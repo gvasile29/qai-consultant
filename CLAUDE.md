@@ -40,4 +40,27 @@ The roadmap progresses from basic strategy generation (v0.1) through multi-LLM s
 
 ## Knowledge Base
 
-The `knowledge_base/standards/` PDFs are the authoritative source material for recommendations. The agent's outputs should be traceable to these standards. When building RAG or retrieval features, index these PDFs as the primary corpus.
+The knowledge base is the core data layer for the agent. All agent outputs should be traceable to it.
+
+### Standards (`knowledge_base/standards/`)
+- **ISTQB** — 14 certification syllabi PDFs (CTFL, CTAL-TA, CTAL-TM, CTAL-TAE, CT-AI, CT-GenAI, CT-MBT, CT-ATLaS, CT-MAT, CTel-ITP, and more)
+- **OWASP** — WSTG v4.2 PDF, MASTG PDF, OWASP Top 10 2021 in both HTML and Markdown
+- **IEEE 829** — Test documentation standard overview (`IEEE_829_Test_Documentation.md`)
+- **ISO/IEC 25010** — Software quality model with all 8 product quality characteristics (`ISO_IEC_25010_Quality_Model.md`)
+
+### Methodologies (`knowledge_base/methodologies/`)
+Five fully written guides: `Agile_Testing.md`, `BDD_TDD.md`, `Exploratory_Testing.md`, `Risk_Based_Testing.md`, `Test_Pyramid.md`. Each file ends with a "QAI Consultant application" section that maps the methodology to agent behavior.
+
+### Expert Knowledge (`knowledge_base/expert_knowledge/`)
+Community contribution framework. Three PROMPT files drive AI-assisted knowledge extraction interviews:
+- `PROMPT_Lessons_Learned.md` — 7-question interview → structured lesson file
+- `PROMPT_Real_Scenarios.md` — 7-question interview → scenario file capturing decision-making
+- `PROMPT_Effort_Estimation.md` — 8-question interview → estimation heuristics file
+
+`CONTRIBUTION_GUIDE.md` defines the 5 contribution categories and file naming conventions.
+
+### Articles (`knowledge_base/articles/`)
+- `AI-DrivenQA_case_studies.md` — 10 real-world AI QA transformation case studies with quantified outcomes (used to ground agent claims with evidence)
+
+### RAG Indexing Priority
+When building retrieval, index in this order: OWASP Top 10 MD + methodology MDs first (structured, directly queryable), then ISTQB/OWASP PDFs (bulk reference), then expert knowledge and articles as supplementary context.
