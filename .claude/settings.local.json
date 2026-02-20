@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python:*)",
       "Bash(git reset:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
