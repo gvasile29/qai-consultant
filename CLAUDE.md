@@ -4,63 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-QAI Consultant is a Python-based AI agent that acts as a senior QA Architect. It generates Test Strategies, Test Plans, and effort estimations from product descriptions, grounded in ISTQB, OWASP, and IEEE standards.
+QAI Consultant is a Python-based AI agent that acts as a senior QA Architect. It collects project context via a structured 11-question dialogue, then generates Test Strategies grounded in ISTQB, OWASP, IEEE, and ISO standards using a local LLM (Mistral via Ollama) with RAG over the knowledge base.
 
 ## Development Commands
 
-The project is in early development. Once `requirements.txt` exists:
-
 ```bash
 pip install -r requirements.txt          # Install dependencies
-python download_knowledge_base.py        # Download/update knowledge base
-python qai.py                            # Run the main agent
+
+# Prerequisites: Ollama must be running with Mistral
+ollama serve
+ollama pull mistral
+
+python src/ingest.py                     # Build/rebuild ChromaDB vector store from knowledge_base/
+python src/cli.py                        # Run terminal UI (Rich-based)
+streamlit run src/app.py                 # Run browser UI at http://localhost:8501
 ```
+
+> `chroma_db/` is gitignored — it is generated locally by `ingest.py` and must exist before running the agent.
 
 ## Architecture
 
-The agent follows a "Sky View to Ground View" approach — taking a high-level product description as input and progressively generating structured QA artifacts (strategy → plan → effort estimates → risk-based recommendations).
+**Data flow:**
+```
+User Input
+  → DialogueManager (11 questions → ProjectContext)
+  → StrategyGenerator.generate(context)
+      → context.to_rag_query() → agent.retrieve_knowledge() → ChromaDB similarity search
+      → build_strategy_prompt(context, knowledge_context)
+      → agent.ask(prompt) → Ollama Mistral
+  → Markdown output saved to output/
+```
 
-### Key directories
+### Source Files (`src/`)
 
-- `src/` — Application source code (to be built)
-- `knowledge_base/standards/istqb/` — 14 ISTQB syllabus PDFs used as RAG source material
-- `knowledge_base/standards/owasp/` — OWASP WSTG (web) and MASTG (mobile) PDFs
-- `knowledge_base/methodologies/` — Future home for QA methodology content
-- `knowledge_base/expert_knowledge/` — Future home for curated expert QA guidance
-- `docs/` — Documentation (to be built)
+| File | Role |
+|------|------|
+| `agent.py` | `QAIAgent` — loads ChromaDB + HuggingFace embeddings, exposes `retrieve_knowledge()`, `ask()`, `ask_with_rag()` |
+| `ingest.py` | One-time pipeline: load PDFs/Markdowns → chunk (1000 chars, 200 overlap) → embed (all-MiniLM-L6-v2) → persist to `chroma_db/` |
+| `dialogue.py` | `DialogueManager` + `ProjectContext` dataclass — collects 11 project fields; `to_rag_query()` builds the retrieval query |
+| `strategy_generator.py` | `StrategyGenerator` — orchestrates retrieve (k=8) → prompt → generate → save to `output/` with timestamp |
+| `cli.py` | Terminal UI using `rich` — multi-phase flow: banner → load agent → dialogue → review → generate → display |
+| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; uses `@st.cache_resource` for agent |
 
-### Planned entry points (from README)
+### Key Configuration (hardcoded in source)
 
-- `qai.py` — Main agent entry point
-- `download_knowledge_base.py` — Script to fetch/update knowledge base resources
+- `OLLAMA_MODEL = "mistral"` — change in `agent.py` to switch models
+- `EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"` — must match between ingest and agent
+- `TOP_K_RESULTS = 5` (agent default), `k=8` used in strategy generation
+- `CHROMA_DIR` — absolute path to `chroma_db/` resolved from `agent.py` location
 
-## Roadmap Context
+### Generated Output
 
-The roadmap progresses from basic strategy generation (v0.1) through multi-LLM support (v0.5) to a full interactive consultant (v1.0). When implementing features, follow this incremental order and keep each version's scope tight.
+- `output/` — gitignored; timestamped markdown files (e.g., `test_strategy_ProjectName_20260220_115311.md`)
+- `chroma_db/` — gitignored; rebuilt by running `python src/ingest.py`
 
 ## Knowledge Base
 
-The knowledge base is the core data layer for the agent. All agent outputs should be traceable to it.
+All agent outputs are grounded in documents from `knowledge_base/`. Re-run `ingest.py` after adding new files.
 
-### Standards (`knowledge_base/standards/`)
-- **ISTQB** — 14 certification syllabi PDFs (CTFL, CTAL-TA, CTAL-TM, CTAL-TAE, CT-AI, CT-GenAI, CT-MBT, CT-ATLaS, CT-MAT, CTel-ITP, and more)
-- **OWASP** — WSTG v4.2 PDF, MASTG PDF, OWASP Top 10 2021 in both HTML and Markdown
-- **IEEE 829** — Test documentation standard overview (`IEEE_829_Test_Documentation.md`)
-- **ISO/IEC 25010** — Software quality model with all 8 product quality characteristics (`ISO_IEC_25010_Quality_Model.md`)
+### Ingestion source categories (mapped by folder path)
 
-### Methodologies (`knowledge_base/methodologies/`)
-Five fully written guides: `Agile_Testing.md`, `BDD_TDD.md`, `Exploratory_Testing.md`, `Risk_Based_Testing.md`, `Test_Pyramid.md`. Each file ends with a "QAI Consultant application" section that maps the methodology to agent behavior.
+| Folder | Category tag in metadata |
+|--------|--------------------------|
+| `standards/` | `"Standard"` |
+| `methodologies/` | `"Methodology"` |
+| `articles/` | `"Article"` |
+| `expert_knowledge/` | `"Expert Knowledge"` |
 
-### Expert Knowledge (`knowledge_base/expert_knowledge/`)
-Community contribution framework. Three PROMPT files drive AI-assisted knowledge extraction interviews:
-- `PROMPT_Lessons_Learned.md` — 7-question interview → structured lesson file
-- `PROMPT_Real_Scenarios.md` — 7-question interview → scenario file capturing decision-making
-- `PROMPT_Effort_Estimation.md` — 8-question interview → estimation heuristics file
+### Contents
 
-`CONTRIBUTION_GUIDE.md` defines the 5 contribution categories and file naming conventions.
+- **`standards/istqb/`** — 14 ISTQB certification PDFs (CTFL, CTAL-TA, CTAL-TM, CTAL-TAE, CT-AI, CT-GenAI, CT-MBT, CT-ATLaS, CT-MAT, CTel-ITP, and more)
+- **`standards/owasp/`** — WSTG v4.2 PDF, MASTG PDF, OWASP Top 10 2021 (HTML + MD)
+- **`standards/`** — IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE (all Markdown)
+- **`methodologies/`** — 5 guides (Agile, BDD/TDD, Exploratory, Risk-Based, Test Pyramid); each ends with a "QAI Consultant application" section
+- **`expert_knowledge/`** — Contribution framework with PROMPT files for AI-assisted knowledge extraction interviews; `Scenario_TeamAlignment.md` is the first real scenario
+- **`articles/`** — 10 real-world AI QA case studies with quantified outcomes
 
-### Articles (`knowledge_base/articles/`)
-- `AI-DrivenQA_case_studies.md` — 10 real-world AI QA transformation case studies with quantified outcomes (used to ground agent claims with evidence)
+### RAG indexing priority
+Index OWASP Top 10 MD + methodology MDs first (structured), then ISTQB/OWASP PDFs, then expert knowledge and articles as supplementary.
 
-### RAG Indexing Priority
-When building retrieval, index in this order: OWASP Top 10 MD + methodology MDs first (structured, directly queryable), then ISTQB/OWASP PDFs (bulk reference), then expert knowledge and articles as supplementary context.
+## Roadmap
+
+- **v0.1** ✅ Test Strategy generation (current)
+- **v0.2** Test Plan with phases
+- **v0.3** Effort estimation
+- **v0.4** Risk-based testing recommendations
+- **v0.5** Multi-LLM support
+- **v1.0** Full interactive QA Consultant
+
+Keep each version's scope tight — implement incrementally in this order.
