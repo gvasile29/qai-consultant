@@ -5,7 +5,9 @@
       "Bash(git reset:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(curl:*)",
+      "Bash(PYTHONIOENCODING=utf-8 python cli.py:*)"
     ]
   }
 }

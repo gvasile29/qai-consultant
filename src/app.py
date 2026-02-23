@@ -291,11 +291,65 @@ def render_strategy():
         )
     with col2:
         if st.button("🔄 Generate Another Strategy", use_container_width=True):
-            for key in ["dialogue", "answers", "strategy", "sources", "output_path"]:
+            for key in ["dialogue", "answers", "strategy", "sources", "output_path", "feedback_submitted"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.current_step = "intro"
             st.rerun()
+
+    # ── Feedback Loop ──────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 💬 Was this Test Strategy useful?")
+    st.caption("Your feedback helps QAI Consultant improve over time.")
+
+    if not st.session_state.get("feedback_submitted", False):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            yes = st.button("✅ Yes, it was useful!", use_container_width=True, type="primary")
+        with col2:
+            partially = st.button("🟡 Partially useful", use_container_width=True)
+        with col3:
+            no = st.button("❌ Not useful", use_container_width=True)
+
+        # Show improvement note field immediately when partially is clicked
+        if partially:
+            extra_note = st.text_input("📝 What could be improved?", key="improvement_note")
+            if not extra_note:
+                st.warning("Please describe what could be improved before saving.")
+                st.stop()
+        else:
+            extra_note = ""
+
+        if yes or (partially and extra_note):
+            feedback_dir = Path(__file__).resolve().parent.parent / "knowledge_base" / "generated_strategies"
+            feedback_dir.mkdir(exist_ok=True)
+
+            feedback_value = "yes" if yes else "partially"
+
+            feedback_content = f"""---
+feedback: {feedback_value}
+notes: {extra_note}
+---
+
+"""
+            output_path = st.session_state.output_path
+            feedback_path = feedback_dir / output_path.name
+            feedback_path.write_text(
+                feedback_content + output_path.read_text(encoding="utf-8"),
+                encoding="utf-8"
+            )
+
+            st.session_state.feedback_submitted = True
+            st.success("✅ Strategy added to knowledge base! Thank you for the feedback.")
+            st.rerun()
+
+        if no:
+            st.session_state.feedback_submitted = True
+            st.info("👍 Ok, strategy not added to knowledge base. Thank you for the feedback!")
+            st.rerun()
+
+    else:
+        st.success("✅ Feedback submitted — thank you for helping QAI Consultant improve!")
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────

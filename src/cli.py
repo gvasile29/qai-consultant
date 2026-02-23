@@ -194,6 +194,45 @@ def main():
             # Show save location
             console.print(f"\n[bold green]💾 Strategy saved to:[/bold green] [cyan]{output_path}[/cyan]")
 
+            # Feedback loop
+            console.print()
+            console.print(Panel(
+                "[bold]Was this Test Strategy useful?[/bold]\n"
+                "[dim]Your feedback helps QAI Consultant improve over time.[/dim]",
+                border_style="yellow",
+            ))
+            feedback = Prompt.ask(
+                "  [yellow]Your feedback[/yellow]",
+                choices=["yes", "partially", "no"],
+                default="yes"
+            )
+
+            if feedback in ["yes", "partially"]:
+                # Save to generated_strategies folder
+                feedback_dir = Path(__file__).resolve().parent.parent / "knowledge_base" / "generated_strategies"
+                feedback_dir.mkdir(exist_ok=True)
+
+                extra_note = ""
+                if feedback == "partially":
+                    extra_note = Prompt.ask("  [yellow]What could be improved?[/yellow]")
+
+                # Add feedback metadata to the strategy file
+                feedback_content = f"""---
+feedback: {feedback}
+notes: {extra_note}
+---
+
+"""
+                feedback_path = feedback_dir / output_path.name
+                feedback_path.write_text(
+                    feedback_content + output_path.read_text(encoding="utf-8"),
+                    encoding="utf-8"
+                )
+                console.print(f"[bold green]✅ Strategy added to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
+
+            elif feedback == "no":
+                console.print("[dim]Ok, strategy not added to knowledge base. Thank you for the feedback![/dim]")
+
         # Ask if user wants to generate another
         console.print()
         another = Prompt.ask(
