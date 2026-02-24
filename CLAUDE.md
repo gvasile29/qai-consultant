@@ -28,11 +28,17 @@ streamlit run src/app.py                 # Run browser UI at http://localhost:85
 ```
 User Input
   → DialogueManager (11 questions → ProjectContext)
+  → RiskAnalyzer.analyze(context)          ← NEW v0.3
+      → _build_risk_query() → agent.retrieve_knowledge() → ChromaDB
+      → build_risk_prompt(context, knowledge_context)
+      → agent.ask(prompt) → Ollama Mistral
+      → Risk Register saved to output/
   → StrategyGenerator.generate(context)
       → context.to_rag_query() → agent.retrieve_knowledge() → ChromaDB similarity search
       → build_strategy_prompt(context, knowledge_context)
       → agent.ask(prompt) → Ollama Mistral
-  → Markdown output saved to output/
+      → Test Strategy saved to output/
+  → Feedback prompt → if yes/partially → saved to knowledge_base/generated_strategies/  ← NEW v0.2
 ```
 
 ### Source Files (`src/`)
@@ -42,9 +48,10 @@ User Input
 | `agent.py` | `QAIAgent` — loads ChromaDB + HuggingFace embeddings, exposes `retrieve_knowledge()`, `ask()`, `ask_with_rag()` |
 | `ingest.py` | One-time pipeline: load PDFs/Markdowns → chunk (1000 chars, 200 overlap) → embed (all-MiniLM-L6-v2) → persist to `chroma_db/` |
 | `dialogue.py` | `DialogueManager` + `ProjectContext` dataclass — collects 11 project fields; `to_rag_query()` builds the retrieval query |
-| `strategy_generator.py` | `StrategyGenerator` — orchestrates retrieve (k=8) → prompt → generate → save to `output/` with timestamp |
-| `cli.py` | Terminal UI using `rich` — multi-phase flow: banner → load agent → dialogue → review → generate → display |
-| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; uses `@st.cache_resource` for agent |
+| `strategy_generator.py` | `StrategyGenerator` — orchestrates retrieve (k=8) → prompt → generate → save to `output/` with timestamp; `generate_all()` generates both Strategy + Risk Register |
+| `risk_analyzer.py` | `RiskAnalyzer` — analyzes project context, builds risk-focused RAG query, generates Risk Register with matrix + mitigations |
+| `cli.py` | Terminal UI using `rich` — multi-phase flow: banner → load agent → dialogue → review → generate (Risk Register + Strategy) → feedback loop |
+| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; results shown in two tabs (Risk Register / Test Strategy); uses `@st.cache_resource` for agent |
 
 ### Key Configuration (hardcoded in source)
 
@@ -55,7 +62,10 @@ User Input
 
 ### Generated Output
 
-- `output/` — gitignored; timestamped markdown files (e.g., `test_strategy_ProjectName_20260220_115311.md`)
+- `output/` — gitignored; timestamped markdown files:
+  - `test_strategy_ProjectName_TIMESTAMP.md` — Test Strategy
+  - `risk_register_ProjectName_TIMESTAMP.md` — Risk Register (NEW v0.3)
+- `knowledge_base/generated_strategies/` — validated strategies from user feedback (yes/partially); ingested on next `ingest.py` run (NEW v0.2)
 - `chroma_db/` — gitignored; rebuilt by running `python src/ingest.py`
 
 ## Knowledge Base
@@ -83,13 +93,30 @@ All agent outputs are grounded in documents from `knowledge_base/`. Re-run `inge
 ### RAG indexing priority
 Index OWASP Top 10 MD + methodology MDs first (structured), then ISTQB/OWASP PDFs, then expert knowledge and articles as supplementary.
 
+## Testing
+
+Tests are in `tests/`. Run with:
+```bash
+python -m pytest tests/ -v
+```
+
+**Test files:**
+| File | Coverage |
+|------|----------|
+| `test_feedback_loop.py` | CLI feedback loop — 4 tests |
+| `test_app_feedback_loop.py` | Streamlit feedback loop — 9 tests |
+| `test_risk_analyzer.py` | RiskAnalyzer module — 7 tests |
+| `test_app_v03.py` | Streamlit v0.3 Risk Register integration — 11 tests |
+
+> **Rule:** After every code change, run relevant tests before committing. Add new tests for every new feature.
+
 ## Roadmap
 
-- **v0.1** ✅ Test Strategy generation (current)
-- **v0.2** Test Plan with phases
-- **v0.3** Effort estimation
-- **v0.4** Risk-based testing recommendations
-- **v0.5** Multi-LLM support
-- **v1.0** Full interactive QA Consultant
+- **v0.1** ✅ Core agent + CLI + Streamlit Web UI
+- **v0.2** ✅ Feedback loop — validated strategies saved to knowledge base
+- **v0.3** ✅ Risk Register generation (automatic, alongside Test Strategy)
+- **v0.4** Effort estimation
+- **v0.5** Multi-LLM support (OpenAI, Claude API, local models)
+- **v1.0** Full interactive QA Consultant + hosted version
 
 Keep each version's scope tight — implement incrementally in this order.

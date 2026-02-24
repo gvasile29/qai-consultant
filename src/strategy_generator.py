@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from agent import QAIAgent
 from dialogue import ProjectContext
+from risk_analyzer import RiskAnalyzer
 
 # ── System Prompt ──────────────────────────────────────────────────────────────
 
@@ -88,6 +89,29 @@ class StrategyGenerator:
 
     def __init__(self, agent: QAIAgent):
         self.agent = agent
+
+    def generate_all(self, context: ProjectContext) -> dict:
+        """
+        Generate both Test Strategy and Risk Register.
+        Returns dict with keys: strategy, risk_register, sources, risk_sources
+        """
+        print("🔍 Analyzing project risks...")
+        risk_analyzer = RiskAnalyzer(self.agent)
+        risk_register, risk_sources = risk_analyzer.analyze(context)
+        risk_path = risk_analyzer.save(risk_register, context)
+
+        print("📋 Generating Test Strategy...")
+        strategy, sources = self.generate(context)
+        strategy_path = self.save(strategy, context)
+
+        return {
+            "strategy": strategy,
+            "strategy_path": strategy_path,
+            "sources": sources,
+            "risk_register": risk_register,
+            "risk_path": risk_path,
+            "risk_sources": risk_sources,
+        }
 
     def generate(self, context: ProjectContext) -> tuple:
         """

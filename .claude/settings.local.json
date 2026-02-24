@@ -7,7 +7,8 @@
       "Bash(git commit:*)",
       "Bash(find:*)",
       "Bash(curl:*)",
-      "Bash(PYTHONIOENCODING=utf-8 python cli.py:*)"
+      "Bash(PYTHONIOENCODING=utf-8 python cli.py:*)",
+      "Bash(PYTHONIOENCODING=utf-8 python:*)"
     ]
   }
 }

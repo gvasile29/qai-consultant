@@ -102,8 +102,8 @@ def show_context_summary(dialogue: DialogueManager):
     console.print()
 
 
-def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> tuple:
-    """Generate the Test Strategy with a progress spinner."""
+def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
+    """Generate Test Strategy and Risk Register with progress spinner."""
     generator = StrategyGenerator(agent)
     context = dialogue.get_context()
 
@@ -112,22 +112,24 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> tuple:
         TextColumn("[progress.description]{task.description}"),
         console=console,
     ) as progress:
-        task = progress.add_task("Retrieving relevant knowledge from knowledge base...", total=None)
-        chunks = agent.retrieve_knowledge(context.to_rag_query(), k=8)
-        knowledge_context = agent.format_knowledge_context(chunks)
+        progress.add_task("🔍 Analyzing project risks...", total=None)
+        from risk_analyzer import RiskAnalyzer
+        risk_analyzer = RiskAnalyzer(agent)
+        risk_register, risk_sources = risk_analyzer.analyze(context)
+        risk_path = risk_analyzer.save(risk_register, context)
 
-        progress.update(task, description="Generating Test Strategy with Mistral...")
-        from strategy_generator import build_strategy_prompt, SYSTEM_PROMPT
-        prompt = build_strategy_prompt(context, knowledge_context)
-        strategy = agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
+        progress.add_task("📋 Generating Test Strategy with Mistral...", total=None)
+        strategy, sources = generator.generate(context)
+        strategy_path = generator.save(strategy, context)
 
-        sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
-            for c in chunks
-        })
-
-    output_path = generator.save(strategy, context)
-    return strategy, sources, output_path
+    return {
+        "strategy": strategy,
+        "strategy_path": strategy_path,
+        "sources": sources,
+        "risk_register": risk_register,
+        "risk_path": risk_path,
+        "risk_sources": risk_sources,
+    }
 
 
 def show_sources(sources: list):
@@ -177,22 +179,30 @@ def main():
         if confirm == "no":
             console.print("[yellow]Strategy generation cancelled.[/yellow]")
         else:
-            # Generate strategy
+            # Generate strategy + risk register
             console.print()
-            strategy, sources, output_path = generate_strategy(agent, dialogue)
+            result = generate_strategy(agent, dialogue)
 
-            # Display strategy
+            # Display Risk Register
             console.print(Panel(
-                "[bold cyan]Generated Test Strategy[/bold cyan]",
+                "[bold yellow]⚠️  Risk Register[/bold yellow]",
+                border_style="yellow",
+            ))
+            console.print(Markdown(result["risk_register"]))
+            show_sources(result["risk_sources"])
+            console.print(f"\n[bold green]💾 Risk Register saved to:[/bold green] [cyan]{result['risk_path']}[/cyan]")
+
+            # Display Test Strategy
+            console.print()
+            console.print(Panel(
+                "[bold cyan]📋 Generated Test Strategy[/bold cyan]",
                 border_style="cyan",
             ))
-            console.print(Markdown(strategy))
+            console.print(Markdown(result["strategy"]))
+            show_sources(result["sources"])
+            console.print(f"\n[bold green]💾 Strategy saved to:[/bold green] [cyan]{result['strategy_path']}[/cyan]")
 
-            # Show sources
-            show_sources(sources)
-
-            # Show save location
-            console.print(f"\n[bold green]💾 Strategy saved to:[/bold green] [cyan]{output_path}[/cyan]")
+            output_path = result["strategy_path"]
 
             # Feedback loop
             console.print()

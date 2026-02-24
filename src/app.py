@@ -17,6 +17,7 @@ import streamlit as st
 from agent import QAIAgent
 from dialogue import DialogueManager, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
+from risk_analyzer import RiskAnalyzer
 
 # ── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -77,6 +78,12 @@ def init_session_state():
         st.session_state.sources = []
     if "output_path" not in st.session_state:
         st.session_state.output_path = None
+    if "risk_register" not in st.session_state:
+        st.session_state.risk_register = None
+    if "risk_sources" not in st.session_state:
+        st.session_state.risk_sources = []
+    if "risk_path" not in st.session_state:
+        st.session_state.risk_path = None
     if "current_step" not in st.session_state:
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
 
@@ -115,7 +122,9 @@ def render_sidebar():
 
         st.divider()
         if st.button("🔄 Start Over", use_container_width=True):
-            for key in ["dialogue", "answers", "strategy", "sources", "output_path", "current_step"]:
+            for key in ["dialogue", "answers", "strategy", "sources", "output_path",
+                        "risk_register", "risk_sources", "risk_path", "feedback_submitted",
+                        "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
@@ -249,16 +258,18 @@ def render_strategy():
         context = st.session_state.dialogue.get_context()
         agent = st.session_state.agent
         generator = StrategyGenerator(agent)
+        risk_analyzer = RiskAnalyzer(agent)
 
-        with st.spinner("🔍 Retrieving relevant knowledge from knowledge base..."):
-            chunks = agent.retrieve_knowledge(context.to_rag_query(), k=8)
-            knowledge_context = agent.format_knowledge_context(chunks)
+        with st.spinner("🔍 Analyzing project risks..."):
+            risk_register, risk_sources = risk_analyzer.analyze(context)
+            risk_path = risk_analyzer.save(risk_register, context)
 
         with st.spinner("🤖 Generating Test Strategy with Mistral — this may take a moment..."):
+            chunks = agent.retrieve_knowledge(context.to_rag_query(), k=8)
+            knowledge_context = agent.format_knowledge_context(chunks)
             prompt = build_strategy_prompt(context, knowledge_context)
             strategy = agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
             output_path = generator.save(strategy, context)
-
             sources = list({
                 f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
                 for c in chunks
@@ -267,20 +278,33 @@ def render_strategy():
         st.session_state.strategy = strategy
         st.session_state.sources = sources
         st.session_state.output_path = output_path
+        st.session_state.risk_register = risk_register
+        st.session_state.risk_sources = risk_sources
+        st.session_state.risk_path = risk_path
 
-    # Display strategy
-    st.markdown(st.session_state.strategy)
-    st.markdown("---")
+    # ── Risk Register Tab + Test Strategy Tab ──────────────────────────────────
+    tab1, tab2 = st.tabs(["⚠️ Risk Register", "📋 Test Strategy"])
 
-    # Sources
-    with st.expander("📚 Knowledge Sources Used"):
-        for source in st.session_state.sources:
-            st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
+    with tab1:
+        st.markdown(st.session_state.risk_register)
+        st.markdown("---")
+        with st.expander("📚 Knowledge Sources Used"):
+            for source in st.session_state.risk_sources:
+                st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
+        st.download_button(
+            label="⬇️ Download Risk Register (.md)",
+            data=st.session_state.risk_register,
+            file_name=f"risk_register_{st.session_state.dialogue.get_context().project_name}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
 
-    # Download button
-    st.markdown("###")
-    col1, col2 = st.columns(2)
-    with col1:
+    with tab2:
+        st.markdown(st.session_state.strategy)
+        st.markdown("---")
+        with st.expander("📚 Knowledge Sources Used"):
+            for source in st.session_state.sources:
+                st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
         st.download_button(
             label="⬇️ Download Test Strategy (.md)",
             data=st.session_state.strategy,
@@ -289,13 +313,16 @@ def render_strategy():
             use_container_width=True,
             type="primary",
         )
-    with col2:
-        if st.button("🔄 Generate Another Strategy", use_container_width=True):
-            for key in ["dialogue", "answers", "strategy", "sources", "output_path", "feedback_submitted"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.current_step = "intro"
-            st.rerun()
+
+    # Generate Another button
+    st.markdown("###")
+    if st.button("🔄 Generate Another Strategy", use_container_width=True):
+        for key in ["dialogue", "answers", "strategy", "sources", "output_path",
+                    "risk_register", "risk_sources", "risk_path", "feedback_submitted"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state.current_step = "intro"
+        st.rerun()
 
     # ── Feedback Loop ──────────────────────────────────────────────────────────
     st.markdown("---")
