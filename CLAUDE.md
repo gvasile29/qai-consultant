@@ -119,11 +119,11 @@ python -m pytest tests/ -v
 - **v0.2** ✅ Feedback loop — validated strategies saved to knowledge base
 - **v0.3** ✅ Risk Register generation (automatic, alongside Test Strategy)
 - **v0.4** ✅ Effort Estimation Report (deterministic baseline + PERT + team capacity)
-- **v0.5** Multi-LLM support (OpenAI, Claude API, local models)
-- **v0.6** Auto re-ingest — detects new documents in `knowledge_base/` and re-ingests automatically
-- **v0.7** Revisit Effort Estimation confidence level algorithm — current logic too simplistic
-- **v0.8** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
-- **v0.9** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
+- **v0.5** Auto re-ingest — detects new documents in `knowledge_base/` and re-ingests automatically
+- **v0.6** Revisit Effort Estimation confidence level algorithm — current logic too simplistic
+- **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
+- **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
 - **v1.0** Full interactive QA Consultant + hosted version
+- **v2.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
 
 Keep each version's scope tight — implement incrementally in this order.
