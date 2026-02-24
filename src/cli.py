@@ -103,7 +103,7 @@ def show_context_summary(dialogue: DialogueManager):
 
 
 def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
-    """Generate Test Strategy and Risk Register with progress spinner."""
+    """Generate Risk Register, Effort Estimation, and Test Strategy with progress spinner."""
     generator = StrategyGenerator(agent)
     context = dialogue.get_context()
 
@@ -118,6 +118,12 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
         risk_register, risk_sources = risk_analyzer.analyze(context)
         risk_path = risk_analyzer.save(risk_register, context)
 
+        progress.add_task("📊 Generating Effort Estimation...", total=None)
+        from effort_estimator import EffortEstimator
+        estimator = EffortEstimator(agent)
+        effort_report, effort_data = estimator.estimate(context, risk_register)
+        effort_path = estimator.save(effort_report, context)
+
         progress.add_task("📋 Generating Test Strategy with Mistral...", total=None)
         strategy, sources = generator.generate(context)
         strategy_path = generator.save(strategy, context)
@@ -129,6 +135,8 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
         "risk_register": risk_register,
         "risk_path": risk_path,
         "risk_sources": risk_sources,
+        "effort_report": effort_report,
+        "effort_path": effort_path,
     }
 
 
@@ -191,6 +199,15 @@ def main():
             console.print(Markdown(result["risk_register"]))
             show_sources(result["risk_sources"])
             console.print(f"\n[bold green]💾 Risk Register saved to:[/bold green] [cyan]{result['risk_path']}[/cyan]")
+
+            # Display Effort Estimation
+            console.print()
+            console.print(Panel(
+                "[bold green]📊 Effort Estimation Report[/bold green]",
+                border_style="green",
+            ))
+            console.print(Markdown(result["effort_report"]))
+            console.print(f"\n[bold green]💾 Effort Report saved to:[/bold green] [cyan]{result['effort_path']}[/cyan]")
 
             # Display Test Strategy
             console.print()

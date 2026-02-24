@@ -8,6 +8,7 @@ from datetime import datetime
 from agent import QAIAgent
 from dialogue import ProjectContext
 from risk_analyzer import RiskAnalyzer
+from effort_estimator import EffortEstimator
 
 # ── System Prompt ──────────────────────────────────────────────────────────────
 
@@ -104,6 +105,11 @@ class StrategyGenerator:
         strategy, sources = self.generate(context)
         strategy_path = self.save(strategy, context)
 
+        print("📊 Generating Effort Estimation...")
+        estimator = EffortEstimator(self.agent)
+        effort_report, effort_data = estimator.estimate(context, risk_register)
+        effort_path = estimator.save(effort_report, context)
+
         return {
             "strategy": strategy,
             "strategy_path": strategy_path,
@@ -111,6 +117,9 @@ class StrategyGenerator:
             "risk_register": risk_register,
             "risk_path": risk_path,
             "risk_sources": risk_sources,
+            "effort_report": effort_report,
+            "effort_path": effort_path,
+            "effort_data": effort_data,
         }
 
     def generate(self, context: ProjectContext) -> tuple:

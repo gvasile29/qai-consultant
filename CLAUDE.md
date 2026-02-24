@@ -50,8 +50,9 @@ User Input
 | `dialogue.py` | `DialogueManager` + `ProjectContext` dataclass — collects 11 project fields; `to_rag_query()` builds the retrieval query |
 | `strategy_generator.py` | `StrategyGenerator` — orchestrates retrieve (k=8) → prompt → generate → save to `output/` with timestamp; `generate_all()` generates both Strategy + Risk Register |
 | `risk_analyzer.py` | `RiskAnalyzer` — analyzes project context, builds risk-focused RAG query, generates Risk Register with matrix + mitigations |
-| `cli.py` | Terminal UI using `rich` — multi-phase flow: banner → load agent → dialogue → review → generate (Risk Register + Strategy) → feedback loop |
-| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; results shown in two tabs (Risk Register / Test Strategy); uses `@st.cache_resource` for agent |
+| `effort_estimator.py` | `EffortEstimator` — deterministic baseline + multipliers + PERT calculation; LLM used only for narrative sections |
+| `cli.py` | Terminal UI using `rich` — multi-phase flow: banner → load agent → dialogue → review → generate (Risk Register + Effort Estimation + Test Strategy) → feedback loop |
+| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; results shown in 3 tabs (⚠️ Risk Register / 📊 Effort Estimation / 📋 Test Strategy); uses `@st.cache_resource` for agent |
 
 ### Key Configuration (hardcoded in source)
 
@@ -64,7 +65,8 @@ User Input
 
 - `output/` — gitignored; timestamped markdown files:
   - `test_strategy_ProjectName_TIMESTAMP.md` — Test Strategy
-  - `risk_register_ProjectName_TIMESTAMP.md` — Risk Register (NEW v0.3)
+  - `risk_register_ProjectName_TIMESTAMP.md` — Risk Register (v0.3)
+  - `effort_estimation_ProjectName_TIMESTAMP.md` — Effort Estimation Report (v0.4)
 - `knowledge_base/generated_strategies/` — validated strategies from user feedback (yes/partially); ingested on next `ingest.py` run (NEW v0.2)
 - `chroma_db/` — gitignored; rebuilt by running `python src/ingest.py`
 
@@ -107,6 +109,7 @@ python -m pytest tests/ -v
 | `test_app_feedback_loop.py` | Streamlit feedback loop — 9 tests |
 | `test_risk_analyzer.py` | RiskAnalyzer module — 7 tests |
 | `test_app_v03.py` | Streamlit v0.3 Risk Register integration — 11 tests |
+| `test_effort_estimator.py` | EffortEstimator — deterministic calculations, PERT, CLI/Streamlit integration — 26 tests |
 
 > **Rule:** After every code change, run relevant tests before committing. Add new tests for every new feature.
 
@@ -115,7 +118,7 @@ python -m pytest tests/ -v
 - **v0.1** ✅ Core agent + CLI + Streamlit Web UI
 - **v0.2** ✅ Feedback loop — validated strategies saved to knowledge base
 - **v0.3** ✅ Risk Register generation (automatic, alongside Test Strategy)
-- **v0.4** Effort estimation
+- **v0.4** ✅ Effort Estimation Report (deterministic baseline + PERT + team capacity)
 - **v0.5** Multi-LLM support (OpenAI, Claude API, local models)
 - **v1.0** Full interactive QA Consultant + hosted version
 

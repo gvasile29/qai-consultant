@@ -18,6 +18,7 @@ from agent import QAIAgent
 from dialogue import DialogueManager, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer
+from effort_estimator import EffortEstimator
 
 # ── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -84,6 +85,10 @@ def init_session_state():
         st.session_state.risk_sources = []
     if "risk_path" not in st.session_state:
         st.session_state.risk_path = None
+    if "effort_report" not in st.session_state:
+        st.session_state.effort_report = None
+    if "effort_path" not in st.session_state:
+        st.session_state.effort_path = None
     if "current_step" not in st.session_state:
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
 
@@ -123,7 +128,8 @@ def render_sidebar():
         st.divider()
         if st.button("🔄 Start Over", use_container_width=True):
             for key in ["dialogue", "answers", "strategy", "sources", "output_path",
-                        "risk_register", "risk_sources", "risk_path", "feedback_submitted",
+                        "risk_register", "risk_sources", "risk_path",
+                        "effort_report", "effort_path", "feedback_submitted",
                         "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -259,10 +265,15 @@ def render_strategy():
         agent = st.session_state.agent
         generator = StrategyGenerator(agent)
         risk_analyzer = RiskAnalyzer(agent)
+        estimator = EffortEstimator(agent)
 
         with st.spinner("🔍 Analyzing project risks..."):
             risk_register, risk_sources = risk_analyzer.analyze(context)
             risk_path = risk_analyzer.save(risk_register, context)
+
+        with st.spinner("📊 Generating Effort Estimation..."):
+            effort_report, effort_data = estimator.estimate(context, risk_register)
+            effort_path = estimator.save(effort_report, context)
 
         with st.spinner("🤖 Generating Test Strategy with Mistral — this may take a moment..."):
             chunks = agent.retrieve_knowledge(context.to_rag_query(), k=8)
@@ -281,9 +292,11 @@ def render_strategy():
         st.session_state.risk_register = risk_register
         st.session_state.risk_sources = risk_sources
         st.session_state.risk_path = risk_path
+        st.session_state.effort_report = effort_report
+        st.session_state.effort_path = effort_path
 
-    # ── Risk Register Tab + Test Strategy Tab ──────────────────────────────────
-    tab1, tab2 = st.tabs(["⚠️ Risk Register", "📋 Test Strategy"])
+    # ── Three Tabs ────────────────────────────────────────────────────────
+    tab1, tab2, tab3 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy"])
 
     with tab1:
         st.markdown(st.session_state.risk_register)
@@ -300,6 +313,17 @@ def render_strategy():
         )
 
     with tab2:
+        st.markdown(st.session_state.effort_report)
+        st.markdown("---")
+        st.download_button(
+            label="⬇️ Download Effort Estimation (.md)",
+            data=st.session_state.effort_report,
+            file_name=f"effort_estimation_{st.session_state.dialogue.get_context().project_name}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
+    with tab3:
         st.markdown(st.session_state.strategy)
         st.markdown("---")
         with st.expander("📚 Knowledge Sources Used"):
@@ -318,7 +342,8 @@ def render_strategy():
     st.markdown("###")
     if st.button("🔄 Generate Another Strategy", use_container_width=True):
         for key in ["dialogue", "answers", "strategy", "sources", "output_path",
-                    "risk_register", "risk_sources", "risk_path", "feedback_submitted"]:
+                    "risk_register", "risk_sources", "risk_path",
+                    "effort_report", "effort_path", "feedback_submitted"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.session_state.current_step = "intro"
