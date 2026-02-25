@@ -22,6 +22,7 @@ from rich import print as rprint
 from agent import QAIAgent
 from dialogue import DialogueManager
 from strategy_generator import StrategyGenerator
+from knowledge_watcher import get_watcher
 
 console = Console()
 
@@ -166,6 +167,21 @@ def main():
 
     console.print("[bold green]✅ Knowledge base ready![/bold green]\n")
 
+    # Start knowledge base watcher
+    def on_kb_update(message: str):
+        console.print(f"\n[bold green]{message}[/bold green]\n")
+
+    watcher = get_watcher()
+    watcher.start(callback=on_kb_update)
+
+    try:
+      _run_main_loop(agent, watcher)
+    finally:
+        watcher.stop()
+
+
+def _run_main_loop(agent: QAIAgent, watcher):
+    """Main interaction loop — separated so watcher can be cleanly stopped."""
     while True:
         # Run dialogue
         dialogue = DialogueManager()
@@ -255,7 +271,15 @@ notes: {extra_note}
                     feedback_content + output_path.read_text(encoding="utf-8"),
                     encoding="utf-8"
                 )
-                console.print(f"[bold green]✅ Strategy added to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
+                # Immediate ingest — don't wait for file watcher
+                try:
+                    chunks = watcher.ingest_manager.ingest_file(feedback_path)
+                    if chunks > 0:
+                        console.print(f"[bold green]✅ Strategy added to knowledge base! +{chunks} chunks ingested.[/bold green]")
+                    else:
+                        console.print(f"[bold green]✅ Strategy saved to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
+                except Exception:
+                    console.print(f"[bold green]✅ Strategy saved to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
 
             elif feedback == "no":
                 console.print("[dim]Ok, strategy not added to knowledge base. Thank you for the feedback![/dim]")

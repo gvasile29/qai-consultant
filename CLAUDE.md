@@ -51,6 +51,7 @@ User Input
 | `strategy_generator.py` | `StrategyGenerator` — orchestrates retrieve (k=8) → prompt → generate → save to `output/` with timestamp; `generate_all()` generates both Strategy + Risk Register |
 | `risk_analyzer.py` | `RiskAnalyzer` — analyzes project context, builds risk-focused RAG query, generates Risk Register with matrix + mitigations |
 | `effort_estimator.py` | `EffortEstimator` — deterministic baseline + multipliers + PERT calculation; LLM used only for narrative sections |
+| `knowledge_watcher.py` | `KnowledgeBaseWatcher` + `IngestManager` + `IngestManifest` — watches `knowledge_base/` for new/changed files and incrementally re-ingests them; singleton via `get_watcher()` |
 | `cli.py` | Terminal UI using `rich` — multi-phase flow: banner → load agent → dialogue → review → generate (Risk Register + Effort Estimation + Test Strategy) → feedback loop |
 | `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; results shown in 3 tabs (⚠️ Risk Register / 📊 Effort Estimation / 📋 Test Strategy); uses `@st.cache_resource` for agent |
 
@@ -67,6 +68,7 @@ User Input
   - `test_strategy_ProjectName_TIMESTAMP.md` — Test Strategy
   - `risk_register_ProjectName_TIMESTAMP.md` — Risk Register (v0.3)
   - `effort_estimation_ProjectName_TIMESTAMP.md` — Effort Estimation Report (v0.4)
+- `chroma_db/ingest_manifest.json` — tracks ingested files with timestamps; used by auto re-ingest to detect new/changed files (v0.5)
 - `knowledge_base/generated_strategies/` — validated strategies from user feedback (yes/partially); ingested on next `ingest.py` run (NEW v0.2)
 - `chroma_db/` — gitignored; rebuilt by running `python src/ingest.py`
 
@@ -110,6 +112,7 @@ python -m pytest tests/ -v
 | `test_risk_analyzer.py` | RiskAnalyzer module — 7 tests |
 | `test_app_v03.py` | Streamlit v0.3 Risk Register integration — 11 tests |
 | `test_effort_estimator.py` | EffortEstimator — deterministic calculations, PERT, CLI/Streamlit integration — 26 tests |
+| `test_knowledge_watcher.py` | KnowledgeBaseWatcher, IngestManager, IngestManifest — file detection, debounce, singleton, CLI/Streamlit integration — 23 tests |
 
 > **Rule:** After every code change, run relevant tests before committing. Add new tests for every new feature.
 
@@ -119,7 +122,7 @@ python -m pytest tests/ -v
 - **v0.2** ✅ Feedback loop — validated strategies saved to knowledge base
 - **v0.3** ✅ Risk Register generation (automatic, alongside Test Strategy)
 - **v0.4** ✅ Effort Estimation Report (deterministic baseline + PERT + team capacity)
-- **v0.5** Auto re-ingest — detects new documents in `knowledge_base/` and re-ingests automatically
+- **v0.5** ✅ Auto re-ingest — watches `knowledge_base/` with file watcher, incremental ingest, manifest tracking, post-feedback immediate ingest
 - **v0.6** Revisit Effort Estimation confidence level algorithm — current logic too simplistic
 - **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
 - **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`

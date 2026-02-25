@@ -8,7 +8,10 @@
       "Bash(find:*)",
       "Bash(curl:*)",
       "Bash(PYTHONIOENCODING=utf-8 python cli.py:*)",
-      "Bash(PYTHONIOENCODING=utf-8 python:*)"
+      "Bash(PYTHONIOENCODING=utf-8 python:*)",
+      "Bash(PYTHONIOENCODING=utf-8 timeout 30 python:*)",
+      "Bash(PYTHONIOENCODING=utf-8 timeout 60 python:*)",
+      "Bash(PYTHONIOENCODING=utf-8 timeout 120 python:*)"
     ]
   }
 }
