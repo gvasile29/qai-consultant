@@ -127,7 +127,8 @@ python -m pytest tests/ -v
 - **v0.6** ✅ Confidence level algorithm — score-based (0-100) with 4 factors: PERT spread, capacity gap, data quality, multiplier magnitude
 - **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
 - **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
-- **v1.0** Full interactive QA Consultant + hosted version
-- **v2.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
+- **v1.0** MVP — polish, stability, full documentation, easy local setup (clone → download KB → run)
+- **v2.0** Hosted version — shared KB, quality gate, VPS deployment
+- **v3.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
 
 Keep each version's scope tight — implement incrementally in this order.
