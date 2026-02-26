@@ -145,7 +145,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v0.3** ✅ Risk Register — automatic risk analysis alongside Test Strategy
 - **v0.4** ✅ Effort Estimation Report — PERT-based with team capacity analysis
 - **v0.5** ✅ Auto re-ingest — file watcher + incremental ingest + manifest tracking
-- **v0.6** Revisit Effort Estimation confidence level algorithm — current logic too simplistic
+- **v0.6** ✅ Confidence level algorithm — score-based (0-100): PERT spread + capacity gap + data quality + multiplier magnitude
 - **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
 - **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
 - **v1.0** Full QA Consultant experience + hosted version

@@ -103,6 +103,8 @@ class EstimationData:
 
     # Confidence
     confidence_level: str = "Medium"
+    data_quality_score: int = 20   # 0-20; calculated from dialogue completeness
+    confidence_score: int = 0      # raw score 0-100 (for debugging/display)
 
 
 # ── Effort Estimator ───────────────────────────────────────────────────────────
@@ -126,6 +128,7 @@ class EffortEstimator:
         self._pert_breakdown(data)
         self._team_capacity(context, data)
         self._risk_buffer(risk_register, data)
+        self._calculate_data_quality(context, data)
         self._finalize(data)
 
         report = self._generate_report(context, data)
@@ -351,19 +354,110 @@ class EffortEstimator:
         max_buffer = data.pert_total_expected * 0.35
         data.risk_buffer_days = round(min(buffer, max_buffer), 1)
 
+    # ── Step 6.5: Data quality score ──────────────────────────────────────────
+
+    def _calculate_data_quality(self, context: ProjectContext, data: EstimationData):
+        """
+        Score dialogue completeness (0-20 pts).
+        Vague or missing answers reduce confidence in the estimate.
+
+        Scoring:
+          - 5 key fields checked: timeline, team_qa_size, team_dev_size,
+            compliance_requirements, existing_automation
+          - Each field: 4 pts if specific, 2 pts if vague, 0 pts if empty/unknown
+        """
+        VAGUE_KEYWORDS = {"tbd", "unknown", "not sure", "don't know", "n/a",
+                          "na", "none", "?", "unclear", "maybe", "to be determined"}
+        score = 0
+
+        fields = [
+            context.timeline,
+            context.team_qa_size,
+            context.team_dev_size,
+            context.compliance_requirements,
+            context.existing_automation,
+        ]
+
+        for field in fields:
+            if not field or not field.strip():
+                score += 0
+            elif any(vague in field.lower() for vague in VAGUE_KEYWORDS):
+                score += 2
+            else:
+                score += 4
+
+        data.data_quality_score = score
+
     # ── Step 7: Finalize ───────────────────────────────────────────────────────
 
     def _finalize(self, data: EstimationData):
         data.final_effort_min = round(data.pert_total_optimistic + data.risk_buffer_days * 0.5, 1)
         data.final_effort_max = round(data.pert_total_pessimistic + data.risk_buffer_days, 1)
+        data.confidence_level = self._calculate_confidence(data)
 
-        # Confidence level based on multiplier count and capacity gap
-        if len(data.multipliers) <= 2 and data.capacity_gap >= 0:
-            data.confidence_level = "High"
-        elif len(data.multipliers) >= 5 or data.capacity_gap < -20:
-            data.confidence_level = "Low"
+    def _calculate_confidence(self, data: EstimationData) -> str:
+        """
+        Score-based confidence algorithm (0-100 points).
+
+        Four factors:
+          1. PERT spread ratio     — 0-40 pts  (how wide is O-P relative to E)
+          2. Capacity gap ratio    — 0-30 pts  (surplus/deficit as % of expected)
+          3. Data quality          — 0-20 pts  (stored in data.data_quality_score)
+          4. Multiplier magnitude  — 0-10 pts  (total % adjustment applied)
+
+        Final score → High (70-100), Medium (40-69), Low (0-39)
+        """
+        score = 0
+
+        # ── Factor 1: PERT spread ratio (40 pts) ──────────────────────────────
+        # spread_ratio = (P - O) / E — lower is better (less uncertainty)
+        if data.pert_total_expected > 0:
+            spread_ratio = (data.pert_total_pessimistic - data.pert_total_optimistic) / data.pert_total_expected
+            # spread_ratio < 1.0 → very tight → 40 pts
+            # spread_ratio 1.0-2.0 → moderate → 20-39 pts
+            # spread_ratio 2.0-3.0 → wide → 5-19 pts
+            # spread_ratio > 3.0 → very wide → 0 pts
+            if spread_ratio < 1.0:
+                score += 40
+            elif spread_ratio < 2.0:
+                score += int(40 - (spread_ratio - 1.0) * 20)   # 20-39
+            elif spread_ratio < 3.0:
+                score += int(20 - (spread_ratio - 2.0) * 15)   # 5-19
+            else:
+                score += 0
+
+        # ── Factor 2: Capacity gap ratio (30 pts) ─────────────────────────────
+        # gap_ratio = capacity_gap / expected_effort
+        # positive (surplus) → good; negative (deficit) → bad
+        if data.pert_total_expected > 0:
+            gap_ratio = data.capacity_gap / data.pert_total_expected
+            if gap_ratio >= 0.3:
+                score += 30    # comfortable surplus (≥30% buffer)
+            elif gap_ratio >= 0.0:
+                score += int(15 + gap_ratio / 0.3 * 15)   # 15-30
+            elif gap_ratio >= -0.3:
+                score += int(15 + gap_ratio / 0.3 * 15)   # 0-14  (mild deficit)
+            else:
+                score += 0     # severe deficit (>30% short)
+
+        # ── Factor 3: Data quality (20 pts) ───────────────────────────────────
+        # Uses pre-calculated data_quality_score (0-20) set during estimation
+        score += min(20, max(0, data.data_quality_score))
+
+        # ── Factor 4: Multiplier magnitude (10 pts) ───────────────────────────
+        # total_multiplier is the sum of all % adjustments applied
+        # 0% → 10 pts; 50% → 5 pts; ≥100% → 0 pts
+        magnitude_score = max(0, 10 - int(data.total_multiplier / 10))
+        score += magnitude_score
+
+        # ── Map score to label ─────────────────────────────────────────────────
+        data.confidence_score = score
+        if score >= 70:
+            return "High"
+        elif score >= 40:
+            return "Medium"
         else:
-            data.confidence_level = "Medium"
+            return "Low"
 
     # ── Report Generation ──────────────────────────────────────────────────────
 
@@ -412,7 +506,7 @@ Write the following sections (keep each concise — 3-5 sentences max):
 | **Risk Buffer** | {data.risk_buffer_days} person-days |
 | **Available Capacity** | {data.available_person_days} person-days |
 | **Capacity Gap** | {"✅ Surplus: " + str(data.capacity_gap) + " days" if data.capacity_gap >= 0 else "⚠️ Deficit: " + str(abs(data.capacity_gap)) + " days"} |
-| **Confidence Level** | {data.confidence_level} |
+| **Confidence Level** | {data.confidence_level} (score: {data.confidence_score}/100) |
 
 ---
 

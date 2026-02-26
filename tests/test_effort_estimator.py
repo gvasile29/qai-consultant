@@ -332,8 +332,16 @@ def test_pert_nine_activities():
         print(f"        {a['activity']}: {a['optimistic']}d / {a['most_likely']}d / {a['pessimistic']}d -> E={a['expected']}d")
 
 
-def test_confidence_level_low():
-    """5+ multipliers -> confidence = 'Low'."""
+def test_confidence_level_medium():
+    """BMW ECU with v0.6 score-based algorithm -> confidence = 'Medium'.
+
+    v0.6 replaces count-based logic with a four-factor score (0-100):
+      Factor 1 (PERT spread ≈ 1.125): ~37 pts
+      Factor 2 (capacity gap_ratio ≈ -0.74 — severe deficit): 0 pts
+      Factor 3 (data quality — all fields specific): 20 pts
+      Factor 4 (82% multiplier): 2 pts
+      Total ≈ 59 → "Medium"
+    """
     est = make_dummy_estimator()
     data = EstimationData()
     est._detect_project_type(BMW_EFFORT_CONTEXT, data)
@@ -342,13 +350,16 @@ def test_confidence_level_low():
     est._pert_breakdown(data)
     est._team_capacity(BMW_EFFORT_CONTEXT, data)
     est._risk_buffer("", data)
+    est._calculate_data_quality(BMW_EFFORT_CONTEXT, data)
     est._finalize(data)
 
     assert len(data.multipliers) >= 5, \
         f"Precondition: need >= 5 multipliers, got {len(data.multipliers)}"
-    assert data.confidence_level == "Low", \
-        f"Expected 'Low' confidence, got '{data.confidence_level}'"
-    print(f"  PASS: {len(data.multipliers)} multipliers -> confidence = '{data.confidence_level}'")
+    assert data.confidence_level == "Medium", \
+        f"Expected 'Medium' confidence (v0.6 score-based), got '{data.confidence_level}' (score={data.confidence_score})"
+    assert 40 <= data.confidence_score < 70, \
+        f"Expected score in [40, 69], got {data.confidence_score}"
+    print(f"  PASS: {len(data.multipliers)} multipliers -> confidence = '{data.confidence_level}' (score={data.confidence_score}/100)")
 
 
 # ── Streamlit app.py structural tests ────────────────────────────────────────
@@ -429,15 +440,19 @@ def test_effort_estimator_imported_in_app():
 # ── CLI structural tests ──────────────────────────────────────────────────────
 
 def test_cli_shows_three_panels():
-    """cli.py main() displays 3 panels: Risk Register, Effort Estimation, Test Strategy."""
-    source = read_cli_source()
-    fn = extract_function(source, "main")
+    """cli.py _run_main_loop() displays 3 panels: Risk Register, Effort Estimation, Test Strategy.
 
-    assert "Risk Register" in fn, "Risk Register panel not found in cli.py main()"
-    assert "Effort Estimation" in fn, "Effort Estimation panel not found in cli.py main()"
+    In v0.5, display logic moved from main() to _run_main_loop() so the watcher
+    can be passed in as a parameter. Check _run_main_loop() for the 3 panels.
+    """
+    source = read_cli_source()
+    fn = extract_function(source, "_run_main_loop")
+
+    assert "Risk Register" in fn, "Risk Register panel not found in cli.py _run_main_loop()"
+    assert "Effort Estimation" in fn, "Effort Estimation panel not found in cli.py _run_main_loop()"
     assert "Generated Test Strategy" in fn or "Test Strategy" in fn, \
-        "Test Strategy panel not found in cli.py main()"
-    print("  PASS: CLI main() shows 3 panels: Risk Register, Effort Estimation, Test Strategy")
+        "Test Strategy panel not found in cli.py _run_main_loop()"
+    print("  PASS: CLI _run_main_loop() shows 3 panels: Risk Register, Effort Estimation, Test Strategy")
 
 
 def test_cli_generate_strategy_returns_effort_keys():
@@ -490,8 +505,8 @@ def test_full_estimate_bmw(agent):
         f"Expected 'v-model', got '{data.methodology_detected}'"
     assert data.total_multiplier == EXPECTED_TOTAL_MULTIPLIER, \
         f"Expected +82%, got +{data.total_multiplier}%"
-    assert data.confidence_level == "Low", \
-        f"Expected 'Low', got '{data.confidence_level}'"
+    assert data.confidence_level == "Medium", \
+        f"Expected 'Medium' (v0.6 score-based), got '{data.confidence_level}' (score={data.confidence_score})"
     assert len(data.pert_activities) == 9, \
         f"Expected 9 PERT activities, got {len(data.pert_activities)}"
     print(f"  PASS: EstimationData fields verified")
@@ -549,8 +564,8 @@ if __name__ == "__main__":
             test_pert_formula),
         ("9 PERT activities when total_multiplier > 0",
             test_pert_nine_activities),
-        ("confidence = 'Low' for >= 5 multipliers",
-            test_confidence_level_low),
+        ("confidence = 'Medium' for BMW ECU (v0.6 score-based algorithm)",
+            test_confidence_level_medium),
         ("app.py has 3 tabs: Risk Register, Effort Estimation, Test Strategy",
             test_three_tabs_in_app),
         ("Effort Estimation tab has download button",
@@ -563,7 +578,7 @@ if __name__ == "__main__":
             test_start_over_clears_effort_keys),
         ("EffortEstimator imported at module level in app.py",
             test_effort_estimator_imported_in_app),
-        ("CLI shows 3 panels: Risk Register, Effort Estimation, Test Strategy",
+        ("CLI _run_main_loop() shows 3 panels: Risk Register, Effort Estimation, Test Strategy",
             test_cli_shows_three_panels),
         ("generate_strategy() returns effort_report and effort_path",
             test_cli_generate_strategy_returns_effort_keys),

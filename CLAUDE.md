@@ -113,6 +113,7 @@ python -m pytest tests/ -v
 | `test_app_v03.py` | Streamlit v0.3 Risk Register integration — 11 tests |
 | `test_effort_estimator.py` | EffortEstimator — deterministic calculations, PERT, CLI/Streamlit integration — 26 tests |
 | `test_knowledge_watcher.py` | KnowledgeBaseWatcher, IngestManager, IngestManifest — file detection, debounce, singleton, CLI/Streamlit integration — 23 tests |
+| `test_confidence_v06.py` | Confidence score algorithm — PERT spread, capacity gap, data quality, multiplier magnitude, boundary conditions — 24 tests |
 
 > **Rule:** After every code change, run relevant tests before committing. Add new tests for every new feature.
 
@@ -123,7 +124,7 @@ python -m pytest tests/ -v
 - **v0.3** ✅ Risk Register generation (automatic, alongside Test Strategy)
 - **v0.4** ✅ Effort Estimation Report (deterministic baseline + PERT + team capacity)
 - **v0.5** ✅ Auto re-ingest — watches `knowledge_base/` with file watcher, incremental ingest, manifest tracking, post-feedback immediate ingest
-- **v0.6** Revisit Effort Estimation confidence level algorithm — current logic too simplistic
+- **v0.6** ✅ Confidence level algorithm — score-based (0-100) with 4 factors: PERT spread, capacity gap, data quality, multiplier magnitude
 - **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
 - **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
 - **v1.0** Full interactive QA Consultant + hosted version
