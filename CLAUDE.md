@@ -128,7 +128,9 @@ python -m pytest tests/ -v
 - **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
 - **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
 - **v1.0** MVP — polish, stability, full documentation, easy local setup (clone → download KB → run)
-- **v2.0** Hosted version — shared KB, quality gate, VPS deployment
-- **v3.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
+- **v2.0** HuggingFace integration — easy KB download for new users
+- **v2.1** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
+- **v3.0** Hosted version — shared KB, quality gate, VPS deployment
+- **v4.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
 
 Keep each version's scope tight — implement incrementally in this order.
