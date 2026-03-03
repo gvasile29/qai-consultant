@@ -1,13 +1,19 @@
 """
 QAI Consultant — Knowledge Base Ingestion Script
 Loads all documents from knowledge_base/ into a local ChromaDB vector store.
+
+Run this once after cloning, and again whenever you add new files to knowledge_base/.
+For automatic re-ingestion of new files, the KnowledgeBaseWatcher (knowledge_watcher.py)
+handles incremental updates while the app is running.
+
+Supported file types: .pdf, .md, .txt
+Output: chroma_db/ (ChromaDB persistent store)
 """
 
 import os
 import sys
 import nltk
 
-# Disable ChromaDB telemetry
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY"] = "False"
 from pathlib import Path

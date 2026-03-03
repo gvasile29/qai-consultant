@@ -12,17 +12,24 @@ os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY"] = "False"
 
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.markdown import Markdown
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+from rich.text import Text
 from rich import print as rprint
 
-from agent import QAIAgent
+from agent import QAIAgent, QAIConnectionError, QAIModelError, QAIKnowledgeBaseError
 from dialogue import DialogueManager
 from strategy_generator import StrategyGenerator
 from knowledge_watcher import get_watcher
+from logger import setup_logging, get_logger
+from version import __version__
+
+setup_logging()
+logger = get_logger(__name__)
 
 console = Console()
 
@@ -30,7 +37,7 @@ console = Console()
 def print_banner():
     """Print the QAI Consultant banner."""
     console.print(Panel.fit(
-        "[bold cyan]QAI Consultant[/bold cyan]\n"
+        f"[bold cyan]QAI Consultant[/bold cyan] [dim]v{__version__}[/dim]\n"
         "[dim]AI-powered QA Architect — Test Strategy Generator[/dim]",
         border_style="cyan",
         padding=(1, 4),
@@ -65,14 +72,14 @@ def run_dialogue(dialogue: DialogueManager) -> bool:
         console.print(f"[bold cyan][{current}/{total}][/bold cyan] [bold]{question['question']}[/bold]")
         console.print(f"[dim]  → {question['hint']}[/dim]")
 
-        # Get answer
-        answer = Prompt.ask("  [cyan]Your answer[/cyan]")
+        # Get answer — retry loop until valid
+        while True:
+            answer = Prompt.ask("  [cyan]Your answer[/cyan]")
+            result = dialogue.submit_answer(answer)
+            if result.valid:
+                break
+            console.print(f"[yellow]  ⚠️  {result.error}[/yellow]")
 
-        if not answer.strip():
-            console.print("[yellow]  ⚠️  Please provide an answer to continue.[/yellow]")
-            continue
-
-        dialogue.submit_answer(answer)
         console.print()
 
     return True
@@ -104,30 +111,71 @@ def show_context_summary(dialogue: DialogueManager):
 
 
 def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
-    """Generate Risk Register, Effort Estimation, and Test Strategy with progress spinner."""
+    """Generate Risk Register, Effort Estimation, and Test Strategy with streaming output."""
+    from concurrent.futures import ThreadPoolExecutor
+    from agent import RAG_K_GENERATION
+    from risk_analyzer import RiskAnalyzer, build_risk_prompt, RISK_SYSTEM_PROMPT
+    from effort_estimator import EffortEstimator
+    from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
+
     generator = StrategyGenerator(agent)
     context = dialogue.get_context()
+    risk_analyzer = RiskAnalyzer(agent)
+    estimator = EffortEstimator(agent)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        progress.add_task("🔍 Analyzing project risks...", total=None)
-        from risk_analyzer import RiskAnalyzer
-        risk_analyzer = RiskAnalyzer(agent)
-        risk_register, risk_sources = risk_analyzer.analyze(context)
-        risk_path = risk_analyzer.save(risk_register, context)
+    # === Parallel RAG retrieval (ChromaDB reads, thread-safe, fast) ===
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        progress.add_task("⚡ Fetching knowledge base context...", total=None)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            f_risk = executor.submit(
+                agent.retrieve_knowledge, risk_analyzer._build_risk_query(context), RAG_K_GENERATION
+            )
+            f_strategy = executor.submit(
+                agent.retrieve_knowledge, context.to_rag_query(), RAG_K_GENERATION
+            )
+            risk_chunks = f_risk.result()
+            strategy_chunks = f_strategy.result()
 
+    risk_knowledge = agent.format_knowledge_context(risk_chunks)
+    strategy_knowledge = agent.format_knowledge_context(strategy_chunks)
+    risk_sources = list({
+        f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+        for c in risk_chunks
+    })
+    sources = list({
+        f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+        for c in strategy_chunks
+    })
+
+    # === Step 1/3: Risk Register (streaming) ===
+    console.print(Panel("[bold yellow]⚠️  Generating Risk Register...[/bold yellow]", border_style="yellow"))
+    risk_prompt = build_risk_prompt(context, risk_knowledge)
+    risk_buffer = []
+    with Live(console=console, refresh_per_second=8) as live:
+        for chunk in agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT):
+            risk_buffer.append(chunk)
+            live.update(Text("".join(risk_buffer)))
+    risk_register = "".join(risk_buffer)
+    risk_path = risk_analyzer.save(risk_register, context)
+    console.print(f"\n[bold green]✅ Risk Register generated[/bold green] ({len(risk_register)} chars)\n")
+
+    # === Step 2/3: Effort Estimation (deterministic + short LLM narrative) ===
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
         progress.add_task("📊 Generating Effort Estimation...", total=None)
-        from effort_estimator import EffortEstimator
-        estimator = EffortEstimator(agent)
         effort_report, effort_data = estimator.estimate(context, risk_register)
         effort_path = estimator.save(effort_report, context)
 
-        progress.add_task("📋 Generating Test Strategy with Mistral...", total=None)
-        strategy, sources = generator.generate(context)
-        strategy_path = generator.save(strategy, context)
+    # === Step 3/3: Test Strategy (streaming) ===
+    console.print(Panel("[bold cyan]📋 Generating Test Strategy...[/bold cyan]", border_style="cyan"))
+    strategy_prompt = build_strategy_prompt(context, strategy_knowledge)
+    strategy_buffer = []
+    with Live(console=console, refresh_per_second=8) as live:
+        for chunk in agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT):
+            strategy_buffer.append(chunk)
+            live.update(Text("".join(strategy_buffer)))
+    strategy = "".join(strategy_buffer)
+    strategy_path = generator.save(strategy, context)
+    console.print(f"\n[bold green]✅ Test Strategy generated[/bold green] ({len(strategy)} chars)\n")
 
     return {
         "strategy": strategy,
@@ -161,8 +209,21 @@ def main():
         progress.add_task("Loading QAI Consultant knowledge base...", total=None)
         try:
             agent = QAIAgent()
+        except QAIKnowledgeBaseError as e:
+            console.print(f"\n[bold red]{e}[/bold red]")
+            logger.error(f"Startup failed - KB error: {e}")
+            sys.exit(1)
+        except QAIConnectionError as e:
+            console.print(f"\n[bold red]{e}[/bold red]")
+            logger.error(f"Startup failed - Ollama connection: {e}")
+            sys.exit(1)
+        except QAIModelError as e:
+            console.print(f"\n[bold red]{e}[/bold red]")
+            logger.error(f"Startup failed - model error: {e}")
+            sys.exit(1)
         except Exception as e:
-            console.print(f"\n[bold red]❌ Error:[/bold red] {e}")
+            console.print(f"\n[bold red]❌ Unexpected error:[/bold red] {e}")
+            logger.exception(f"Unexpected startup error: {e}")
             sys.exit(1)
 
     console.print("[bold green]✅ Knowledge base ready![/bold green]\n")

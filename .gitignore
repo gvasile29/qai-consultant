@@ -10,6 +10,9 @@ __pycache__/
 # Generated output files
 output/
 
+# Logs
+logs/
+
 # Large binary installers
 *.exe
 

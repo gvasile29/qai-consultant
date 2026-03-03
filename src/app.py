@@ -20,6 +20,12 @@ from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_
 from risk_analyzer import RiskAnalyzer
 from effort_estimator import EffortEstimator
 from knowledge_watcher import get_watcher
+from agent import QAIConnectionError, QAIModelError, QAIKnowledgeBaseError
+from logger import setup_logging, get_logger
+from version import __version__
+
+setup_logging()
+logger = get_logger(__name__)
 
 # ── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -99,7 +105,26 @@ def init_session_state():
 # ── Load Agent ─────────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_agent():
-    return QAIAgent()
+    """
+    Load QAIAgent once per Streamlit session.
+    Returns (agent, error_message) tuple — error_message is None on success.
+    """
+    try:
+        agent = QAIAgent()
+        logger.info("QAIAgent loaded successfully in Streamlit")
+        return agent, None
+    except QAIKnowledgeBaseError as e:
+        logger.error(f"KB error: {e}")
+        return None, str(e)
+    except QAIConnectionError as e:
+        logger.error(f"Ollama connection error: {e}")
+        return None, str(e)
+    except QAIModelError as e:
+        logger.error(f"Model error: {e}")
+        return None, str(e)
+    except Exception as e:
+        logger.exception(f"Unexpected error loading agent: {e}")
+        return None, f"❌ Unexpected error: {e}"
 
 
 # ── Knowledge Base Watcher ─────────────────────────────────────────────────────
@@ -134,8 +159,9 @@ def check_kb_notification() -> str:
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
-        st.markdown("## 🧪 QAI Consultant")
-        st.markdown("AI-powered QA Architect")
+        st.markdown(f"## 🧪 QAI Consultant")
+        st.markdown(f"AI-powered QA Architect")
+        st.caption(f"v{__version__}")
         st.divider()
 
         st.markdown("### How it works")
@@ -185,15 +211,6 @@ def render_intro():
 
     st.markdown("---")
 
-    with st.spinner("Loading knowledge base..."):
-        try:
-            st.session_state.agent = load_agent()
-            st.success("✅ Knowledge base ready! Let's get started.")
-        except Exception as e:
-            st.error(f"❌ Error loading knowledge base: {e}")
-            st.info("Make sure you've run `python src/ingest.py` first.")
-            return
-
     st.markdown("###")
     if st.button("🚀 Start — Generate a Test Strategy", use_container_width=True, type="primary"):
         st.session_state.current_step = "dialogue"
@@ -227,15 +244,30 @@ def render_dialogue():
         submitted = st.form_submit_button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
 
     if submitted:
-        # Validate all answers are filled
-        empty_fields = [q["question"] for q in QUESTIONS if not st.session_state.answers.get(q["key"], "").strip()]
-        if empty_fields:
-            st.warning(f"⚠️ Please answer all questions. Missing: {len(empty_fields)} field(s).")
+        # Validate all answers using InputValidator
+        from dialogue import InputValidator
+        validator = InputValidator()
+        errors = []
+        cleaned_answers = {}
+
+        for question in QUESTIONS:
+            key = question["key"]
+            raw = st.session_state.answers.get(key, "")
+            result = validator.validate(key, raw)
+            if not result.valid:
+                errors.append(f"**{question['question']}**: {result.error}")
+            else:
+                cleaned_answers[key] = result.cleaned
+
+        if errors:
+            st.warning("⚠️ Please fix the following before continuing:")
+            for err in errors:
+                st.markdown(f"- {err}")
         else:
-            # Populate dialogue context
+            # Populate dialogue context with cleaned answers
             dialogue = DialogueManager()
             for question in QUESTIONS:
-                dialogue.submit_answer(st.session_state.answers[question["key"]])
+                dialogue.submit_answer(cleaned_answers[question["key"]])
             st.session_state.dialogue = dialogue
             st.session_state.current_step = "review"
             st.rerun()
@@ -293,30 +325,62 @@ def render_strategy():
     st.markdown("---")
 
     if st.session_state.strategy is None:
+        from concurrent.futures import ThreadPoolExecutor
+        from agent import RAG_K_GENERATION
+        from risk_analyzer import build_risk_prompt, RISK_SYSTEM_PROMPT
+
         context = st.session_state.dialogue.get_context()
         agent = st.session_state.agent
         generator = StrategyGenerator(agent)
         risk_analyzer = RiskAnalyzer(agent)
         estimator = EffortEstimator(agent)
 
-        with st.spinner("🔍 Analyzing project risks..."):
-            risk_register, risk_sources = risk_analyzer.analyze(context)
-            risk_path = risk_analyzer.save(risk_register, context)
+        # Parallel RAG retrieval (read-only ChromaDB, thread-safe)
+        with st.spinner("⚡ Fetching knowledge base context..."):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f_risk = executor.submit(
+                    agent.retrieve_knowledge,
+                    risk_analyzer._build_risk_query(context),
+                    RAG_K_GENERATION,
+                )
+                f_strategy = executor.submit(
+                    agent.retrieve_knowledge,
+                    context.to_rag_query(),
+                    RAG_K_GENERATION,
+                )
+                risk_chunks = f_risk.result()
+                strategy_chunks = f_strategy.result()
 
+        risk_sources = list({
+            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            for c in risk_chunks
+        })
+        sources = list({
+            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            for c in strategy_chunks
+        })
+
+        # Risk Register (streaming)
+        st.markdown("#### ⚠️ Generating Risk Register...")
+        risk_prompt = build_risk_prompt(context, agent.format_knowledge_context(risk_chunks))
+        risk_register = st.write_stream(
+            agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
+        )
+        risk_path = risk_analyzer.save(risk_register, context)
+
+        # Effort Estimation (deterministic + short LLM narrative)
         with st.spinner("📊 Generating Effort Estimation..."):
             effort_report, effort_data = estimator.estimate(context, risk_register)
             effort_path = estimator.save(effort_report, context)
 
-        with st.spinner("🤖 Generating Test Strategy with Mistral — this may take a moment..."):
-            chunks = agent.retrieve_knowledge(context.to_rag_query(), k=8)
-            knowledge_context = agent.format_knowledge_context(chunks)
-            prompt = build_strategy_prompt(context, knowledge_context)
-            strategy = agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
-            output_path = generator.save(strategy, context)
-            sources = list({
-                f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
-                for c in chunks
-            })
+        # Test Strategy (streaming)
+        st.markdown("#### 📋 Generating Test Strategy...")
+        strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
+        strategy = st.write_stream(
+            agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
+        )
+        output_path = generator.save(strategy, context)
+        st.markdown("---")
 
         st.session_state.strategy = strategy
         st.session_state.sources = sources
@@ -450,6 +514,19 @@ notes: {extra_note}
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     init_session_state()
+
+    # ── Load agent — show clear error if Ollama/ChromaDB not ready ─────────────
+    agent, error = load_agent()
+    if error:
+        st.error(error)
+        st.markdown("---")
+        st.markdown("### 🛠️ Troubleshooting")
+        st.code("# Start Ollama\nollama serve\n\n# Pull model\nollama pull mistral:7b-instruct-q4_0\n\n# Build knowledge base\npython src/ingest.py", language="bash")
+        st.stop()
+
+    # Store agent in session state for use across components
+    if st.session_state.agent is None:
+        st.session_state.agent = agent
 
     # Start KB watcher (once per session)
     start_kb_watcher()

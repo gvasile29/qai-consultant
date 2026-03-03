@@ -1,6 +1,18 @@
 """
 QAI Consultant — Knowledge Base Watcher & Auto Re-ingest
-Monitors knowledge_base/ for new/modified files and incrementally ingests them.
+Monitors knowledge_base/ for new/modified files and incrementally ingests them
+into ChromaDB without requiring a manual re-run of ingest.py.
+
+Two triggers:
+  1. File watcher (watchdog) — detects new/modified files in knowledge_base/
+  2. Direct call — IngestManager.ingest_file() called after feedback save
+
+Key design decisions:
+  - Incremental ingest only — never full re-ingest (too slow)
+  - Manifest-driven — ingest_manifest.json tracks SHA/mtime per file
+  - Thread-safe — ChromaDB writes protected by threading.Lock
+  - Debounced — 3-second debounce prevents duplicate triggers on save
+  - Singleton — get_watcher() returns the same instance across the app
 """
 
 import os
@@ -17,8 +29,9 @@ os.environ["CHROMA_TELEMETRY"] = "False"
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent, FileMovedEvent
+from logger import get_logger
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
+logger = get_logger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 KB_DIR = BASE_DIR / "knowledge_base"
 CHROMA_DIR = BASE_DIR / "chroma_db"
@@ -32,8 +45,6 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 COLLECTION_NAME = "qai_knowledge_base"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
-
-logger = logging.getLogger(__name__)
 
 
 # ── Ingest Manifest ────────────────────────────────────────────────────────────

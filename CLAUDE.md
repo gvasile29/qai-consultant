@@ -11,9 +11,9 @@ QAI Consultant is a Python-based AI agent that acts as a senior QA Architect. It
 ```bash
 pip install -r requirements.txt          # Install dependencies
 
-# Prerequisites: Ollama must be running with Mistral
+# Prerequisites: Ollama must be running with the quantized Mistral model
 ollama serve
-ollama pull mistral
+ollama pull mistral:7b-instruct-q4_0    # 4-bit quantized — ~3x faster on CPU than float16
 
 python src/ingest.py                     # Build/rebuild ChromaDB vector store from knowledge_base/
 python src/cli.py                        # Run terminal UI (Rich-based)
@@ -28,39 +28,60 @@ streamlit run src/app.py                 # Run browser UI at http://localhost:85
 ```
 User Input
   → DialogueManager (11 questions → ProjectContext)
-  → RiskAnalyzer.analyze(context)          ← NEW v0.3
-      → _build_risk_query() → agent.retrieve_knowledge() → ChromaDB
+  → generate_all() — parallel RAG prefetch (ThreadPoolExecutor, 2 workers)
+      → [parallel] _build_risk_query()  → retrieve_knowledge(k=5) → ChromaDB
+      → [parallel] context.to_rag_query() → retrieve_knowledge(k=5) → ChromaDB
+  → RiskAnalyzer.analyze(context, chunks=prefetched)
       → build_risk_prompt(context, knowledge_context)
-      → agent.ask(prompt) → Ollama Mistral
+      → agent.ask_streaming(prompt) → Ollama mistral:7b-instruct-q4_0 (streamed)
       → Risk Register saved to output/
-  → StrategyGenerator.generate(context)
-      → context.to_rag_query() → agent.retrieve_knowledge() → ChromaDB similarity search
+  → EffortEstimator.estimate(context, risk_register)
+      → deterministic PERT + multipliers + confidence score
+      → agent.ask(narrative_prompt) → Ollama (short, ~600 char prompt)
+      → Effort Report saved to output/
+  → StrategyGenerator.generate(context, chunks=prefetched)
       → build_strategy_prompt(context, knowledge_context)
-      → agent.ask(prompt) → Ollama Mistral
+      → agent.ask_streaming(prompt) → Ollama mistral:7b-instruct-q4_0 (streamed)
       → Test Strategy saved to output/
-  → Feedback prompt → if yes/partially → saved to knowledge_base/generated_strategies/  ← NEW v0.2
+  → Feedback prompt → if yes/partially → saved to knowledge_base/generated_strategies/
 ```
 
 ### Source Files (`src/`)
 
 | File | Role |
 |------|------|
-| `agent.py` | `QAIAgent` — loads ChromaDB + HuggingFace embeddings, exposes `retrieve_knowledge()`, `ask()`, `ask_with_rag()` |
+| `agent.py` | `QAIAgent` — loads ChromaDB + HuggingFace embeddings, exposes `retrieve_knowledge()`, `ask()`, `ask_streaming()`, `ask_with_rag()`; all LLM params in one config block |
 | `ingest.py` | One-time pipeline: load PDFs/Markdowns → chunk (1000 chars, 200 overlap) → embed (all-MiniLM-L6-v2) → persist to `chroma_db/` |
 | `dialogue.py` | `DialogueManager` + `ProjectContext` dataclass — collects 11 project fields; `to_rag_query()` builds the retrieval query |
-| `strategy_generator.py` | `StrategyGenerator` — orchestrates retrieve (k=8) → prompt → generate → save to `output/` with timestamp; `generate_all()` generates both Strategy + Risk Register |
-| `risk_analyzer.py` | `RiskAnalyzer` — analyzes project context, builds risk-focused RAG query, generates Risk Register with matrix + mitigations |
-| `effort_estimator.py` | `EffortEstimator` — deterministic baseline + multipliers + PERT calculation; LLM used only for narrative sections |
+| `strategy_generator.py` | `StrategyGenerator` — `generate_all()` prefetches RAG chunks in parallel (ThreadPoolExecutor) then runs Risk → Effort → Strategy sequentially; `generate(chunks=None)` accepts pre-fetched chunks |
+| `risk_analyzer.py` | `RiskAnalyzer` — analyzes project context, builds risk-focused RAG query, generates Risk Register; `analyze(chunks=None)` accepts pre-fetched chunks |
+| `effort_estimator.py` | `EffortEstimator` — deterministic baseline + multipliers + PERT calculation; LLM used only for narrative sections (no RAG) |
+| `version.py` | `__version__` = "1.0.0" — version string displayed in CLI banner and Streamlit sidebar |
+| `logger.py` | `get_logger()` + `setup_logging()` — centralized logging to `logs/qai_consultant.log`; file handler (DEBUG) + console handler (WARNING+) |
 | `knowledge_watcher.py` | `KnowledgeBaseWatcher` + `IngestManager` + `IngestManifest` — watches `knowledge_base/` for new/changed files and incrementally re-ingests them; singleton via `get_watcher()` |
-| `cli.py` | Terminal UI using `rich` — multi-phase flow: banner → load agent → dialogue → review → generate (Risk Register + Effort Estimation + Test Strategy) → feedback loop |
-| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; results shown in 3 tabs (⚠️ Risk Register / 📊 Effort Estimation / 📋 Test Strategy); uses `@st.cache_resource` for agent |
+| `cli.py` | Terminal UI using `rich` — parallel RAG prefetch → Risk Register (streaming via `rich.live.Live`) → Effort spinner → Strategy (streaming via `rich.live.Live`) → feedback loop |
+| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; Risk + Strategy stream via `st.write_stream()`; results shown in 3 tabs; uses `@st.cache_resource` for agent |
 
-### Key Configuration (hardcoded in source)
+### Key Configuration (`src/agent.py` config block)
 
-- `OLLAMA_MODEL = "mistral"` — change in `agent.py` to switch models
-- `EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"` — must match between ingest and agent
-- `TOP_K_RESULTS = 5` (agent default), `k=8` used in strategy generation
-- `CHROMA_DIR` — absolute path to `chroma_db/` resolved from `agent.py` location
+```python
+OLLAMA_MODEL     = "mistral:7b-instruct-q4_0"  # quantized model — change here to switch
+EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"  # must match ingest.py
+TOP_K_RESULTS    = 5          # default k for retrieve_knowledge()
+RAG_K_GENERATION = 5          # k for Risk + Strategy prompts (imported by risk_analyzer, strategy_generator)
+GENERATION_TIMEOUT = 300      # HTTP wall-clock timeout (seconds) — set via OllamaClient(timeout=N)
+
+LLM_NUM_CTX     = 4096        # context window — Mistral default 32768 causes CPU hangs
+LLM_NUM_PREDICT = 1500        # max output tokens — prevents runaway generation
+LLM_TEMPERATURE = 0.1         # near-deterministic sampling
+
+_ollama_client = OllamaClient(timeout=GENERATION_TIMEOUT)  # real HTTP timeout
+```
+
+> **Performance note:** `options={"timeout": N}` in `ollama.chat()` is silently ignored by Ollama.
+> The real HTTP timeout must be set via `OllamaClient(timeout=N)`.
+>
+> `CHROMA_DIR` — absolute path to `chroma_db/` resolved from `agent.py` location.
 
 ### Generated Output
 
@@ -114,6 +135,11 @@ python -m pytest tests/ -v
 | `test_effort_estimator.py` | EffortEstimator — deterministic calculations, PERT, CLI/Streamlit integration — 26 tests |
 | `test_knowledge_watcher.py` | KnowledgeBaseWatcher, IngestManager, IngestManifest — file detection, debounce, singleton, CLI/Streamlit integration — 23 tests |
 | `test_confidence_v06.py` | Confidence score algorithm — PERT spread, capacity gap, data quality, multiplier magnitude, boundary conditions — 24 tests |
+| `test_agent.py` | QAIAgent error handling + ask_streaming() — QAIKnowledgeBaseError, QAIConnectionError, QAIModelError, streaming — 8 tests |
+| `test_dialogue.py` | InputValidator + DialogueManager — validation rules, submit flow, reset — 21 tests |
+| `test_ollama_check.py` | Ollama connectivity checks — running/not running, model present/missing — 5 tests |
+| `test_integration.py` | End-to-end pipeline — dialogue → Risk Register + Effort Report + Test Strategy — 5 tests |
+| `test_performance_config.py` | Performance regression guards — LLM_NUM_CTX, LLM_NUM_PREDICT, GENERATION_TIMEOUT, RAG_K_GENERATION, OllamaClient instance, model tag — 6 tests |
 
 > **Rule:** After every code change, run relevant tests before committing. Add new tests for every new feature.
 
@@ -127,7 +153,7 @@ python -m pytest tests/ -v
 - **v0.6** ✅ Confidence level algorithm — score-based (0-100) with 4 factors: PERT spread, capacity gap, data quality, multiplier magnitude
 - **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
 - **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
-- **v1.0** MVP — polish, stability, full documentation, easy local setup (clone → download KB → run)
+- **v1.0** ✅ MVP — error handling, input validation, logging, docstrings, tests, INSTALL.md, CONTRIBUTING.md, version display
 - **v2.0** HuggingFace integration — easy KB download for new users
 - **v2.1** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment

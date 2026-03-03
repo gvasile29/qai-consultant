@@ -4,6 +4,41 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 
 > 100% local. No API keys. No cloud. Powered by [Ollama](https://ollama.ai) + [Mistral](https://mistral.ai).
 
+![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
+
+---
+
+## Screenshots
+
+<!-- TODO: Add screenshots before making repo public -->
+<!-- ![CLI](docs/screenshots/cli_dialogue.png) -->
+<!-- ![Streamlit](docs/screenshots/streamlit_strategy.png) -->
+
+---
+
+## Quick Start
+
+```bash
+# 1. Install Ollama (https://ollama.ai) and pull the model
+ollama pull mistral:7b-instruct-q4_0   # 4-bit quantized — ~3x faster on CPU
+
+# 2. Clone and install
+git clone https://github.com/yourusername/qai-consultant.git
+cd qai-consultant
+pip install -r requirements.txt
+
+# 3. Build the knowledge base (one-time, 5-10 min)
+python src/ingest.py
+
+# 4. Run
+python src/cli.py            # Terminal UI
+streamlit run src/app.py     # Web UI → http://localhost:8501
+```
+
+> 📖 Full installation guide: [INSTALL.md](INSTALL.md)
+
 ---
 
 ## The Problem
@@ -55,10 +90,10 @@ QAI Consultant's recommendations are grounded in real QA standards and methodolo
 
 ### 1. Install Ollama
 
-Download and install Ollama from [ollama.ai](https://ollama.ai), then pull the recommended model:
+Download and install Ollama from [ollama.ai](https://ollama.ai), then pull the quantized model:
 
 ```bash
-ollama pull mistral
+ollama pull mistral:7b-instruct-q4_0   # 4-bit quantized — ~3x faster on CPU than float16
 ```
 
 ### 2. Verify Ollama is running
@@ -166,4 +201,19 @@ Contributions are welcome:
 - 🐛 Report bugs or suggest features via GitHub Issues
 - 🔧 Submit pull requests
 
-See `knowledge_base/expert_knowledge/CONTRIBUTION_GUIDE.md` for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| "Ollama is not running" | Run `ollama serve` in a separate terminal |
+| "Model 'mistral:7b-instruct-q4_0' not found" | Run `ollama pull mistral:7b-instruct-q4_0` |
+| "Knowledge base not found" | Run `python src/ingest.py` |
+| Slow generation (>1 min) | Normal on first call — model loading into memory; subsequent calls are faster |
+| Windows encoding errors | Set `PYTHONIOENCODING=utf-8` before running |
+
+> 📖 Full troubleshooting guide: [INSTALL.md](INSTALL.md#troubleshooting)
+

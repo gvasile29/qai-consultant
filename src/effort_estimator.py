@@ -1,7 +1,20 @@
 """
-QAI Consultant — Effort Estimator Module
-Generates a detailed QA Effort Estimation Report using deterministic
-baseline + multipliers + PERT, with LLM-generated narrative.
+QAI Consultant — Effort Estimator
+Generates a QA Effort Estimation Report using a deterministic calculation
+pipeline, with LLM used only for narrative sections (summary, assumptions,
+recommendations).
+
+Calculation pipeline:
+  1. Parse timeline and team size from free-text dialogue answers
+  2. Detect project type → baseline QA percentage (industry benchmarks)
+  3. Apply complexity multipliers (compliance, automation, team size, integrations)
+  4. PERT analysis across 9 QA activity areas
+  5. Team capacity calculation (available person-days at 75% utilization)
+  6. Risk buffer from Risk Register (critical/high/medium risk counts)
+  7. Confidence score (0-100) from 4 factors: PERT spread, capacity gap,
+     data quality, multiplier magnitude
+
+Output: markdown report saved to output/effort_estimation_*.md
 """
 
 import os
@@ -11,6 +24,9 @@ os.environ["CHROMA_TELEMETRY"] = "False"
 
 from pathlib import Path
 from datetime import datetime
+from logger import get_logger
+
+logger = get_logger(__name__)
 from dataclasses import dataclass, field
 from typing import Optional
 from agent import QAIAgent

@@ -1,7 +1,10 @@
 """
-QAI Consultant — Risk Analyzer Module
-Automatically analyzes project context and generates a Risk Register
-with Likelihood vs Impact matrix and concrete mitigations.
+QAI Consultant — Risk Analyzer
+Analyzes project context and generates a structured Risk Register
+with Likelihood × Impact matrix and concrete mitigations.
+
+Output is a markdown document saved to output/risk_register_*.md.
+The Risk Register is also passed to EffortEstimator to calculate risk buffers.
 """
 
 import os
@@ -10,8 +13,11 @@ os.environ["CHROMA_TELEMETRY"] = "False"
 
 from pathlib import Path
 from datetime import datetime
-from agent import QAIAgent
+from agent import QAIAgent, RAG_K_GENERATION
 from dialogue import ProjectContext
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 # ── System Prompt ──────────────────────────────────────────────────────────────
 
@@ -94,24 +100,46 @@ Reference relevant standards (ISO 26262, OWASP, ISTQB) where applicable.
 # ── Risk Analyzer ──────────────────────────────────────────────────────────────
 
 class RiskAnalyzer:
-    """Analyzes project context and generates a Risk Register."""
+    """
+    Analyzes project context and generates a structured Risk Register.
+
+    Uses RAG to retrieve risk-relevant knowledge (OWASP, ISO 26262, etc.)
+    then generates a markdown Risk Register via Ollama with:
+    - Risk matrix (Likelihood × Impact)
+    - Mitigation strategies per risk
+    - Risk-based testing priorities
+    """
 
     def __init__(self, agent: QAIAgent):
+        """
+        Args:
+            agent: Initialized QAIAgent with ChromaDB and Ollama connections.
+        """
         self.agent = agent
 
-    def analyze(self, context: ProjectContext) -> tuple:
+    def analyze(self, context: ProjectContext, chunks: list = None) -> tuple:
         """
-        Analyze project risks and generate a Risk Register.
-        Returns (risk_register_markdown, sources)
-        """
-        # Build RAG query focused on risks
-        risk_query = self._build_risk_query(context)
-        chunks = self.agent.retrieve_knowledge(risk_query, k=8)
-        knowledge_context = self.agent.format_knowledge_context(chunks)
+        Analyze project risks using RAG + LLM and generate a Risk Register.
 
-        # Generate risk register
+        Args:
+            context: Collected ProjectContext from DialogueManager.
+            chunks: Optional pre-fetched knowledge chunks. If None, retrieves
+                    from ChromaDB using the risk-focused query. Pass pre-fetched
+                    chunks to enable parallel RAG retrieval in the pipeline.
+
+        Returns:
+            Tuple of (risk_register_markdown: str, sources: list[str]).
+        """
+        logger.info(f"Analyzing risks for '{context.project_name}'...")
+        if chunks is None:
+            risk_query = self._build_risk_query(context)
+            chunks = self.agent.retrieve_knowledge(risk_query, k=RAG_K_GENERATION)
+        knowledge_context = self.agent.format_knowledge_context(chunks)
+        logger.info(f"Retrieved {len(chunks)} risk-relevant chunks")
+
         prompt = build_risk_prompt(context, knowledge_context)
         risk_register = self.agent.ask(prompt, system_prompt=RISK_SYSTEM_PROMPT)
+        logger.info(f"Risk Register generated ({len(risk_register)} chars)")
 
         sources = list({
             f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
