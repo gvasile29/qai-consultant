@@ -1,2 +1,0 @@
-# Test
-Some content.
