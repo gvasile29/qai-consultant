@@ -13,6 +13,10 @@ output/
 # Logs
 logs/
 
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+
 # Large binary installers
 *.exe
 
@@ -29,7 +33,11 @@ Thumbs.db
 # IDE
 .idea/
 *.iml
+.vscode/
 
 # Environment variables
 .env
 .env.local
+
+# Claude Code internal file
+CLAUDE.md
