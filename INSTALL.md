@@ -57,7 +57,7 @@ ollama list
 ## Step 3 — Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/qai-consultant.git
+git clone https://github.com/gvasile29/qai-consultant.git
 cd qai-consultant
 ```
 

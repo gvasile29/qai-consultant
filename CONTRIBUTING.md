@@ -137,7 +137,7 @@ The easiest way to contribute validated strategies:
 
 ## Pull Request Guidelines
 
-1. **Fork** the repository
+1. **Fork** the repository at https://github.com/gvasile29/qai-consultant
 2. **Create a branch**: `git checkout -b add/automotive-testing-knowledge`
 3. **Add your files** following the naming conventions above
 4. **Run ingest** and verify your content is ingested correctly

@@ -2,19 +2,28 @@
 
 An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, and **Effort Estimation Report** from a simple project description.
 
-> 100% local. No API keys. No cloud. Powered by [Ollama](https://ollama.ai) + [Mistral](https://mistral.ai).
+> 100% local. No API keys. No cloud. Powered by [Ollama](https://ollama.ai) + [mistral:7b-instruct-q4_0](https://ollama.com/library/mistral).
+
+> 🤖 Built with [Claude Code](https://claude.ai/code) by Anthropic.
 
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
+![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
 ---
 
 ## Screenshots
 
-<!-- TODO: Add screenshots before making repo public -->
-<!-- ![CLI](docs/screenshots/cli_dialogue.png) -->
-<!-- ![Streamlit](docs/screenshots/streamlit_strategy.png) -->
+### CLI
+![CLI Banner](docs/screenshots/cli_banner.png)
+![CLI Dialogue](docs/screenshots/cli_dialogue.png)
+
+### Web UI (Streamlit)
+![Streamlit Intro](docs/screenshots/streamlit_intro.png)
+![Streamlit Strategy](docs/screenshots/streamlit_strategy.png)
+![Streamlit Risk Register](docs/screenshots/streamlit_risk_register.png)
+![Streamlit Effort](docs/screenshots/streamlit_effort.png)
 
 ---
 
@@ -25,7 +34,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ollama pull mistral:7b-instruct-q4_0   # 4-bit quantized — ~3x faster on CPU
 
 # 2. Clone and install
-git clone https://github.com/yourusername/qai-consultant.git
+git clone https://github.com/gvasile29/qai-consultant.git
 cd qai-consultant
 pip install -r requirements.txt
 
@@ -105,26 +114,6 @@ curl http://localhost:11434
 
 ---
 
-## Getting Started
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/qai-consultant
-cd qai-consultant
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Build the knowledge base (one-time setup, ~5-10 min)
-python src/ingest.py
-
-# 4. Run — choose your preferred interface:
-python src/cli.py                 # Terminal UI
-streamlit run src/app.py          # Web UI → http://localhost:8501
-```
-
----
-
 ## How It Works
 
 ```
@@ -181,10 +170,8 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v0.4** ✅ Effort Estimation Report — PERT-based with team capacity analysis
 - **v0.5** ✅ Auto re-ingest — file watcher + incremental ingest + manifest tracking
 - **v0.6** ✅ Confidence level algorithm — score-based (0-100): PERT spread + capacity gap + data quality + multiplier magnitude
-- **v0.7** HuggingFace integration — `download_knowledge_base.py` so users don't need to build KB manually
-- **v0.8** Community knowledge — launch LinkedIn Poll Series (10 polls ready) + run expert knowledge extraction sessions using prompts in `knowledge_base/expert_knowledge/`
-- **v1.0** MVP — polish, stability, full documentation, easy local setup (clone → download KB → run)
-- **v2.0** HuggingFace integration — easy KB download for new users
+- **v1.0** ✅ MVP — error handling, input validation, logging, full documentation, tests, Apache 2.0 license
+- **v2.0** HuggingFace integration — easy KB download for new users (no manual ingest needed)
 - **v2.1** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment
 - **v4.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
