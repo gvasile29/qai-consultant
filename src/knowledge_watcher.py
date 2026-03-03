@@ -230,8 +230,6 @@ class IngestManager:
                 loader = PyPDFLoader(str(filepath))
                 docs = loader.load()
             elif suffix in (".md", ".txt"):
-                # Use TextLoader for .md and .txt — UnstructuredMarkdownLoader
-                # requires NLTK downloads not guaranteed in watcher context.
                 from langchain_community.document_loaders import TextLoader
                 loader = TextLoader(str(filepath), encoding="utf-8")
                 docs = loader.load()

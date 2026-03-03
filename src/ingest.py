@@ -32,8 +32,6 @@ nltk.download("punkt_tab", quiet=True)
 nltk.download("averaged_perceptron_tagger", quiet=True)
 nltk.download("averaged_perceptron_tagger_eng", quiet=True)
 
-from langchain_community.document_loaders import UnstructuredMarkdownLoader
-
 # ── Paths ──────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 KNOWLEDGE_BASE_DIR = BASE_DIR / "knowledge_base"
@@ -42,7 +40,7 @@ CHROMA_DIR = BASE_DIR / "chroma_db"
 # ── Supported file types ───────────────────────────────────────────────────────
 SUPPORTED_EXTENSIONS = {
     ".pdf": PyPDFLoader,
-    ".md": UnstructuredMarkdownLoader,
+    ".md": TextLoader,
     ".txt": TextLoader,
 }
 
