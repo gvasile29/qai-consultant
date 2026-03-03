@@ -116,7 +116,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
     from agent import RAG_K_GENERATION
     from risk_analyzer import RiskAnalyzer, build_risk_prompt, RISK_SYSTEM_PROMPT
     from effort_estimator import EffortEstimator
-    from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
+    from strategy_generator import build_strategy_prompt, SYSTEM_PROMPT
 
     generator = StrategyGenerator(agent)
     context = dialogue.get_context()

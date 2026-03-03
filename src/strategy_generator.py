@@ -275,7 +275,7 @@ if __name__ == "__main__":
 
     print(strategy)
     print("\n" + "=" * 50)
-    print(f"\n📚 Sources used:")
+    print("\n📚 Sources used:")
     for s in sources:
         print(f"  - {s}")
     print(f"\n💾 Strategy saved to: {output_path}")

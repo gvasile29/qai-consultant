@@ -140,11 +140,11 @@ def test_feedback_partially():
 
         content = result.read_text(encoding="utf-8")
         assert "feedback: partially" in content, "Missing 'feedback: partially'"
-        assert note in content, f"Improvement note missing from saved file"
+        assert note in content, "Improvement note missing from saved file"
         assert SAMPLE_STRATEGY in content, "Original strategy body missing"
         assert session_state.get("feedback_submitted") is True, "feedback_submitted not set"
 
-        print(f"  PASS: File with partial note saved")
+        print("  PASS: File with partial note saved")
         print(f"        Frontmatter: {content[:120].strip()}")
     finally:
         shutil.rmtree(output_path.parent, ignore_errors=True)
@@ -167,7 +167,7 @@ def test_feedback_no():
         new_files = files_after - files_before
         assert not new_files, f"Unexpected files created: {new_files}"
 
-        print(f"  PASS: No file written, feedback_submitted=True")
+        print("  PASS: No file written, feedback_submitted=True")
     finally:
         shutil.rmtree(output_path.parent, ignore_errors=True)
 
@@ -187,7 +187,7 @@ def test_feedback_submitted_guard():
     guard_after = not session_after.get("feedback_submitted", False)
     assert guard_after is False, "Buttons should be hidden after submission"
 
-    print(f"  PASS: Guard correctly shows buttons only when feedback not yet submitted")
+    print("  PASS: Guard correctly shows buttons only when feedback not yet submitted")
 
 
 def test_feedback_submitted_not_set_by_default():
@@ -200,7 +200,7 @@ def test_feedback_submitted_not_set_by_default():
     assert '"feedback_submitted"' not in app_source.split("def init_session_state")[1].split("def load_agent")[0], \
         "feedback_submitted should NOT be initialized in init_session_state — it must default to absent"
 
-    print(f"  PASS: feedback_submitted is not pre-set in init_session_state (defaults to absent/False)")
+    print("  PASS: feedback_submitted is not pre-set in init_session_state (defaults to absent/False)")
 
 
 def test_generate_another_clears_feedback_submitted():
@@ -223,7 +223,7 @@ def test_generate_another_clears_feedback_submitted():
     assert "dialogue" not in session_state, "dialogue should be cleared"
     assert session_state.get("current_step") == "intro", "Should return to intro step"
 
-    print(f"  PASS: 'Generate Another' clears feedback_submitted and resets to intro")
+    print("  PASS: 'Generate Another' clears feedback_submitted and resets to intro")
 
 
 def test_generate_another_works_even_without_feedback_submitted():
@@ -243,7 +243,7 @@ def test_generate_another_works_even_without_feedback_submitted():
     assert "feedback_submitted" not in session_state, "Should still be absent"
     assert session_state.get("current_step") == "intro"
 
-    print(f"  PASS: Cleanup is safe when feedback_submitted was never set")
+    print("  PASS: Cleanup is safe when feedback_submitted was never set")
 
 
 def test_generated_strategies_dir_autocreated():
@@ -265,7 +265,7 @@ def test_generated_strategies_dir_autocreated():
         assert FEEDBACK_DIR.exists(), "generated_strategies/ was NOT auto-created"
         assert result is not None and result.exists(), "File was not saved"
 
-        print(f"  PASS: generated_strategies/ auto-created on first 'yes'")
+        print("  PASS: generated_strategies/ auto-created on first 'yes'")
     finally:
         shutil.rmtree(output_path.parent, ignore_errors=True)
         if result and result.exists():
@@ -312,13 +312,13 @@ def test_partially_ux_fix_one_interaction():
         assert "feedback: partially" in content, \
             "Sub-case B: missing 'feedback: partially' in frontmatter"
         assert note in content, \
-            f"Sub-case B: improvement note missing from saved file"
+            "Sub-case B: improvement note missing from saved file"
         assert SAMPLE_STRATEGY in content, \
             "Sub-case B: original strategy body missing"
         assert session_b.get("feedback_submitted") is True, \
             "Sub-case B: feedback_submitted not set after save"
 
-        print(f"  PASS Sub-case B: note filled -> file saved immediately in same render")
+        print("  PASS Sub-case B: note filled -> file saved immediately in same render")
         print(f"        Frontmatter: {content[:130].strip()}")
 
     finally:

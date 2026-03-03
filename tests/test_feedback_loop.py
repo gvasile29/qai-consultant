@@ -94,7 +94,7 @@ def test_feedback_partially():
         assert note in content, f"Expected note '{note}' in content"
         assert SAMPLE_STRATEGY in content, "Original strategy content missing"
 
-        print(f"  PASS: File created with partial feedback note")
+        print("  PASS: File created with partial feedback note")
         print(f"        Content preview: {content[:160].strip()}")
     finally:
         shutil.rmtree(output_path.parent, ignore_errors=True)
@@ -115,7 +115,7 @@ def test_feedback_no():
         new_files = [f for f in files_after if f not in files_before]
         assert not new_files, f"Unexpected files created: {new_files}"
 
-        print(f"  PASS: No file created (feedback='no')")
+        print("  PASS: No file created (feedback='no')")
     finally:
         shutil.rmtree(output_path.parent, ignore_errors=True)
 

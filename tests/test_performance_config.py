@@ -108,7 +108,7 @@ if __name__ == "__main__":
         print(f"\n[TEST] {name}")
         try:
             fn()
-            print(f"  PASS")
+            print("  PASS")
             passed += 1
         except AssertionError as e:
             print(f"  FAIL: {e}")

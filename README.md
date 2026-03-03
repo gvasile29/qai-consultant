@@ -6,6 +6,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 
 > 🤖 Built with [Claude Code](https://claude.ai/code) by Anthropic.
 
+![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-green.svg)

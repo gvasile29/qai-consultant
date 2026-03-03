@@ -1,0 +1,5 @@
+﻿# Development dependencies - not needed for running QAI Consultant
+-r requirements.txt
+ruff==0.4.4
+pytest==8.3.3
+pytest-mock==3.14.0

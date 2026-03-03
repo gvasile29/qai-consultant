@@ -177,7 +177,7 @@ def test_detect_project_type_embedded():
     est._detect_project_type(BMW_EFFORT_CONTEXT, data)
     assert data.project_type_detected == "embedded", \
         f"Expected 'embedded', got '{data.project_type_detected}'"
-    print(f"  PASS: 'automotive embedded system' -> project_type_detected = 'embedded'")
+    print("  PASS: 'automotive embedded system' -> project_type_detected = 'embedded'")
 
 
 def test_detect_methodology_vmodel():
@@ -187,7 +187,7 @@ def test_detect_methodology_vmodel():
     est._detect_project_type(BMW_EFFORT_CONTEXT, data)
     assert data.methodology_detected == "v-model", \
         f"Expected 'v-model', got '{data.methodology_detected}'"
-    print(f"  PASS: 'V-model' -> methodology_detected = 'v-model'")
+    print("  PASS: 'V-model' -> methodology_detected = 'v-model'")
 
 
 def test_baseline_embedded_vmodel():
@@ -327,7 +327,7 @@ def test_pert_nine_activities():
     names = [a["activity"] for a in data.pert_activities]
     assert "Automation Framework Setup" in names, \
         "Automation Framework Setup missing from PERT when total_multiplier > 0"
-    print(f"  PASS: 9 PERT activities (Automation Framework Setup included)")
+    print("  PASS: 9 PERT activities (Automation Framework Setup included)")
     for a in data.pert_activities:
         print(f"        {a['activity']}: {a['optimistic']}d / {a['most_likely']}d / {a['pessimistic']}d -> E={a['expected']}d")
 
@@ -492,7 +492,7 @@ def test_full_estimate_bmw(agent):
         f"Final effort min '{data.final_effort_min}' not found in report"
     assert str(data.final_effort_max) in report, \
         f"Final effort max '{data.final_effort_max}' not found in report"
-    print(f"  PASS: Deterministic values in report:")
+    print("  PASS: Deterministic values in report:")
     print(f"        Multiplier total: +{data.total_multiplier}%")
     print(f"        Final effort: {data.final_effort_min} - {data.final_effort_max} person-days")
     print(f"        Confidence: {data.confidence_level}")
@@ -509,7 +509,7 @@ def test_full_estimate_bmw(agent):
         f"Expected 'Medium' (v0.6 score-based), got '{data.confidence_level}' (score={data.confidence_score})"
     assert len(data.pert_activities) == 9, \
         f"Expected 9 PERT activities, got {len(data.pert_activities)}"
-    print(f"  PASS: EstimationData fields verified")
+    print("  PASS: EstimationData fields verified")
 
     # Save and verify file
     output_path = estimator.save(report, BMW_EFFORT_CONTEXT)
@@ -523,9 +523,9 @@ def test_full_estimate_bmw(agent):
     assert "generated_by: QAI Consultant" in content, \
         "Missing 'generated_by: QAI Consultant' frontmatter"
     assert f"project: {BMW_EFFORT_CONTEXT.project_name}" in content, \
-        f"Missing project name in frontmatter"
+        "Missing project name in frontmatter"
     print(f"  PASS: File saved: {output_path.name}")
-    print(f"        Frontmatter: document_type: Effort Estimation Report")
+    print("        Frontmatter: document_type: Effort Estimation Report")
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────
@@ -612,7 +612,7 @@ if __name__ == "__main__":
     try:
         from agent import QAIAgent
         agent = QAIAgent()
-        print(f"\n[TEST] Full estimate: BMW ECU context, all sections, file saved")
+        print("\n[TEST] Full estimate: BMW ECU context, all sections, file saved")
         test_full_estimate_bmw(agent)
         passed += 1
     except AssertionError as e:

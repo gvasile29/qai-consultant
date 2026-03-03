@@ -206,7 +206,7 @@ if __name__ == "__main__":
         agent = load_agent()
     except Exception as e:
         print(f"\n  ERROR loading agent: {e}")
-        print(f"  Skipping LLM-dependent tests.")
+        print("  Skipping LLM-dependent tests.")
         print(f"\n{'=' * 65}")
         print(f"  Results: {passed} passed, {failed} failed (LLM tests skipped)")
         print(f"{'=' * 65}")
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     # Generate risk register once; feed to subsequent tests
     risk_register = sources = output_path = None
 
-    print(f"\n[TEST] analyze() returns all required sections")
+    print("\n[TEST] analyze() returns all required sections")
     try:
         risk_register, sources = test_risk_register_sections(agent)
         passed += 1

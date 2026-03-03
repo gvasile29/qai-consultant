@@ -139,7 +139,7 @@ def test_full_dialogue_produces_valid_project_context():
     assert context.project_description != "", "project_description should not be empty"
     assert context.tech_stack != "", "tech_stack should not be empty"
 
-    print(f"  PASS: All 11 answers accepted → ProjectContext populated")
+    print("  PASS: All 11 answers accepted → ProjectContext populated")
     print(f"        project_name='{context.project_name}', tech_stack='{context.tech_stack}'")
 
 
@@ -199,7 +199,7 @@ def test_strategy_generator_save_creates_correct_filename():
             f"Expected filename to start with 'test_strategy_', got '{output_path.name}'"
 
     print(f"  PASS: save() → '{output_path.name}'")
-    print(f"        project_name present: True | timestamp present: True")
+    print("        project_name present: True | timestamp present: True")
 
 
 def test_generate_all_returns_all_required_keys():

@@ -544,7 +544,7 @@ def test_report_shows_confidence_score_per_100():
     assert score_str in report, \
         f"Expected '{score_str}' in report confidence row, not found.\n" \
         f"Relevant report section:\n" + \
-        "\n".join(l for l in report.splitlines() if "Confidence" in l or "score:" in l)
+        "\n".join(line for line in report.splitlines() if "Confidence" in line or "score:" in line)
 
     print(f"  PASS: Report contains '{score_str}' in confidence row")
     print(f"        Confidence level: {data.confidence_level}  |  Score: {data.confidence_score}/100")

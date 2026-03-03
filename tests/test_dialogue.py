@@ -67,7 +67,7 @@ def test_whitespace_only_invalid():
     """Whitespace-only string → invalid (treated as empty after strip)."""
     result = _v().validate("timeline", "   ")
     assert not result.valid, "Expected invalid for whitespace-only input"
-    print(f"  PASS: '   ' → invalid")
+    print("  PASS: '   ' → invalid")
 
 
 def test_project_name_spaces_to_underscores():
@@ -95,7 +95,7 @@ def test_project_name_only_invalid_chars():
     result = _v().validate("project_name", "???")
     assert not result.valid, \
         f"Expected invalid for name with only invalid chars, got cleaned='{result.cleaned}'"
-    print(f"  PASS: '???' → invalid (only invalid chars)")
+    print("  PASS: '???' → invalid (only invalid chars)")
 
 
 def test_project_name_truncated_at_50():
@@ -114,7 +114,7 @@ def test_project_description_too_short_invalid():
     assert len(short) < MIN_DESCRIPTION_LENGTH, \
         f"Precondition: '{short}' must be shorter than {MIN_DESCRIPTION_LENGTH}"
     result = _v().validate("project_description", short)
-    assert not result.valid, f"Expected invalid for short description"
+    assert not result.valid, "Expected invalid for short description"
     assert "more specific" in result.error.lower(), \
         f"Expected 'more specific' in error, got: '{result.error}'"
     print(f"  PASS: '{short}' ({len(short)} chars) → invalid (error: '{result.error}')")
@@ -134,7 +134,7 @@ def test_team_qa_size_number_valid():
     """team_qa_size: '3' (digit present) → valid."""
     result = _v().validate("team_qa_size", "3")
     assert result.valid, f"Expected valid for '3', got: '{result.error}'"
-    print(f"  PASS: team_qa_size='3' → valid")
+    print("  PASS: team_qa_size='3' → valid")
 
 
 def test_team_qa_size_no_dedicated_qa_valid():
@@ -142,14 +142,14 @@ def test_team_qa_size_no_dedicated_qa_valid():
     result = _v().validate("team_qa_size", "no dedicated QA")
     assert result.valid, \
         f"Expected valid for 'no dedicated QA', got: '{result.error}'"
-    print(f"  PASS: team_qa_size='no dedicated QA' → valid")
+    print("  PASS: team_qa_size='no dedicated QA' → valid")
 
 
 def test_team_qa_size_word_number_valid():
     """team_qa_size: 'three' (word number) → valid."""
     result = _v().validate("team_qa_size", "three")
     assert result.valid, f"Expected valid for 'three', got: '{result.error}'"
-    print(f"  PASS: team_qa_size='three' → valid")
+    print("  PASS: team_qa_size='three' → valid")
 
 
 def test_team_qa_size_invalid():
@@ -275,7 +275,7 @@ def test_reset_clears_state():
         f"After reset: expected project_name='', got '{dm.context.project_name}'"
     assert not dm.completed, \
         "After reset: completed should be False"
-    print(f"  PASS: reset() → index=0, project_name='', completed=False")
+    print("  PASS: reset() → index=0, project_name='', completed=False")
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────

@@ -303,8 +303,6 @@ class EffortEstimator:
                       if k != "Automation Framework Setup" or data.total_multiplier > 0}
 
         # Normalize percentages to sum to 100
-        total_pct_mid = sum((lo + hi) / 2 for lo, hi in activities.values())
-
         total_o = total_m = total_p = 0
 
         for activity, (pct_lo, pct_hi) in activities.items():
@@ -394,10 +392,10 @@ class EffortEstimator:
             context.existing_automation,
         ]
 
-        for field in fields:
-            if not field or not field.strip():
+        for field_val in fields:
+            if not field_val or not field_val.strip():
                 score += 0
-            elif any(vague in field.lower() for vague in VAGUE_KEYWORDS):
+            elif any(vague in field_val.lower() for vague in VAGUE_KEYWORDS):
                 score += 2
             else:
                 score += 4

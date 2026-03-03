@@ -1,0 +1,11 @@
+﻿# Ruff linter configuration for QAI Consultant
+target-version = "py310"
+
+[lint]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E402",   # module level import not at top (needed for env vars before imports)
+    "F401",   # imported but unused (some imports needed for re-export)
+    "W291",   # trailing whitespace
+    "W293",   # whitespace before ':'
+]

@@ -249,7 +249,7 @@ def test_ignored_patterns():
     assert not manifest._should_ignore(Path("notes.txt")), "Normal .txt should not be ignored"
 
     print(f"  PASS: _should_ignore() correctly filters: {IGNORED_PATTERNS}")
-    print(f"        Correctly passes: .md, .pdf, .txt files")
+    print("        Correctly passes: .md, .pdf, .txt files")
 
 
 # ── 7. SUPPORTED_EXTENSIONS ───────────────────────────────────────────────────
@@ -567,7 +567,7 @@ if __name__ == "__main__":
     print("  Integration test (requires ChromaDB + HuggingFace embeddings)...")
     print(f"{'=' * 68}")
 
-    print(f"\n[TEST] Integration: ingest new .md file, verify chunks + manifest")
+    print("\n[TEST] Integration: ingest new .md file, verify chunks + manifest")
     try:
         test_ingest_new_md_file()
         passed += 1

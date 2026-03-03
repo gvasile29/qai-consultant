@@ -275,7 +275,7 @@ def test_both_documents_generated_and_stored(agent):
     for section in ["Executive Summary", "Risk Matrix Overview", "Detailed Risk Analysis"]:
         assert section in risk_register, f"Missing section in risk_register: {section}"
 
-    print(f"  PASS: Both documents generated and stored correctly")
+    print("  PASS: Both documents generated and stored correctly")
     print(f"        Strategy:      {output_path.name}")
     print(f"        Risk Register: {risk_path.name}")
     print(f"        Strategy sources:  {len(sources)}")
@@ -336,7 +336,7 @@ if __name__ == "__main__":
     try:
         from agent import QAIAgent
         agent = QAIAgent()
-        print(f"\n[TEST] Both documents generated and stored in session state")
+        print("\n[TEST] Both documents generated and stored in session state")
         test_both_documents_generated_and_stored(agent)
         passed += 1
     except AssertionError as e:

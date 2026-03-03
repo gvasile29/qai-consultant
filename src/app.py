@@ -159,8 +159,8 @@ def check_kb_notification() -> str:
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
-        st.markdown(f"## 🧪 QAI Consultant")
-        st.markdown(f"AI-powered QA Architect")
+        st.markdown("## 🧪 QAI Consultant")
+        st.markdown("AI-powered QA Architect")
         st.caption(f"v{__version__}")
         st.divider()
 
