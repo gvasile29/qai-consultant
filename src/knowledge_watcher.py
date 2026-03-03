@@ -70,6 +70,7 @@ class IngestManifest:
         """Persist manifest to disk."""
         with self._lock:
             self._data["last_updated"] = datetime.now().isoformat()
+            MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
             MANIFEST_PATH.write_text(
                 json.dumps(self._data, indent=2), encoding="utf-8"
             )
