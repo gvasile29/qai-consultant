@@ -39,5 +39,12 @@ Thumbs.db
 .env
 .env.local
 
-# Claude Code internal file
+# Claude Code internal files
 CLAUDE.md
+.claude/
+
+# Generated output strategies (personal, not for public KB)
+knowledge_base/generated_strategies/
+
+# Internal docs
+docs/launch_strategy.md
