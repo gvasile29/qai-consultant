@@ -115,6 +115,10 @@ curl http://localhost:11434
 
 ---
 
+## Architecture
+
+![QAI Consultant Architecture](docs/screenshots/architecture.svg)
+
 ## How It Works
 
 ```
