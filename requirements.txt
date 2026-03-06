@@ -4,7 +4,7 @@ chromadb==0.4.24
 sentence-transformers==2.7.0
 pypdf==6.7.5
 python-dotenv==1.0.1
-markdown==3.6
+markdown==3.8.1
 nltk==3.9.3
 ollama==0.2.1
 rich==13.7.1
