@@ -3,7 +3,7 @@ langchain-community==0.3.27
 chromadb==0.4.24
 sentence-transformers==2.7.0
 numpy<2.0
-pypdf==6.9.2
+pypdf==6.10.2
 python-dotenv==1.0.1
 markdown==3.8.1
 nltk==3.9.4
