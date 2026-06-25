@@ -137,7 +137,7 @@ class LLMClient:
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 MISTRAL_MODEL    = "mistral-small-latest"
-OPENROUTER_MODEL = "mistralai/mistral-7b-instruct"
+OPENROUTER_MODEL = "mistralai/mistral-small-3.2-24b-instruct"
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
 TOP_K_RESULTS    = 5
 RAG_K_GENERATION = 5        # chunks for Risk Register + Test Strategy prompts
