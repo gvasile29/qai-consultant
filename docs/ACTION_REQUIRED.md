@@ -45,7 +45,7 @@ python src/ingest.py
 ### 6. Add Pinecone keys to .env
 
 ```
-PINECONE_API_KEY=your_pinecone_api_key_here
+PINECONE_API_KEY=your_pinecone_api_key_here  ✅ set in .env
 PINECONE_INDEX_NAME=qai-consultant
 ```
 

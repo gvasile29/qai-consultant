@@ -129,7 +129,7 @@ def test_connection_error_message_mentions_api_keys():
         if key in ("PINECONE_API_KEY", "PINECONE_INDEX_NAME"):
             return "fake-value"
         if key == "MISTRAL_API_KEY":
-            raise ValueError(f"Missing required secret: 'MISTRAL_API_KEY'. Add it to .env")
+            raise ValueError("Missing required secret: 'MISTRAL_API_KEY'. Add it to .env")
         return "fake-key"
 
     with patch("agent._get_secret", side_effect=fake_get_secret), \
