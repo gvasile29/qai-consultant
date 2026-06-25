@@ -4,8 +4,6 @@ Connects to Ollama (LLM) and ChromaDB (knowledge base) and provides RAG query fu
 """
 
 import os
-import ollama
-from ollama import Client as OllamaClient
 from pathlib import Path
 
 # Disable ChromaDB telemetry
@@ -15,6 +13,8 @@ os.environ["CHROMA_TELEMETRY"] = "False"
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from logger import get_logger, setup_logging
+from mistralai.client import Mistral
+from openai import OpenAI
 
 setup_logging()
 logger = get_logger(__name__)
@@ -40,24 +40,118 @@ def _get_secret(key: str) -> str:
     )
 
 
+# ── LLM Client Adapter ─────────────────────────────────────────────────────────
+
+class LLMClient:
+    """
+    Thin adapter: Mistral API primary, OpenRouter fallback.
+    chat() and chat(stream=True) have identical call sites regardless of provider.
+    """
+
+    def __init__(self, mistral_api_key: str, openrouter_api_key: str):
+        self._mistral = Mistral(api_key=mistral_api_key)
+        self._openrouter = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_api_key,
+        )
+
+    def chat(self, messages: list, stream: bool = False):
+        """
+        Send messages to Mistral; fall back to OpenRouter on any error.
+
+        Args:
+            messages: List of {"role": ..., "content": ...} dicts.
+            stream: If True, returns a generator yielding text chunks.
+
+        Returns:
+            str (stream=False) or generator of str (stream=True).
+
+        Raises:
+            QAIConnectionError: If both providers fail.
+        """
+        if stream:
+            return self._chat_stream(messages)
+        return self._chat_once(messages)
+
+    def _chat_once(self, messages: list) -> str:
+        try:
+            response = self._mistral.chat.complete(
+                model=MISTRAL_MODEL,
+                messages=messages,
+                max_tokens=LLM_NUM_PREDICT,
+                temperature=LLM_TEMPERATURE,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.warning(f"Mistral failed ({e}), falling back to OpenRouter")
+
+        try:
+            response = self._openrouter.chat.completions.create(
+                model=OPENROUTER_MODEL,
+                messages=messages,
+                max_tokens=LLM_NUM_PREDICT,
+                temperature=LLM_TEMPERATURE,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            raise QAIConnectionError(
+                f"\n❌ LLM generation failed!\n\n"
+                f"   Both Mistral API and OpenRouter are unavailable.\n"
+                f"   Last error: {e}\n\n"
+                "   Check your API keys in .env or Streamlit secrets."
+            )
+
+    def _chat_stream(self, messages: list):
+        try:
+            stream = self._mistral.chat.stream(
+                model=MISTRAL_MODEL,
+                messages=messages,
+                max_tokens=LLM_NUM_PREDICT,
+                temperature=LLM_TEMPERATURE,
+            )
+            for event in stream:
+                content = event.data.choices[0].delta.content
+                if content:
+                    yield content
+            return
+        except Exception as e:
+            logger.warning(f"Mistral streaming failed ({e}), falling back to OpenRouter")
+
+        try:
+            stream = self._openrouter.chat.completions.create(
+                model=OPENROUTER_MODEL,
+                messages=messages,
+                max_tokens=LLM_NUM_PREDICT,
+                temperature=LLM_TEMPERATURE,
+                stream=True,
+            )
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+        except Exception as e:
+            raise QAIConnectionError(
+                f"\n❌ LLM streaming failed!\n\n"
+                f"   Both Mistral API and OpenRouter are unavailable.\n"
+                f"   Last error: {e}\n\n"
+                "   Check your API keys in .env or Streamlit secrets."
+            )
+
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 CHROMA_DIR = BASE_DIR / "chroma_db"
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-OLLAMA_MODEL     = "mistral:7b-instruct-q4_0"   # quantized: ~3x faster than float16 on CPU
+MISTRAL_MODEL    = "mistral-small-latest"
+OPENROUTER_MODEL = "mistralai/mistral-7b-instruct"
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
 TOP_K_RESULTS    = 5
-RAG_K_GENERATION = 5        # chunks for Risk Register + Test Strategy prompts (was hardcoded 8)
-GENERATION_TIMEOUT = 300    # real HTTP wall-clock timeout (seconds) — passed to httpx
+RAG_K_GENERATION = 5        # chunks for Risk Register + Test Strategy prompts
 
 # ── LLM Generation Parameters ──────────────────────────────────────────────────
-LLM_NUM_CTX     = 4096   # context window tokens (Mistral default: 32768 → 8x memory reduction)
-LLM_NUM_PREDICT = 1500   # max output tokens (default: unlimited → runaway generation)
-LLM_TEMPERATURE = 0.1    # near-deterministic sampling (Mistral default: 0.8)
-
-# ── Ollama Client (real HTTP timeout via httpx, not silently-ignored options key) ─
-_ollama_client = OllamaClient(timeout=GENERATION_TIMEOUT)
+LLM_NUM_PREDICT = 1500      # max output tokens — prevents runaway generation
+LLM_TEMPERATURE = 0.1       # near-deterministic
 
 
 # ── Custom Exceptions ──────────────────────────────────────────────────────────
@@ -94,7 +188,8 @@ class QAIAgent:
         self.vector_store = None
         self.embeddings = None
         self._load_knowledge_base()
-        self._check_ollama()
+        self._llm_client = None
+        self._check_llm()
 
     def _load_knowledge_base(self):
         """
@@ -150,41 +245,16 @@ class QAIAgent:
             logger.error(f"ChromaDB load failed: {e}")
             raise QAIKnowledgeBaseError(msg)
 
-    def _check_ollama(self):
-        """
-        Verify Ollama is running and the required model is available.
-
-        Raises:
-            QAIConnectionError: If Ollama is not running.
-            QAIModelError: If the required model is not pulled.
-        """
+    def _check_llm(self):
+        """Initialise LLMClient — validates API keys are present."""
         try:
-            models_response = ollama.list()
-            available = [m["name"] for m in models_response.get("models", [])]
-        except Exception as e:
-            msg = (
-                "\n❌ Ollama is not running!\n\n"
-                "   Start Ollama with:\n"
-                "     ollama serve\n\n"
-                "   Then pull the model:\n"
-                f"     ollama pull {OLLAMA_MODEL}\n\n"
-                "   Install Ollama: https://ollama.ai"
+            self._llm_client = LLMClient(
+                mistral_api_key=_get_secret("MISTRAL_API_KEY"),
+                openrouter_api_key=_get_secret("OPENROUTER_API_KEY"),
             )
-            logger.error(f"Ollama connection failed: {e}")
-            raise QAIConnectionError(msg)
-
-        if not any(OLLAMA_MODEL in m for m in available):
-            available_str = ", ".join(available) if available else "none"
-            msg = (
-                f"\n❌ Model '{OLLAMA_MODEL}' not found in Ollama!\n\n"
-                f"   Pull it with:\n"
-                f"     ollama pull {OLLAMA_MODEL}\n\n"
-                f"   Models available on your system: {available_str}"
-            )
-            logger.error(f"Model '{OLLAMA_MODEL}' not found. Available: {available_str}")
-            raise QAIModelError(msg)
-
-        logger.info(f"Ollama ready — model: {OLLAMA_MODEL}")
+            logger.info("LLMClient ready — Mistral primary, OpenRouter fallback")
+        except ValueError as e:
+            raise QAIConnectionError(str(e))
 
     def retrieve_knowledge(self, query: str, k: int = TOP_K_RESULTS) -> list:
         """
@@ -223,7 +293,7 @@ class QAIAgent:
 
     def ask(self, prompt: str, system_prompt: str = None) -> str:
         """
-        Send a prompt to Ollama and return the generated response.
+        Send a prompt to the LLM and return the generated response.
 
         Args:
             prompt: The user prompt to send.
@@ -233,43 +303,21 @@ class QAIAgent:
             The LLM response string.
 
         Raises:
-            QAIConnectionError: If Ollama becomes unavailable during generation.
+            QAIConnectionError: If both LLM providers fail.
         """
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        logger.debug(f"Sending prompt to Ollama ({len(prompt)} chars)...")
-        try:
-            response = _ollama_client.chat(
-                model=OLLAMA_MODEL,
-                messages=messages,
-                options={
-                    "num_ctx":     LLM_NUM_CTX,
-                    "num_predict": LLM_NUM_PREDICT,
-                    "temperature": LLM_TEMPERATURE,
-                },
-            )
-            content = response["message"]["content"]
-            logger.debug(f"Response received ({len(content)} chars)")
-            return content
-        except Exception as e:
-            msg = (
-                f"\n❌ Generation failed!\n\n"
-                f"   Error: {e}\n\n"
-                "   Make sure Ollama is still running:\n"
-                "     ollama serve"
-            )
-            logger.error(f"Ollama generation failed: {e}")
-            raise QAIConnectionError(msg)
+        logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)...")
+        content = self._llm_client.chat(messages)
+        logger.debug(f"Response received ({len(content)} chars)")
+        return content
 
     def ask_streaming(self, prompt: str, system_prompt: str = None):
         """
-        Stream a prompt to Ollama, yielding text chunks as they arrive.
-
-        Enables real-time display of LLM output while generation is in progress.
-        Uses the same model parameters as ask() for consistency.
+        Stream a prompt to the LLM, yielding text chunks as they arrive.
 
         Args:
             prompt: The user prompt to send.
@@ -279,38 +327,15 @@ class QAIAgent:
             str: Incremental content chunks from the LLM.
 
         Raises:
-            QAIConnectionError: If Ollama becomes unavailable during generation.
+            QAIConnectionError: If both LLM providers fail.
         """
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        logger.debug(f"Streaming prompt to Ollama ({len(prompt)} chars)...")
-        try:
-            stream = _ollama_client.chat(
-                model=OLLAMA_MODEL,
-                messages=messages,
-                stream=True,
-                options={
-                    "num_ctx":     LLM_NUM_CTX,
-                    "num_predict": LLM_NUM_PREDICT,
-                    "temperature": LLM_TEMPERATURE,
-                },
-            )
-            for chunk in stream:
-                content = chunk["message"]["content"]
-                if content:
-                    yield content
-        except Exception as e:
-            msg = (
-                f"\n❌ Generation failed!\n\n"
-                f"   Error: {e}\n\n"
-                "   Make sure Ollama is still running:\n"
-                "     ollama serve"
-            )
-            logger.error(f"Ollama streaming generation failed: {e}")
-            raise QAIConnectionError(msg)
+        logger.debug(f"Streaming prompt to LLM ({len(prompt)} chars)...")
+        yield from self._llm_client.chat(messages, stream=True)
 
     def ask_with_rag(self, query: str, system_prompt: str = None) -> tuple:
         """
