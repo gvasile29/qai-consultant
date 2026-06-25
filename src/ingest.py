@@ -178,7 +178,10 @@ def main():
 
     # Step 4 — Clear existing vectors and upsert fresh
     print(f"\n🗑️  Clearing existing vectors in namespace '{PINECONE_NAMESPACE}'...")
-    index.delete(delete_all=True, namespace=PINECONE_NAMESPACE)
+    try:
+        index.delete(delete_all=True, namespace=PINECONE_NAMESPACE)
+    except Exception:
+        print(f"   (namespace '{PINECONE_NAMESPACE}' is new — nothing to clear)")
 
     total = upsert_to_pinecone(chunks, index)
     print(f"\n✅ Upserted {total} vectors to Pinecone")
