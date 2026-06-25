@@ -19,7 +19,6 @@ from dialogue import DialogueManager, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer
 from effort_estimator import EffortEstimator
-from knowledge_watcher import get_watcher
 from agent import QAIConnectionError, QAIModelError, QAIKnowledgeBaseError
 from logger import setup_logging, get_logger
 from version import __version__
@@ -96,8 +95,6 @@ def init_session_state():
         st.session_state.effort_report = None
     if "effort_path" not in st.session_state:
         st.session_state.effort_path = None
-    if "kb_notification" not in st.session_state:
-        st.session_state.kb_notification = None
     if "current_step" not in st.session_state:
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
 
@@ -126,34 +123,6 @@ def load_agent():
         logger.exception(f"Unexpected error loading agent: {e}")
         return None, f"❌ Unexpected error: {e}"
 
-
-# ── Knowledge Base Watcher ─────────────────────────────────────────────────────
-_NOTIFICATION_FILE = Path(__file__).resolve().parent.parent / "chroma_db" / ".watcher_msg"
-
-
-@st.cache_resource(show_spinner=False)
-def start_kb_watcher():
-    """Start knowledge base watcher once per Streamlit session."""
-    def on_kb_update(message: str):
-        try:
-            _NOTIFICATION_FILE.write_text(message, encoding="utf-8")
-        except Exception:
-            pass
-    watcher = get_watcher()
-    watcher.start(callback=on_kb_update)
-    return watcher
-
-
-def check_kb_notification() -> str:
-    """Check if watcher has a pending notification and consume it."""
-    if _NOTIFICATION_FILE.exists():
-        try:
-            msg = _NOTIFICATION_FILE.read_text(encoding="utf-8").strip()
-            _NOTIFICATION_FILE.unlink()
-            return msg
-        except Exception:
-            pass
-    return None
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
@@ -487,19 +456,8 @@ notes: {extra_note}
                 encoding="utf-8"
             )
 
-            # Trigger immediate ingest of the saved strategy
-            try:
-                watcher = get_watcher()
-                chunks = watcher.ingest_manager.ingest_file(feedback_path)
-                if chunks > 0:
-                    st.session_state.feedback_submitted = True
-                    st.success(f"✅ Strategy added to knowledge base! +{chunks} chunks ingested.")
-                else:
-                    st.session_state.feedback_submitted = True
-                    st.success("✅ Strategy saved to knowledge base!")
-            except Exception:
-                st.session_state.feedback_submitted = True
-                st.success("✅ Strategy saved to knowledge base!")
+            st.session_state.feedback_submitted = True
+            st.success("✅ Strategy saved! Thank you for your feedback.")
             st.rerun()
 
         if no:
@@ -527,14 +485,6 @@ def main():
     # Store agent in session state for use across components
     if st.session_state.agent is None:
         st.session_state.agent = agent
-
-    # Start KB watcher (once per session)
-    start_kb_watcher()
-
-    # Check for KB update notification from watcher background thread
-    kb_msg = check_kb_notification()
-    if kb_msg:
-        st.toast(kb_msg, icon="✅")
 
     render_sidebar()
 

@@ -11,3 +11,6 @@ ollama==0.2.1
 rich==13.7.1
 streamlit==1.37.0
 watchdog==4.0.0
+mistralai>=1.2.0
+openai>=1.0.0
+pinecone>=3.0.0

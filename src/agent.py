@@ -19,6 +19,27 @@ from logger import get_logger, setup_logging
 setup_logging()
 logger = get_logger(__name__)
 
+
+def _get_secret(key: str) -> str:
+    """Lookup order: Streamlit secrets → os.environ (populated by .env via python-dotenv)."""
+    from dotenv import load_dotenv
+    load_dotenv()
+    try:
+        import streamlit as st
+        val = st.secrets.get(key)
+        if val:
+            return val
+    except Exception:
+        pass
+    val = os.environ.get(key)
+    if val:
+        return val
+    raise ValueError(
+        f"Missing required secret: '{key}'. "
+        "Add it to .env (local dev) or Streamlit Cloud secrets (deployed)."
+    )
+
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 CHROMA_DIR = BASE_DIR / "chroma_db"
