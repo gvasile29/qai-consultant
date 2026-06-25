@@ -1,16 +1,13 @@
 langchain==0.3.27
 langchain-community==0.3.27
-chromadb==0.4.24
 sentence-transformers==2.7.0
 numpy<2.0
 pypdf==6.9.2
 python-dotenv==1.0.1
 markdown==3.8.1
 nltk==3.9.4
-ollama==0.2.1
 rich==13.7.1
 streamlit==1.37.0
-watchdog==4.0.0
 mistralai>=1.2.0
 openai>=2.44.0
 pinecone>=3.0.0

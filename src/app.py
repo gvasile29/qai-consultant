@@ -19,7 +19,7 @@ from dialogue import DialogueManager, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer
 from effort_estimator import EffortEstimator
-from agent import QAIConnectionError, QAIModelError, QAIKnowledgeBaseError
+from agent import QAIConnectionError, QAIKnowledgeBaseError
 from logger import setup_logging, get_logger
 from version import __version__
 
@@ -97,6 +97,8 @@ def init_session_state():
         st.session_state.effort_path = None
     if "current_step" not in st.session_state:
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
+    if "run_count" not in st.session_state:
+        st.session_state.run_count = 0
 
 
 # ── Load Agent ─────────────────────────────────────────────────────────────────
@@ -114,10 +116,7 @@ def load_agent():
         logger.error(f"KB error: {e}")
         return None, str(e)
     except QAIConnectionError as e:
-        logger.error(f"Ollama connection error: {e}")
-        return None, str(e)
-    except QAIModelError as e:
-        logger.error(f"Model error: {e}")
+        logger.error(f"LLM connection error: {e}")
         return None, str(e)
     except Exception as e:
         logger.exception(f"Unexpected error loading agent: {e}")
@@ -290,6 +289,15 @@ def render_review():
 
 
 def render_strategy():
+    MAX_RUNS_PER_SESSION = 3
+
+    if st.session_state.run_count >= MAX_RUNS_PER_SESSION:
+        st.warning(
+            f"⚠️ You've used all {MAX_RUNS_PER_SESSION} free runs for this session. "
+            "Refresh the page to start a new session."
+        )
+        st.stop()
+
     st.markdown("## 📄 Generated Test Strategy")
     st.markdown("---")
 
@@ -352,6 +360,7 @@ def render_strategy():
         st.markdown("---")
 
         st.session_state.strategy = strategy
+        st.session_state.run_count = st.session_state.get("run_count", 0) + 1
         st.session_state.sources = sources
         st.session_state.output_path = output_path
         st.session_state.risk_register = risk_register
@@ -479,7 +488,16 @@ def main():
         st.error(error)
         st.markdown("---")
         st.markdown("### 🛠️ Troubleshooting")
-        st.code("# Start Ollama\nollama serve\n\n# Pull model\nollama pull mistral:7b-instruct-q4_0\n\n# Build knowledge base\npython src/ingest.py", language="bash")
+        st.code(
+            "# Set required environment variables in .env\n"
+            "MISTRAL_API_KEY=your_key_here\n"
+            "OPENROUTER_API_KEY=your_key_here\n"
+            "PINECONE_API_KEY=your_key_here\n"
+            "PINECONE_INDEX_NAME=qai-consultant\n\n"
+            "# Then build the knowledge base\n"
+            "python src/ingest.py",
+            language="bash"
+        )
         st.stop()
 
     # Store agent in session state for use across components

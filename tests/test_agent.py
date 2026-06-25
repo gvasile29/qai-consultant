@@ -1,11 +1,11 @@
 """
 Tests for src/agent.py — QAIAgent error handling (v2.0).
 
-All tests use unittest.mock — no real Mistral, OpenRouter, or ChromaDB required.
+All tests use unittest.mock — no real Mistral, OpenRouter, or Pinecone required.
 
 Covers:
-1.  QAIKnowledgeBaseError raised when ChromaDB is missing
-2.  QAIKnowledgeBaseError raised when ChromaDB is empty
+1.  QAIKnowledgeBaseError raised when Pinecone fails to connect
+2.  QAIKnowledgeBaseError raised when Pinecone index is empty (0 vectors)
 3.  QAIConnectionError raised when MISTRAL_API_KEY is missing
 4.  QAIConnectionError raised when OPENROUTER_API_KEY is missing
 5.  QAIKnowledgeBaseError message contains "python src/ingest.py"
@@ -15,7 +15,6 @@ Covers:
 
 import sys
 import os
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -27,19 +26,20 @@ sys.path.insert(0, str(SRC_DIR))
 from agent import QAIAgent, QAIConnectionError, QAIKnowledgeBaseError
 
 
-def _mock_chroma(doc_count: int = 5):
-    """Return a mock Chroma vectorstore with a given document count."""
-    chroma = MagicMock()
-    collection = MagicMock()
-    collection.count.return_value = doc_count
-    chroma._collection = collection
-    return chroma
+def _mock_pinecone_client(vector_count: int = 5):
+    """Return a mock Pinecone index with a given vector count."""
+    mock_index = MagicMock()
+    mock_stats = MagicMock()
+    mock_stats.total_vector_count = vector_count
+    mock_index.describe_index_stats.return_value = mock_stats
+    mock_pc = MagicMock()
+    mock_pc.Index.return_value = mock_index
+    return mock_pc, mock_index
 
 
 def test_kb_missing_raises_error():
-    """QAIKnowledgeBaseError raised when chroma_db/ directory does not exist."""
-    with patch("agent.CHROMA_DIR", Path("/nonexistent/chroma_db")), \
-         patch("agent._get_secret", side_effect=lambda k: "fake-key"), \
+    """QAIKnowledgeBaseError raised when Pinecone connection fails."""
+    with patch("agent._get_secret", side_effect=ValueError("Missing required secret: 'PINECONE_API_KEY'")), \
          patch("agent.HuggingFaceEmbeddings"):
         try:
             QAIAgent()
@@ -49,13 +49,17 @@ def test_kb_missing_raises_error():
 
 
 def test_kb_empty_raises_error():
-    """QAIKnowledgeBaseError raised when ChromaDB collection has 0 documents."""
-    with patch("agent.CHROMA_DIR") as mock_dir, \
-         patch("agent._get_secret", side_effect=lambda k: "fake-key"), \
+    """QAIKnowledgeBaseError raised when Pinecone index has 0 vectors."""
+    mock_pc, mock_index = _mock_pinecone_client(vector_count=0)
+
+    def fake_get_secret(key):
+        if key in ("PINECONE_API_KEY", "PINECONE_INDEX_NAME"):
+            return "fake-value"
+        raise ValueError(f"Missing required secret: '{key}'")
+
+    with patch("agent._get_secret", side_effect=fake_get_secret), \
          patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Chroma") as mock_chroma_cls:
-        mock_dir.exists.return_value = True
-        mock_chroma_cls.return_value = _mock_chroma(doc_count=0)
+         patch("agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIKnowledgeBaseError — not raised"
@@ -65,17 +69,18 @@ def test_kb_empty_raises_error():
 
 def test_missing_mistral_key_raises_connection_error():
     """QAIConnectionError raised when MISTRAL_API_KEY is missing."""
+    mock_pc, mock_index = _mock_pinecone_client(vector_count=5)
+
     def fake_get_secret(key):
+        if key in ("PINECONE_API_KEY", "PINECONE_INDEX_NAME"):
+            return "fake-value"
         if key == "MISTRAL_API_KEY":
             raise ValueError(f"Missing required secret: '{key}'")
         return "fake-key"
 
-    with patch("agent.CHROMA_DIR") as mock_dir, \
-         patch("agent._get_secret", side_effect=fake_get_secret), \
+    with patch("agent._get_secret", side_effect=fake_get_secret), \
          patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Chroma") as mock_chroma_cls:
-        mock_dir.exists.return_value = True
-        mock_chroma_cls.return_value = _mock_chroma(doc_count=5)
+         patch("agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIConnectionError — not raised"
@@ -85,17 +90,18 @@ def test_missing_mistral_key_raises_connection_error():
 
 def test_missing_openrouter_key_raises_connection_error():
     """QAIConnectionError raised when OPENROUTER_API_KEY is missing."""
+    mock_pc, mock_index = _mock_pinecone_client(vector_count=5)
+
     def fake_get_secret(key):
+        if key in ("PINECONE_API_KEY", "PINECONE_INDEX_NAME"):
+            return "fake-value"
         if key == "OPENROUTER_API_KEY":
             raise ValueError(f"Missing required secret: '{key}'")
         return "fake-key"
 
-    with patch("agent.CHROMA_DIR") as mock_dir, \
-         patch("agent._get_secret", side_effect=fake_get_secret), \
+    with patch("agent._get_secret", side_effect=fake_get_secret), \
          patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Chroma") as mock_chroma_cls:
-        mock_dir.exists.return_value = True
-        mock_chroma_cls.return_value = _mock_chroma(doc_count=5)
+         patch("agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIConnectionError — not raised"
@@ -105,8 +111,7 @@ def test_missing_openrouter_key_raises_connection_error():
 
 def test_kb_error_message_mentions_ingest():
     """QAIKnowledgeBaseError message includes 'python src/ingest.py'."""
-    with patch("agent.CHROMA_DIR", Path("/nonexistent/chroma_db")), \
-         patch("agent._get_secret", side_effect=lambda k: "fake-key"), \
+    with patch("agent._get_secret", side_effect=ValueError("Missing required secret: 'PINECONE_API_KEY'")), \
          patch("agent.HuggingFaceEmbeddings"):
         try:
             QAIAgent()
@@ -118,17 +123,18 @@ def test_kb_error_message_mentions_ingest():
 
 def test_connection_error_message_mentions_api_keys():
     """QAIConnectionError message mentions API key setup."""
+    mock_pc, mock_index = _mock_pinecone_client(vector_count=5)
+
     def fake_get_secret(key):
+        if key in ("PINECONE_API_KEY", "PINECONE_INDEX_NAME"):
+            return "fake-value"
         if key == "MISTRAL_API_KEY":
             raise ValueError(f"Missing required secret: 'MISTRAL_API_KEY'. Add it to .env")
         return "fake-key"
 
-    with patch("agent.CHROMA_DIR") as mock_dir, \
-         patch("agent._get_secret", side_effect=fake_get_secret), \
+    with patch("agent._get_secret", side_effect=fake_get_secret), \
          patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Chroma") as mock_chroma_cls:
-        mock_dir.exists.return_value = True
-        mock_chroma_cls.return_value = _mock_chroma(doc_count=5)
+         patch("agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIConnectionError — not raised"
@@ -139,13 +145,12 @@ def test_connection_error_message_mentions_api_keys():
 
 def test_ask_streaming_yields_chunks():
     """ask_streaming() yields incremental text chunks from LLMClient."""
-    with patch("agent.CHROMA_DIR") as mock_dir, \
-         patch("agent._get_secret", side_effect=lambda k: "fake-key"), \
+    mock_pc, mock_index = _mock_pinecone_client(vector_count=5)
+
+    with patch("agent._get_secret", side_effect=lambda k: "fake-value"), \
          patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Chroma") as mock_chroma_cls, \
+         patch("agent.Pinecone", return_value=mock_pc), \
          patch("agent.LLMClient") as mock_llm_cls:
-        mock_dir.exists.return_value = True
-        mock_chroma_cls.return_value = _mock_chroma(doc_count=5)
         mock_llm = MagicMock()
         mock_llm.chat.return_value = iter(["Hello", " world", "!"])
         mock_llm_cls.return_value = mock_llm
@@ -158,8 +163,8 @@ def test_ask_streaming_yields_chunks():
 
 if __name__ == "__main__":
     tests = [
-        ("chroma_db/ missing → QAIKnowledgeBaseError", test_kb_missing_raises_error),
-        ("ChromaDB empty → QAIKnowledgeBaseError", test_kb_empty_raises_error),
+        ("Pinecone connection fails → QAIKnowledgeBaseError", test_kb_missing_raises_error),
+        ("Pinecone index empty → QAIKnowledgeBaseError", test_kb_empty_raises_error),
         ("Missing MISTRAL_API_KEY → QAIConnectionError", test_missing_mistral_key_raises_connection_error),
         ("Missing OPENROUTER_API_KEY → QAIConnectionError", test_missing_openrouter_key_raises_connection_error),
         ("QAIKnowledgeBaseError mentions 'python src/ingest.py'", test_kb_error_message_mentions_ingest),

@@ -1,17 +1,14 @@
 """
 QAI Consultant — Core Agent
-Connects to Ollama (LLM) and ChromaDB (knowledge base) and provides RAG query functionality.
+Connects to Mistral API (LLM) and Pinecone (knowledge base) and provides RAG query functionality.
 """
 
 import os
 from pathlib import Path
 
-# Disable ChromaDB telemetry
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY"] = "False"
-
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain.schema import Document
+from pinecone import Pinecone
 from logger import get_logger, setup_logging
 from mistralai.client import Mistral
 from openai import OpenAI
@@ -138,16 +135,13 @@ class LLMClient:
             )
 
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-BASE_DIR = Path(__file__).resolve().parent.parent
-CHROMA_DIR = BASE_DIR / "chroma_db"
-
 # ── Config ─────────────────────────────────────────────────────────────────────
 MISTRAL_MODEL    = "mistral-small-latest"
 OPENROUTER_MODEL = "mistralai/mistral-7b-instruct"
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
 TOP_K_RESULTS    = 5
 RAG_K_GENERATION = 5        # chunks for Risk Register + Test Strategy prompts
+PINECONE_NAMESPACE = "knowledge-base"   # must match PINECONE_NAMESPACE in ingest.py
 
 # ── LLM Generation Parameters ──────────────────────────────────────────────────
 LLM_NUM_PREDICT = 1500      # max output tokens — prevents runaway generation
@@ -157,17 +151,17 @@ LLM_TEMPERATURE = 0.1       # near-deterministic
 # ── Custom Exceptions ──────────────────────────────────────────────────────────
 
 class QAIConnectionError(Exception):
-    """Raised when Ollama is not running or not reachable."""
+    """Raised when LLM API keys are missing or both providers fail."""
     pass
 
 
 class QAIModelError(Exception):
-    """Raised when the required Ollama model is not available."""
+    """Legacy — no longer raised by v2.0 agent. Kept for import compatibility."""
     pass
 
 
 class QAIKnowledgeBaseError(Exception):
-    """Raised when ChromaDB is missing, empty, or corrupt."""
+    """Raised when Pinecone index is empty, unreachable, or API key is missing."""
     pass
 
 
@@ -175,74 +169,60 @@ class QAIKnowledgeBaseError(Exception):
 
 class QAIAgent:
     """
-    Core agent that connects to Ollama (LLM) and ChromaDB (RAG knowledge base).
+    Core agent that connects to Mistral API (LLM) and Pinecone (RAG knowledge base).
     Provides knowledge retrieval and LLM generation capabilities.
 
     Raises:
-        QAIConnectionError: If Ollama is not running.
-        QAIModelError: If the required model is not pulled.
-        QAIKnowledgeBaseError: If ChromaDB is missing or empty.
+        QAIConnectionError: If LLM API keys are missing or both providers fail.
+        QAIKnowledgeBaseError: If Pinecone index is empty or unreachable.
     """
 
     def __init__(self):
-        self.vector_store = None
+        self._index = None
         self.embeddings = None
-        self._load_knowledge_base()
         self._llm_client = None
+        self._load_knowledge_base()
         self._check_llm()
 
     def _load_knowledge_base(self):
         """
-        Load the ChromaDB vector store from disk.
+        Connect to Pinecone index and verify it has vectors.
 
         Raises:
-            QAIKnowledgeBaseError: If chroma_db/ is missing or empty.
+            QAIKnowledgeBaseError: If Pinecone is unreachable or index is empty.
         """
-        if not CHROMA_DIR.exists():
-            msg = (
-                "\n❌ Knowledge base not found!\n\n"
-                f"   Expected: {CHROMA_DIR}\n\n"
-                "   Build it with:\n"
-                "     python src/ingest.py\n\n"
-                "   This will take 5-10 minutes on first run."
-            )
-            logger.error(f"ChromaDB directory not found: {CHROMA_DIR}")
-            raise QAIKnowledgeBaseError(msg)
-
-        logger.info("Loading knowledge base from ChromaDB...")
         try:
+            api_key = _get_secret("PINECONE_API_KEY")
+            index_name = _get_secret("PINECONE_INDEX_NAME")
+            pc = Pinecone(api_key=api_key)
+            self._index = pc.Index(index_name)
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=EMBEDDING_MODEL,
                 model_kwargs={"device": "cpu"},
             )
-            self.vector_store = Chroma(
-                persist_directory=str(CHROMA_DIR),
-                embedding_function=self.embeddings,
-                collection_name="qai_knowledge_base",
-            )
-            count = self.vector_store._collection.count()
+            stats = self._index.describe_index_stats()
+            count = stats.total_vector_count
             if count == 0:
                 msg = (
                     "\n❌ Knowledge base is empty!\n\n"
-                    "   ChromaDB exists but contains no chunks.\n\n"
-                    "   Add files to knowledge_base/ then run:\n"
+                    "   Pinecone index exists but contains no vectors.\n\n"
+                    "   Build it with:\n"
                     "     python src/ingest.py"
                 )
-                logger.error("ChromaDB collection is empty (0 chunks)")
+                logger.error("Pinecone index is empty (0 vectors)")
                 raise QAIKnowledgeBaseError(msg)
-
-            logger.info(f"Knowledge base loaded: {count} chunks")
-
+            logger.info(f"Pinecone knowledge base loaded: {count} vectors in index '{index_name}'")
         except QAIKnowledgeBaseError:
             raise
         except Exception as e:
             msg = (
                 f"\n❌ Knowledge base failed to load!\n\n"
                 f"   Error: {e}\n\n"
-                "   Try rebuilding it:\n"
+                "   Check your PINECONE_API_KEY and PINECONE_INDEX_NAME,\n"
+                "   then rebuild with:\n"
                 "     python src/ingest.py"
             )
-            logger.error(f"ChromaDB load failed: {e}")
+            logger.error(f"Pinecone load failed: {e}")
             raise QAIKnowledgeBaseError(msg)
 
     def _check_llm(self):
@@ -258,19 +238,36 @@ class QAIAgent:
 
     def retrieve_knowledge(self, query: str, k: int = TOP_K_RESULTS) -> list:
         """
-        Retrieve relevant knowledge chunks from ChromaDB.
+        Retrieve relevant knowledge chunks from Pinecone.
 
         Args:
             query: The search query string.
             k: Number of chunks to retrieve. Default: TOP_K_RESULTS.
 
         Returns:
-            List of LangChain Document objects with page_content and metadata.
+            List of Document objects with page_content and metadata.
         """
         logger.debug(f"RAG query (k={k}): {query[:80]}...")
-        results = self.vector_store.similarity_search(query, k=k)
-        logger.debug(f"Retrieved {len(results)} chunks")
-        return results
+        query_embedding = self.embeddings.embed_query(query)
+        results = self._index.query(
+            vector=query_embedding,
+            top_k=k,
+            namespace=PINECONE_NAMESPACE,
+            include_metadata=True,
+        )
+        chunks = [
+            Document(
+                page_content=match.metadata.get("text", ""),
+                metadata={
+                    "source": match.metadata.get("source", ""),
+                    "category": match.metadata.get("category", ""),
+                    "filename": match.metadata.get("filename", ""),
+                },
+            )
+            for match in results.matches
+        ]
+        logger.debug(f"Retrieved {len(chunks)} chunks")
+        return chunks
 
     def format_knowledge_context(self, chunks: list) -> str:
         """
