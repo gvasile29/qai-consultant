@@ -12,6 +12,7 @@ output/
 
 # Logs
 logs/
+streamlit_logs/
 
 # Test / lint caches
 .pytest_cache/
