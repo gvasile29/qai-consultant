@@ -1,0 +1,217 @@
+---
+title: Cybersecurity Risks of AI-Generated Code
+source: https://cset.georgetown.edu/publication/cybersecurity-risks-of-ai-generated-code/
+category: AI SDLC Adoption
+tags: AI, SDLC, software development, testing, quality assurance
+---
+
+# Cybersecurity Risks of AI-Generated Code
+
+**Authors:** Jessica Ji, Jenny Jun, Maggie Wu, Rebecca Gelles  
+**Organization:** Center for Security and Emerging Technology (CSET), Georgetown University  
+**Published:** November 2024  
+**Document Type:** Issue Brief  
+**DOI:** 10.51593/2023CA010
+
+---
+
+## Executive Summary
+
+Recent developments have improved the ability of large language models (LLMs) and other AI systems to generate computer code. While this is promising for the field of software development, these models can also pose direct and indirect cybersecurity risks. This brief identifies three broad categories of risk associated with AI code generation models:
+
+1. **Models generating insecure code** — AI code generation models frequently output insecure code under experimental conditions.
+2. **Models themselves being vulnerable to attack and manipulation** — adversarial attacks including data poisoning, backdoor injection, and indirect prompt injection.
+3. **Downstream cybersecurity impacts** — feedback loops in training future AI systems, where insecure AI-generated code enters open-source repositories and poisons future training data.
+
+CSET's own evaluation of five LLMs found that almost half (48%) of the code snippets produced contained bugs that are often impactful and could potentially lead to malicious exploitation. These risks will not be evenly distributed across organizations: larger, well-resourced organizations will have an advantage over those that face cost and workforce constraints.
+
+---
+
+## Introduction
+
+Advancements in artificial intelligence have resulted in a leap in the ability of AI systems to generate functional computer code. Code generation has been a viable use case for AI systems for the last several years, with specialized models (Amazon CodeWhisperer, DeepSeek Coder, WizardCoder, Code Llama) and general-purpose foundation models (GPT series, Mistral, Gemini, Claude) all capable of generating code.
+
+According to GitHub's June 2023 survey, **92% of surveyed U.S.-based developers report using AI coding tools** in and out of work. A November 2023 industry survey reported a similarly high rate, with 96% of surveyed developers using AI coding tools and more than half using them most of the time. If this trend continues, LLM-generated code will become an integral part of the software supply chain.
+
+The policy challenge is that this technological advancement presents tangible benefits but also potential systemic risks. On the one hand, these models could significantly increase workforce productivity and positively contribute to cybersecurity if applied in vulnerability discovery and patching. On the other hand, research has shown that these models generate insecure code, posing direct cybersecurity risks if incorporated without proper review, as well as indirect risks as insecure code ends up in open-source repositories that feed into subsequent models.
+
+---
+
+## Background: What Are Code Generation Models?
+
+Code generation models are AI models capable of generating computer code in response to code or natural-language prompts. Examples include:
+
+- **Specialized models:** Amazon CodeWhisperer, DeepSeek Coder, WizardCoder, Code Llama
+- **General-purpose models:** OpenAI's GPT series, Mistral, Gemini, Claude
+
+Earlier iterations functioned similarly to "autocomplete for code" (code infilling). More recent improvements allow natural-language prompting. Training data for these models primarily comes from publicly available, open-source code scraped from repositories such as GitHub. For example, The Stack (6 TB) contains source code in 358 programming languages; The Pile (825 GB) contains 95 GB of GitHub data and 32 GB from Stack Exchange.
+
+The number of research papers on code generation more than doubled from 2022 to 2023, demonstrating rapidly growing research interest.
+
+### Industry Adoption
+
+GitHub Copilot had **1.8 million paid subscribers as of spring 2024**, up from more than one million in mid-2023. Google and Meta have created non-public, custom code generation models for internal employee use. A September 2024 study analyzing data from randomized control trials across three organizations found a **26% increase in the number of completed tasks** among developers using GitHub Copilot vs. those without access. Most studies agree that code generation tools improve developer productivity, regardless of the exact metrics used.
+
+---
+
+## Three Risk Categories
+
+### Risk 1: Code Generation Models Produce Insecure Code
+
+An emerging body of research demonstrates that AI code generation models frequently output insecure code. Key empirical findings:
+
+- **Pearce et al. (2021):** Approximately **40% of the 1,689 programs generated by GitHub Copilot** were vulnerable to MITRE's 2021 Common Weakness Enumerations (CWE) Top 25 Most Dangerous Software Weaknesses list.
+- **Siddiq and Santos (2022):** Out of 130 code samples generated using InCoder and GitHub Copilot, **68% and 73% of the code samples respectively contained vulnerabilities** when checked manually.
+- **Khoury et al. (2023):** Used ChatGPT to generate 21 programs in five different programming languages; only **5 out of 21 were initially secure**. Only after specific prompting to correct the code did an additional seven cases generate secure code.
+- **Fu et al. (2024):** Out of 452 real-world cases of GitHub Copilot-generated code snippets from publicly available projects, **32.8% of Python and 24.5% of JavaScript snippets** contained 38 different CWEs, eight of which belong to the 2023 CWE Top 25 list.
+
+**Hallucinated packages:** Code generation models are also likely to produce code that calls external libraries and packages that may be nonexistent (hallucinated), outdated and unpatched, or malicious. Vulcan Cyber showed that ChatGPT routinely recommended nonexistent packages — over 40 out of 201 Node.js questions and over 80 out of 227 Python questions contained at least one nonexistent package in the answer. Follow-up research demonstrated that attackers could easily create a package with the same hallucinated name to deliver malicious code.
+
+**Automation bias:** Despite these empirical results, there are early indications that users perceive AI-generated code to be more secure than human-written code. In a 2023 industry survey of 537 technology and IT workers and managers, **76% responded that AI code is more secure than human code**. Perry et al. (2023) showed in a user study that participants with access to an AI assistant wrote significantly less secure code than those without access, and were more likely to believe they had written secure code. This "automation bias" means users may overlook careful code review.
+
+**Why models produce insecure code:** Many code generation models are trained on open-source repositories such as GitHub, which contain human-authored code with known vulnerabilities, largely do not enforce secure coding practices, and lack data sanitization processes. Recent work has shown that security vulnerabilities in training data can leak into outputs of transformer-based models. A 2023 Meta study comparing Llama 2, Code Llama, and GPT-3.5/4 found that **models with more advanced coding capabilities were more likely to output insecure code**, suggesting a possible inverse relationship between functionality and security.
+
+### Risk 2: Models' Vulnerability to Attack
+
+Code generation models are software tools that need to be properly secured. Adversarial attacks on these models include:
+
+- **Data poisoning attacks:** An attacker contaminates a model's training data to elicit a desired behavior, such as manipulating training data to increase the likelihood of producing code that imports a malicious package or library.
+- **Backdoor attacks:** An attacker attempts to produce a specific output by prompting the model with a predetermined trigger phrase. This changed behavior can result in outputs that violate restrictions placed on the model by its developers or reveal sensitive information.
+- **Indirect prompt injection:** An attacker attempts to instruct a model to behave a certain way while hiding these instructions from a legitimate user. In the code generation context, an AI model that can reference external webpages or documentation may not distinguish between legitimate and malicious prompts, potentially instructing it to generate code that calls a specific malicious package.
+
+Researchers have pointed out that because code generation models are trained on data from a finite number of unsanitized code repositories, attackers could easily seed these repositories with files containing malicious code or purposefully introduce new repositories containing vulnerable code.
+
+Insecure code generation models may also increase an organization's cybersecurity attack surface if granted overly permissive access to internal systems.
+
+### Risk 3: Downstream Impacts
+
+As programmers use AI tools more frequently, the proportion of AI-authored code will increase relative to human-authored code. If AI tools introduce different types of bugs compared to human programmers, the vulnerability landscape will shift over time and new classes of vulnerabilities may emerge. Future scrapes of open-source repositories are likely to contain greater amounts of AI-generated code. **Today's insecure outputs are likely to become tomorrow's training data**, creating a negative feedback loop where future models learn from more insecure patterns.
+
+Additional downstream risks include:
+
+- **Technical debt:** If AI tools make it trivial to write large volumes of code quickly, organizations' technical debt may increase, which also increases the monitoring, maintenance, and patching required to secure assets.
+- **Workforce displacement:** Companies may reduce their security engineering workforce if code generation tools produce productivity gains. IBM's CEO stated in 2023 that almost 8,000 IBM positions could be replaced by AI and automation within five years. Human software developers perform security-relevant tasks (monitoring, manual code review, design, patching, updating dependencies) that today's probabilistic models are unlikely to perform reliably out of the box.
+
+---
+
+## CSET's Independent Evaluation
+
+### Methodology
+
+CSET evaluated five LLMs using the same programming language (C), assessment tool (ESBMC — Efficient SMT-based Context-Bounded Model Checker), and prompts (67 prompts from the LLMSecEval dataset, designed to elicit code corresponding to MITRE Top 25 CWE categories):
+
+| Model | Type | Creator | Specialized for Code? | Size |
+|---|---|---|---|---|
+| GPT-3.5-turbo | Closed | OpenAI | No | 175B parameters |
+| GPT-4 | Closed | OpenAI | No | ~1T parameters (estimated) |
+| Code Llama 7B Instruct | Open | Meta | Yes | 7B parameters |
+| WizardCoder 7B | Open | WizardLM | Yes | 7B parameters |
+| Mistral 7B Instruct | Open | Mistral AI | No | 7B parameters |
+
+ESBMC tests for out-of-bounds array access, illegal pointer dereferences, integer overflows, undefined behavior on shift operations, floating-point NaN, divide by zero, and memory leaks.
+
+### Evaluation Results
+
+**Unsuccessful verification rates:** Across all five models, **approximately 48% of all generated code snippets were compilable but contained a bug** flagged by ESBMC ("verification failed"). Only approximately 30% of all generated code snippets successfully compiled and passed ESBMC verification (defined as secure).
+
+**Variation across models:**
+- GPT-3.5-turbo had the best overall performance measured by successfully verified code snippets.
+- GPT-4 generated more code that did not compile and had higher incompleteness/syntactic errors.
+- WizardCoder produced the highest overall number of code snippets that failed verification.
+- Code Llama produced the worst results: only **19% of all Code Llama code snippets successfully passed ESBMC verification**. It repeatedly failed to produce usable code for 5 prompts even after 3 attempts each.
+- Mistral tended to generate individual functions rather than complete programs, causing compilation failures.
+
+**Severity of bugs:** All five models demonstrated a tendency to produce similar and severe bugs. The three most common bug types were:
+1. **Dereference failures** — can lead to memory corruption and arbitrary code execution
+2. **Buffer overflows** — can become vulnerabilities when discovered by a malicious actor
+3. **Memory leak failures** — can lead to crashes and system instability
+
+All three most common bug types fall into the category of severe memory-related bugs.
+
+**Key finding:** While the exact percentages vary, **all models produced buggy code in at least 40% of the prompts tested**. These results corroborate a growing body of previous research suggesting that various LLMs produce insecure code containing impactful weaknesses.
+
+---
+
+## Challenges in Assessing Security of Code Generation Models
+
+Assessing the security of AI-generated code is highly complex, with many interdependent variables:
+
+- **Coding language:** Different languages have different sets of common vulnerabilities (e.g., C is highly susceptible to memory safety errors; Python and Rust have built-in memory management).
+- **Model type:** There may be significant performance differences between specialized code models and general-purpose models.
+- **Assessment tools:** No shared industry standard exists for code quality checkers and static analysis tools across programming languages.
+- **Benchmarking:** Few publicly available benchmarks exist for assessing the security of AI-generated code. Popular benchmarks like HumanEval evaluate only functionality, not security.
+- **Prompting:** The language used to prompt a code generation model can significantly impact the quality of outputs.
+- **Randomness and reproducibility:** The probabilistic nature of language modeling makes it difficult to claim a model will respond the same way every time.
+- **Human-computer interaction:** Studies have observed automation bias in human subjects given access to code generation models, making them more likely to trust model outputs.
+
+---
+
+## Policy Implications
+
+### Supply Chain Risk
+
+Industry adoption of AI code generation models may pose risks to software supply chain security. However, these risks will not be evenly distributed. Larger, well-resourced enterprises with robust code review processes may be able to mitigate the impact of AI-generated insecure code using existing procedures, while smaller, under-resourced businesses may face constraints or overlook the need to check AI code outputs for security.
+
+This risk can be incorporated into existing risk management frameworks. NIST's 2022 Cybersecurity Supply Chain Risk Management (C-SCRM) framework already enumerates similar risks. Regardless of authorship, code should be evaluated as part of existing secure software development practices, such as those recommended by the NIST Cybersecurity Framework (CSF 2.0).
+
+### Shared Responsibility
+
+Currently, the burden of verifying that AI-generated code is secure falls mainly on users — an arrangement that does not align with the White House's 2023 National Cybersecurity Strategy to shift responsibility away from individuals and small businesses to organizations best positioned to reduce systemic risk at scale.
+
+Multiple stakeholders have roles to play:
+
+- **AI developers:** Remove known vulnerable code from training datasets; assess models on security benchmarks in addition to functional benchmarks; monitor for unforeseen instances of insecure code generation.
+- **Organizations producing code at scale:** Build in features that check code outputs for security and offer suggestions for fixes.
+- **Policymakers (CISA, NIST):** Drive conversations to expand secure-by-design principles to LLMs that can impact software supply chain security.
+
+### Evaluation Benchmark Gap
+
+Many popular leaderboards that rank code generation models only rely on performance-based metrics such as HumanEval, which are limited to specific programming languages and measure only functionality. The "best-performing" model (measured by ability to produce functional code) may not be the one least likely to produce insecure code. Early studies suggest that as the parameter count of models grows larger, models may produce **more** insecure code, not less. Leaderboards should also explicitly rank code generation models based on available security benchmarks.
+
+### Downstream Feedback Loop Risk
+
+Without transparency in training data, negative feedback loops where insecure AI code outputs end up in open-source repositories and are used to train future models may be difficult to trace and measure. The probabilistic nature of model outputs means that patching them may not be 100% reliable.
+
+---
+
+## Key Research Questions for the Field
+
+- Do better-performing models tend to generate less secure code? If so, why?
+- How buggy or insecure is the training data being used to train AI code generation models?
+- How reliably will code generation models replicate patterns found in their training data?
+- How reliable are various security benchmarks for code generation models?
+- To what extent do human programmers demonstrate automation bias when using AI code generation tools?
+- To what extent will AI-generated code either contribute to or help reduce technical debt?
+- To what extent are existing cybersecurity best practices sufficient to safeguard against AI-generated code?
+
+---
+
+## Conclusion
+
+A variety of code generation models often produce insecure code, some of which contains impactful bugs. As more individuals and organizations rely on code generation models, these practices may pose problems for software supply chain security. They may also create a negative feedback loop where more insecure code ends up in open repositories, feeding into the training of future code generation models.
+
+Policy attention on improving models and their usage with security in mind — beyond functionality benchmarks — could help steer the industry towards reaping the productivity gains from code generation models while mitigating their risks. The ability of LLMs to generate functional code is one of the most promising application areas of generative AI, but to fully reap the benefits there must be proactive policy attention on the potential cybersecurity risks.
+
+---
+
+## Key Statistics Summary
+
+| Statistic | Source |
+|---|---|
+| 48% of code snippets from 5 LLMs contained exploitable bugs | CSET evaluation (2024) |
+| All 5 models produced buggy code in at least 40% of prompts | CSET evaluation (2024) |
+| ~40% of 1,689 GitHub Copilot programs vulnerable to MITRE CWE Top 25 | Pearce et al. (2021) |
+| 68% of InCoder samples contained vulnerabilities (manual inspection) | Siddiq & Santos (2022) |
+| 73% of GitHub Copilot samples contained vulnerabilities (manual inspection) | Siddiq & Santos (2022) |
+| Only 5/21 ChatGPT-generated programs were initially secure | Khoury et al. (2023) |
+| 32.8% of Python Copilot snippets had CWEs; 24.5% of JavaScript | Fu et al. (2024) |
+| 92% of U.S.-based developers use AI coding tools | GitHub survey, June 2023 |
+| 76% of IT workers believe AI code is more secure than human code | Industry survey, 2023 |
+| 26% increase in completed tasks for GitHub Copilot users | Cui et al. (2024) |
+| Only 19% of Code Llama snippets passed security verification | CSET evaluation (2024) |
+
+---
+
+## Citation
+
+Ji, Jessica, Jenny Jun, Maggie Wu, and Rebecca Gelles. "Cybersecurity Risks of AI-Generated Code." Center for Security and Emerging Technology, Georgetown University, November 2024. https://doi.org/10.51593/2023CA010.
