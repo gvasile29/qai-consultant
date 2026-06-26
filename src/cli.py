@@ -7,9 +7,6 @@ import os
 import sys
 from pathlib import Path
 
-# Disable ChromaDB telemetry
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY"] = "False"
 
 from rich.console import Console
 from rich.live import Live
@@ -24,7 +21,6 @@ from rich import print as rprint
 from agent import QAIAgent, QAIConnectionError, QAIModelError, QAIKnowledgeBaseError
 from dialogue import DialogueManager
 from strategy_generator import StrategyGenerator
-from knowledge_watcher import get_watcher
 from logger import setup_logging, get_logger
 from version import __version__
 
@@ -123,7 +119,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
     risk_analyzer = RiskAnalyzer(agent)
     estimator = EffortEstimator(agent)
 
-    # === Parallel RAG retrieval (ChromaDB reads, thread-safe, fast) ===
+    # === Parallel RAG retrieval (Pinecone reads, thread-safe, fast) ===
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
         progress.add_task("⚡ Fetching knowledge base context...", total=None)
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -215,7 +211,7 @@ def main():
             sys.exit(1)
         except QAIConnectionError as e:
             console.print(f"\n[bold red]{e}[/bold red]")
-            logger.error(f"Startup failed - Ollama connection: {e}")
+            logger.error(f"Startup failed - LLM connection: {e}")
             sys.exit(1)
         except QAIModelError as e:
             console.print(f"\n[bold red]{e}[/bold red]")
@@ -228,20 +224,10 @@ def main():
 
     console.print("[bold green]✅ Knowledge base ready![/bold green]\n")
 
-    # Start knowledge base watcher
-    def on_kb_update(message: str):
-        console.print(f"\n[bold green]{message}[/bold green]\n")
-
-    watcher = get_watcher()
-    watcher.start(callback=on_kb_update)
-
-    try:
-      _run_main_loop(agent, watcher)
-    finally:
-        watcher.stop()
+    _run_main_loop(agent)
 
 
-def _run_main_loop(agent: QAIAgent, watcher):
+def _run_main_loop(agent: QAIAgent):
     """Main interaction loop — separated so watcher can be cleanly stopped."""
     while True:
         # Run dialogue
@@ -332,15 +318,7 @@ notes: {extra_note}
                     feedback_content + output_path.read_text(encoding="utf-8"),
                     encoding="utf-8"
                 )
-                # Immediate ingest — don't wait for file watcher
-                try:
-                    chunks = watcher.ingest_manager.ingest_file(feedback_path)
-                    if chunks > 0:
-                        console.print(f"[bold green]✅ Strategy added to knowledge base! +{chunks} chunks ingested.[/bold green]")
-                    else:
-                        console.print(f"[bold green]✅ Strategy saved to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
-                except Exception:
-                    console.print(f"[bold green]✅ Strategy saved to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
+                console.print(f"[bold green]✅ Strategy saved to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
 
             elif feedback == "no":
                 console.print("[dim]Ok, strategy not added to knowledge base. Thank you for the feedback![/dim]")

@@ -19,8 +19,6 @@ Output: markdown report saved to output/effort_estimation_*.md
 
 import os
 import re
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY"] = "False"
 
 from pathlib import Path
 from datetime import datetime

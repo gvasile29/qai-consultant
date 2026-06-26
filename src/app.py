@@ -6,9 +6,6 @@ Browser-based interface for generating Test Strategy documents.
 import os
 import sys
 
-# Disable ChromaDB telemetry
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY"] = "False"
 
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
@@ -482,7 +479,7 @@ notes: {extra_note}
 def main():
     init_session_state()
 
-    # ── Load agent — show clear error if Ollama/ChromaDB not ready ─────────────
+    # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()
     if error:
         st.error(error)

@@ -1,16 +1,22 @@
 """
-Tests for LLMClient in src/agent.py — Mistral primary + OpenRouter fallback.
+Tests for LLMClient in src/agent.py.
+
+All tests use unittest.mock — no real Mistral or OpenRouter API calls are made.
 
 Covers:
-1.  chat() returns text from Mistral on success
-2.  chat() falls back to OpenRouter when Mistral raises an API error
-3.  chat() raises QAIConnectionError when both Mistral and OpenRouter fail
-4.  chat(stream=True) yields text chunks from Mistral
-5.  chat(stream=True) falls back to OpenRouter streaming when Mistral fails
+1.  _chat_once returns Mistral response when Mistral succeeds
+2.  _chat_once falls back to OpenRouter when Mistral raises an exception
+3.  _chat_once raises QAIConnectionError when both providers fail
+4.  _chat_stream yields chunks from Mistral when Mistral succeeds
+5.  _chat_stream falls back to OpenRouter when Mistral streaming fails
+6.  _chat_stream raises QAIConnectionError when both providers fail
+7.  chat(stream=False) calls _chat_once and not _chat_stream
+8.  chat(stream=True) returns a generator via _chat_stream
 """
 
 import sys
 import os
+import pytest
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 from pathlib import Path
@@ -23,8 +29,15 @@ sys.path.insert(0, str(SRC_DIR))
 from agent import LLMClient, QAIConnectionError
 
 
+# ── Helpers ─────────────────────────────────────────────────────────────────────
+
+def _make_client() -> LLMClient:
+    """Instantiate LLMClient with fake keys (constructors are key-only, no network)."""
+    return LLMClient(mistral_api_key="mk-test", openrouter_api_key="or-test")
+
+
 def _make_mistral_response(text: str) -> MagicMock:
-    """Fake Mistral SDK non-streaming response."""
+    """Fake Mistral SDK non-streaming response (choices[0].message.content)."""
     choice = MagicMock()
     choice.message.content = text
     response = MagicMock()
@@ -32,8 +45,8 @@ def _make_mistral_response(text: str) -> MagicMock:
     return response
 
 
-def _make_openai_response(text: str) -> MagicMock:
-    """Fake OpenAI-compatible (OpenRouter) non-streaming response."""
+def _make_openrouter_response(text: str) -> MagicMock:
+    """Fake OpenAI-compatible (OpenRouter) non-streaming response (choices[0].message.content)."""
     choice = MagicMock()
     choice.message.content = text
     response = MagicMock()
@@ -41,8 +54,11 @@ def _make_openai_response(text: str) -> MagicMock:
     return response
 
 
-def _make_mistral_stream(chunks: list) -> list:
-    """Fake Mistral SDK streaming events."""
+def _make_mistral_stream_events(chunks: list):
+    """
+    Fake Mistral SDK streaming events.
+    Each event exposes event.data.choices[0].delta.content.
+    """
     events = []
     for text in chunks:
         delta = MagicMock()
@@ -55,95 +71,164 @@ def _make_mistral_stream(chunks: list) -> list:
     return iter(events)
 
 
-def _make_openai_stream(chunks: list) -> list:
-    """Fake OpenAI-compatible (OpenRouter) streaming chunks."""
+def _make_openrouter_stream_chunks(chunks: list):
+    """
+    Fake OpenAI-compatible (OpenRouter) streaming chunks.
+    Each chunk exposes chunk.choices[0].delta.content.
+    """
     items = []
     for text in chunks:
         delta = MagicMock()
         delta.content = text
         choice = MagicMock()
         choice.delta = delta
-        chunk = MagicMock()
-        chunk.choices = [choice]
-        items.append(chunk)
+        chunk_mock = MagicMock()
+        chunk_mock.choices = [choice]
+        items.append(chunk_mock)
     return iter(items)
 
 
-def test_chat_returns_mistral_response():
-    """chat() returns text from Mistral when it succeeds."""
-    client = LLMClient(mistral_api_key="mk-test", openrouter_api_key="or-test")
-    messages = [{"role": "user", "content": "hello"}]
+# ── Tests ───────────────────────────────────────────────────────────────────────
 
-    with patch.object(client._mistral, "chat") as mock_chat:
-        mock_chat.complete.return_value = _make_mistral_response("Hello from Mistral")
-        result = client.chat(messages)
-
-    assert result == "Hello from Mistral", f"Expected 'Hello from Mistral', got: {result}"
-
-
-def test_chat_falls_back_to_openrouter_on_mistral_error():
-    """chat() uses OpenRouter when Mistral raises an exception."""
-    client = LLMClient(mistral_api_key="mk-test", openrouter_api_key="or-test")
-    messages = [{"role": "user", "content": "hello"}]
+def test_mistral_primary_returns_response():
+    """_chat_once returns Mistral response when Mistral succeeds."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "generate a strategy"}]
 
     with patch.object(client._mistral, "chat") as mock_mistral_chat, \
-         patch.object(client._openrouter.chat.completions, "create") as mock_or:
-        mock_mistral_chat.complete.side_effect = Exception("Rate limit exceeded")
-        mock_or.return_value = _make_openai_response("Hello from OpenRouter")
-        result = client.chat(messages)
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.complete.return_value = _make_mistral_response("Mistral generated this.")
+        result = client._chat_once(messages)
 
-    assert result == "Hello from OpenRouter", f"Expected 'Hello from OpenRouter', got: {result}"
+    assert result == "Mistral generated this."
+    mock_mistral_chat.complete.assert_called_once()
+    mock_or_create.assert_not_called()
 
 
-def test_chat_raises_connection_error_when_both_fail():
-    """chat() raises QAIConnectionError when both Mistral and OpenRouter fail."""
-    client = LLMClient(mistral_api_key="mk-test", openrouter_api_key="or-test")
-    messages = [{"role": "user", "content": "hello"}]
+def test_openrouter_fallback_on_mistral_failure():
+    """_chat_once falls back to OpenRouter when Mistral raises an exception."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "generate a strategy"}]
 
     with patch.object(client._mistral, "chat") as mock_mistral_chat, \
-         patch.object(client._openrouter.chat.completions, "create") as mock_or:
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.complete.side_effect = Exception("Mistral API unavailable")
+        mock_or_create.return_value = _make_openrouter_response("OpenRouter fallback response.")
+        result = client._chat_once(messages)
+
+    assert result == "OpenRouter fallback response."
+    mock_mistral_chat.complete.assert_called_once()
+    mock_or_create.assert_called_once()
+
+
+def test_both_fail_raises_connection_error():
+    """_chat_once raises QAIConnectionError when both Mistral and OpenRouter fail."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "generate a strategy"}]
+
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
         mock_mistral_chat.complete.side_effect = Exception("Mistral down")
-        mock_or.side_effect = Exception("OpenRouter down")
-        try:
-            client.chat(messages)
-            assert False, "Expected QAIConnectionError — not raised"
-        except QAIConnectionError:
-            pass
+        mock_or_create.side_effect = Exception("OpenRouter down")
+
+        with pytest.raises(QAIConnectionError) as exc_info:
+            client._chat_once(messages)
+
+    error_msg = str(exc_info.value)
+    assert "LLM generation failed" in error_msg or "OpenRouter" in error_msg
 
 
-def test_chat_stream_yields_chunks_from_mistral():
-    """chat(stream=True) yields text chunks from Mistral streaming."""
-    client = LLMClient(mistral_api_key="mk-test", openrouter_api_key="or-test")
-    messages = [{"role": "user", "content": "hello"}]
-
-    with patch.object(client._mistral, "chat") as mock_chat:
-        mock_chat.stream.return_value = _make_mistral_stream(["Hello", " world", "!"])
-        chunks = list(client.chat(messages, stream=True))
-
-    assert chunks == ["Hello", " world", "!"], f"Expected ['Hello', ' world', '!'], got: {chunks}"
-
-
-def test_chat_stream_falls_back_to_openrouter():
-    """chat(stream=True) falls back to OpenRouter streaming when Mistral fails."""
-    client = LLMClient(mistral_api_key="mk-test", openrouter_api_key="or-test")
-    messages = [{"role": "user", "content": "hello"}]
+def test_streaming_mistral_primary():
+    """_chat_stream yields chunks from Mistral when Mistral streaming succeeds."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "stream test"}]
 
     with patch.object(client._mistral, "chat") as mock_mistral_chat, \
-         patch.object(client._openrouter.chat.completions, "create") as mock_or:
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.stream.return_value = _make_mistral_stream_events(
+            ["Risk ", "Register ", "generated."]
+        )
+        result = list(client._chat_stream(messages))
+
+    assert result == ["Risk ", "Register ", "generated."]
+    mock_mistral_chat.stream.assert_called_once()
+    mock_or_create.assert_not_called()
+
+
+def test_streaming_openrouter_fallback():
+    """_chat_stream falls back to OpenRouter when Mistral streaming raises an exception."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "stream test"}]
+
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.stream.side_effect = Exception("Mistral streaming unavailable")
+        mock_or_create.return_value = _make_openrouter_stream_chunks(["Fallback ", "chunks."])
+        result = list(client._chat_stream(messages))
+
+    assert result == ["Fallback ", "chunks."]
+    mock_mistral_chat.stream.assert_called_once()
+    mock_or_create.assert_called_once()
+
+
+def test_streaming_both_fail_raises_connection_error():
+    """_chat_stream raises QAIConnectionError when both providers fail during streaming."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "stream test"}]
+
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
         mock_mistral_chat.stream.side_effect = Exception("Mistral streaming down")
-        mock_or.return_value = _make_openai_stream(["Hi", " there"])
-        chunks = list(client.chat(messages, stream=True))
+        mock_or_create.side_effect = Exception("OpenRouter streaming down")
 
-    assert chunks == ["Hi", " there"], f"Expected ['Hi', ' there'], got: {chunks}"
+        with pytest.raises(QAIConnectionError) as exc_info:
+            list(client._chat_stream(messages))
 
+    error_msg = str(exc_info.value)
+    assert "LLM streaming failed" in error_msg or "OpenRouter" in error_msg
+
+
+def test_chat_non_streaming_calls_chat_once():
+    """chat(stream=False) delegates to _chat_once and does not call _chat_stream."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "test"}]
+
+    with patch.object(client, "_chat_once", return_value="once response") as mock_once, \
+         patch.object(client, "_chat_stream") as mock_stream:
+        result = client.chat(messages, stream=False)
+
+    mock_once.assert_called_once_with(messages)
+    mock_stream.assert_not_called()
+    assert result == "once response"
+
+
+def test_chat_streaming_calls_chat_stream():
+    """chat(stream=True) delegates to _chat_stream and does not call _chat_once."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "test"}]
+    expected_chunks = ["chunk1", "chunk2", "chunk3"]
+
+    with patch.object(client, "_chat_stream", return_value=iter(expected_chunks)) as mock_stream, \
+         patch.object(client, "_chat_once") as mock_once:
+        result = client.chat(messages, stream=True)
+
+    mock_stream.assert_called_once_with(messages)
+    mock_once.assert_not_called()
+    assert list(result) == expected_chunks
+
+
+# ── Manual runner ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     tests = [
-        ("chat() returns Mistral response on success", test_chat_returns_mistral_response),
-        ("chat() falls back to OpenRouter on Mistral error", test_chat_falls_back_to_openrouter_on_mistral_error),
-        ("chat() raises QAIConnectionError when both fail", test_chat_raises_connection_error_when_both_fail),
-        ("chat(stream=True) yields chunks from Mistral", test_chat_stream_yields_chunks_from_mistral),
-        ("chat(stream=True) falls back to OpenRouter streaming", test_chat_stream_falls_back_to_openrouter),
+        ("_chat_once returns Mistral response when Mistral succeeds", test_mistral_primary_returns_response),
+        ("_chat_once falls back to OpenRouter on Mistral failure", test_openrouter_fallback_on_mistral_failure),
+        ("_chat_once raises QAIConnectionError when both fail", test_both_fail_raises_connection_error),
+        ("_chat_stream yields chunks from Mistral when Mistral succeeds", test_streaming_mistral_primary),
+        ("_chat_stream falls back to OpenRouter when Mistral streaming fails", test_streaming_openrouter_fallback),
+        ("_chat_stream raises QAIConnectionError when both streaming fail", test_streaming_both_fail_raises_connection_error),
+        ("chat(stream=False) calls _chat_once", test_chat_non_streaming_calls_chat_once),
+        ("chat(stream=True) returns generator via _chat_stream", test_chat_streaming_calls_chat_stream),
     ]
     passed = failed = 0
     for name, fn in tests:

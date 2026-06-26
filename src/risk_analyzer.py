@@ -8,9 +8,6 @@ The Risk Register is also passed to EffortEstimator to calculate risk buffers.
 """
 
 import os
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY"] = "False"
-
 from pathlib import Path
 from datetime import datetime
 from agent import QAIAgent, RAG_K_GENERATION
@@ -104,7 +101,7 @@ class RiskAnalyzer:
     Analyzes project context and generates a structured Risk Register.
 
     Uses RAG to retrieve risk-relevant knowledge (OWASP, ISO 26262, etc.)
-    then generates a markdown Risk Register via Ollama with:
+    then generates a markdown Risk Register via LLM (Mistral API) with:
     - Risk matrix (Likelihood × Impact)
     - Mitigation strategies per risk
     - Risk-based testing priorities
@@ -113,7 +110,7 @@ class RiskAnalyzer:
     def __init__(self, agent: QAIAgent):
         """
         Args:
-            agent: Initialized QAIAgent with ChromaDB and Ollama connections.
+            agent: Initialized QAIAgent with Pinecone and LLM connections.
         """
         self.agent = agent
 
@@ -124,7 +121,7 @@ class RiskAnalyzer:
         Args:
             context: Collected ProjectContext from DialogueManager.
             chunks: Optional pre-fetched knowledge chunks. If None, retrieves
-                    from ChromaDB using the risk-focused query. Pass pre-fetched
+                    from Pinecone using the risk-focused query. Pass pre-fetched
                     chunks to enable parallel RAG retrieval in the pipeline.
 
         Returns:

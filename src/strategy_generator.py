@@ -100,7 +100,7 @@ class StrategyGenerator:
     """
     Generates Test Strategy documents using RAG-augmented LLM generation.
 
-    Retrieves relevant QA knowledge from ChromaDB (k=RAG_K_GENERATION chunks),
+    Retrieves relevant QA knowledge from Pinecone (k=RAG_K_GENERATION chunks),
     builds a structured prompt, and generates a markdown Test Strategy
     grounded in ISTQB, IEEE 829, OWASP, and ISO/IEC 25010 methodologies.
     """
@@ -108,7 +108,7 @@ class StrategyGenerator:
     def __init__(self, agent: QAIAgent):
         """
         Args:
-            agent: Initialized QAIAgent with ChromaDB and Ollama connections.
+            agent: Initialized QAIAgent with Pinecone and LLM connections.
         """
         self.agent = agent
 
@@ -126,7 +126,7 @@ class StrategyGenerator:
         logger.info(f"Starting full generation pipeline for '{context.project_name}'")
         risk_analyzer = RiskAnalyzer(self.agent)
 
-        # Parallel RAG prefetch — both are read-only ChromaDB queries, thread-safe
+        # Parallel RAG prefetch — both are read-only Pinecone queries, thread-safe
         logger.info("Prefetching knowledge base context (parallel)...")
         with ThreadPoolExecutor(max_workers=2) as executor:
             f_risk = executor.submit(
@@ -175,14 +175,14 @@ class StrategyGenerator:
         """
         Generate a Test Strategy document for the given project context.
 
-        Retrieves relevant chunks from ChromaDB (k=RAG_K_GENERATION) using
+        Retrieves relevant chunks from Pinecone (k=RAG_K_GENERATION) using
         the project's RAG query, builds a structured prompt, and generates
-        via Ollama.
+        via LLM (Mistral API).
 
         Args:
             context: Collected ProjectContext from DialogueManager.
             chunks: Optional pre-fetched knowledge chunks. If None, retrieves
-                    from ChromaDB. Pass pre-fetched chunks to enable parallel
+                    from Pinecone. Pass pre-fetched chunks to enable parallel
                     RAG retrieval in generate_all().
 
         Returns:
@@ -196,7 +196,7 @@ class StrategyGenerator:
         logger.info(f"Retrieved {len(chunks)} knowledge chunks")
 
         prompt = build_strategy_prompt(context, knowledge_context)
-        logger.info("Generating Test Strategy via Ollama...")
+        logger.info("Generating Test Strategy via LLM...")
         strategy = self.agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
         logger.info(f"Test Strategy generated ({len(strategy)} chars)")
 
