@@ -2,14 +2,14 @@
 
 An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, and **Effort Estimation Report** from a simple project description.
 
-> 100% local. No API keys. No cloud. Powered by [Ollama](https://ollama.ai) + [mistral:7b-instruct-q4_0](https://ollama.com/library/mistral).
+> 🌐 **Live demo:** [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
 
 > 🤖 Built with [Claude Code](https://claude.ai/code) by Anthropic.
 
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-green.svg)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
 ---
@@ -30,16 +30,23 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 
 ## Quick Start
 
-```bash
-# 1. Install Ollama (https://ollama.ai) and pull the model
-ollama pull mistral:7b-instruct-q4_0   # 4-bit quantized — ~3x faster on CPU
+### Option A — Use the live app (no setup)
 
-# 2. Clone and install
+👉 [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
+
+### Option B — Run locally
+
+```bash
+# 1. Clone and install
 git clone https://github.com/gvasile29/qai-consultant.git
 cd qai-consultant
 pip install -r requirements.txt
 
-# 3. Build the knowledge base (one-time, 5-10 min)
+# 2. Set up API keys
+cp .env.example .env
+# Edit .env and fill in the 4 keys (see Prerequisites below)
+
+# 3. Build the knowledge base (one-time, pushes to Pinecone)
 python src/ingest.py
 
 # 4. Run
@@ -98,19 +105,20 @@ QAI Consultant's recommendations are grounded in real QA standards and methodolo
 
 ## Prerequisites
 
-### 1. Install Ollama
+QAI Consultant v2.0 runs on cloud APIs — no local GPU or Ollama required.
 
-Download and install Ollama from [ollama.ai](https://ollama.ai), then pull the quantized model:
+You need four API keys in a `.env` file (all have free tiers):
+
+| Key | Where to get it |
+|-----|----------------|
+| `MISTRAL_API_KEY` | [console.mistral.ai](https://console.mistral.ai/) → API Keys |
+| `OPENROUTER_API_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `PINECONE_API_KEY` | [pinecone.io](https://www.pinecone.io/) → API Keys |
+| `PINECONE_INDEX_NAME` | Name of your Pinecone index (e.g. `qai-consultant`, dimensions: 384, metric: cosine) |
 
 ```bash
-ollama pull mistral:7b-instruct-q4_0   # 4-bit quantized — ~3x faster on CPU than float16
-```
-
-### 2. Verify Ollama is running
-
-```bash
-curl http://localhost:11434
-# Expected: Ollama is running
+cp .env.example .env
+# Edit .env and fill in all four values
 ```
 
 ---
@@ -124,33 +132,35 @@ curl http://localhost:11434
 ```
 You describe your project (11 questions)
         ↓
-QAI analyzes risks from your context
+QAI retrieves relevant knowledge from Pinecone (RAG)
+        ↓
+QAI analyzes risks from your context (Mistral API)
         ↓
 QAI estimates effort using PERT + industry benchmarks
         ↓
-QAI generates a Test Strategy backed by QA standards
+QAI generates a Test Strategy backed by QA standards (Mistral API)
         ↓
 Three documents ready for download
 ```
+
+LLM calls use **Mistral API** as the primary provider, with **OpenRouter** as automatic fallback.
 
 ---
 
 ## Interfaces
 
-### CLI (Terminal)
-
-Beautiful terminal experience with `rich`:
-
-```bash
-python src/cli.py
-```
-
-### Web UI (Browser)
-
-Streamlit interface with three output tabs:
+### Web UI (Browser — recommended)
 
 ```bash
 streamlit run src/app.py
+```
+
+Or use the **live hosted version**: [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
+
+### CLI (Terminal)
+
+```bash
+python src/cli.py
 ```
 
 ---
@@ -176,8 +186,9 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v0.5** ✅ Auto re-ingest — file watcher + incremental ingest + manifest tracking
 - **v0.6** ✅ Confidence level algorithm — score-based (0-100): PERT spread + capacity gap + data quality + multiplier magnitude
 - **v1.0** ✅ MVP — error handling, input validation, logging, full documentation, tests, Apache 2.0 license
-- **v2.0** HuggingFace integration — easy KB download for new users (no manual ingest needed)
-- **v2.1** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
+- **v2.0** ✅ Cloud migration — Ollama → Mistral API + OpenRouter fallback; ChromaDB → Pinecone; deployed to Streamlit Cloud
+- **v2.1** HuggingFace KB — `download_knowledge_base.py` so new users don't need to build the KB manually
+- **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment
 - **v4.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
 
@@ -201,11 +212,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 | Problem | Solution |
 |---|---|
-| "Ollama is not running" | Run `ollama serve` in a separate terminal |
-| "Model 'mistral:7b-instruct-q4_0' not found" | Run `ollama pull mistral:7b-instruct-q4_0` |
-| "Knowledge base not found" | Run `python src/ingest.py` |
-| Slow generation (>1 min) | Normal on first call — model loading into memory; subsequent calls are faster |
+| "Missing required secret: 'MISTRAL_API_KEY'" | Add your key to `.env` or Streamlit Cloud secrets |
+| "Missing required secret: 'PINECONE_API_KEY'" | Add your Pinecone key to `.env` |
+| "Knowledge base is empty" | Run `python src/ingest.py` to push documents to Pinecone |
+| "Both Mistral API and OpenRouter are unavailable" | Check API keys are valid and have credits |
 | Windows encoding errors | Set `PYTHONIOENCODING=utf-8` before running |
 
 > 📖 Full troubleshooting guide: [INSTALL.md](INSTALL.md#troubleshooting)
-
