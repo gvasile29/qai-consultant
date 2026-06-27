@@ -156,6 +156,7 @@ def render_sidebar():
 - 📋 IEEE 829
 - ⚙️ ISO/IEC 25010
 - 🤖 AI SDLC Adoption (2024–2025)
+- 📝 AI Test Planning (2025)
 - 🧠 Expert Knowledge
         """)
 
@@ -287,7 +288,7 @@ def render_intro():
 
     e1, e2, e3, e4 = st.columns(4)
     e1.metric("⏱️ Time to results", "~2 min", "vs. hours of manual work")
-    e2.metric("📚 Standards", "ISTQB · OWASP · ISO", "7,000+ knowledge vectors")
+    e2.metric("📚 Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors")
     e3.metric("📄 Deliverables", "4 documents", "Risk · Effort · Strategy · Plan")
     e4.metric("💰 Cost", "Free", "No sign-up required")
 
@@ -309,7 +310,7 @@ def render_intro():
 | Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, 17 AI SDLC case studies | General training data |
 | Structured output | Risk Register + Effort Estimation + Test Strategy | Varies by prompt quality |
 | Project discovery | Guided 11-question dialogue | You write the full prompt |
-| RAG grounding | 7,000+ QA-specific vectors in Pinecone | None |
+| RAG grounding | 7,100+ vectors: ISTQB, OWASP, IEEE 829, AI Test Planning | None |
 | Best for | Early-stage / kick-off, no codebase yet | When you already have project context |
 
 **Recommended workflow:**
