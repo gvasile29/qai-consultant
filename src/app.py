@@ -214,7 +214,7 @@ def render_dialogue():
     st.markdown("---")
 
     total = len(QUESTIONS)
-    answered = len(st.session_state.answers)
+    answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
     progress = answered / total
     st.progress(progress, text=f"Progress: {answered}/{total} questions answered")
     st.markdown("###")
