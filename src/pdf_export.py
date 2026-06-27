@@ -15,9 +15,11 @@ body { font-family: Arial, sans-serif; font-size: 11pt; color: #222; margin: 2cm
 h1 { color: #00b4d8; font-size: 18pt; border-bottom: 2px solid #00b4d8; padding-bottom: 4px; }
 h2 { color: #0077a8; font-size: 14pt; margin-top: 16pt; }
 h3 { color: #333; font-size: 12pt; }
-table { width: 100%; border-collapse: collapse; margin: 8pt 0; font-size: 10pt; }
-th { background: #00b4d8; color: white; padding: 4pt 6pt; text-align: left; }
-td { border: 1px solid #ddd; padding: 4pt 6pt; }
+table { width: 100%; border-collapse: collapse; margin: 8pt 0; font-size: 8pt; table-layout: fixed; }
+th { background: #00b4d8; color: white; padding: 3pt 4pt; text-align: left;
+     word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; overflow: hidden; }
+td { border: 1px solid #ddd; padding: 3pt 4pt;
+     word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; overflow: hidden; }
 tr:nth-child(even) { background: #f5f5f5; }
 code { background: #f0f0f0; padding: 1pt 3pt; border-radius: 2pt; font-size: 10pt; }
 pre { background: #f0f0f0; padding: 8pt; border-radius: 4pt; font-size: 9pt; }
