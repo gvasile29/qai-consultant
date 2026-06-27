@@ -19,6 +19,8 @@ from effort_estimator import EffortEstimator
 from agent import QAIConnectionError, QAIKnowledgeBaseError
 from logger import setup_logging, get_logger
 from version import __version__
+from templates import TEMPLATES, TEMPLATE_OPTIONS
+from pdf_export import markdown_to_pdf
 
 setup_logging()
 logger = get_logger(__name__)
@@ -163,6 +165,52 @@ def render_sidebar():
         st.markdown("[⭐ Star on GitHub](https://github.com/gvasile29/qai-consultant)", unsafe_allow_html=True)
 
 
+# ── Example output constants (used in render_intro expander) ──────────────────
+EXAMPLE_RISK = """
+### Risk Register — ShopFlow E-Commerce Platform
+
+| ID | Risk | Likelihood | Impact | Severity | Mitigation |
+|----|------|-----------|--------|----------|-----------|
+| R01 | Payment gateway integration failure | Medium | Critical | **High** | Contract SLA, fallback provider |
+| R02 | GDPR non-compliance in user data handling | Low | Critical | **High** | DPO review, data mapping, consent flows |
+| R03 | Performance degradation under Black Friday load | High | High | **High** | Load testing with k6, autoscaling config |
+| R04 | SQL injection via product search | Low | Critical | **High** | Parameterised queries, OWASP WSTG review |
+| R05 | Third-party analytics SDK breaking changes | Medium | Medium | **Medium** | Pin SDK versions, integration tests |
+"""
+
+EXAMPLE_EFFORT = """
+### Effort Estimation — ShopFlow E-Commerce Platform
+
+| Phase | Optimistic | Most Likely | Pessimistic | PERT Estimate |
+|-------|-----------|-------------|-------------|---------------|
+| Test Planning & Strategy | 3d | 5d | 8d | **5.2d** |
+| Functional Testing | 8d | 12d | 18d | **12.3d** |
+| Security Testing (OWASP) | 3d | 5d | 7d | **5.0d** |
+| Performance Testing | 2d | 4d | 6d | **4.0d** |
+| Regression & UAT | 4d | 6d | 10d | **6.3d** |
+| **Total** | **20d** | **32d** | **49d** | **32.8d** |
+
+**Confidence Score: 72 / 100 (Medium-High)**
+Risk buffer: +20% → **~39 person-days**
+"""
+
+EXAMPLE_STRATEGY = """
+### Test Strategy — ShopFlow E-Commerce Platform
+
+**Scope:** End-to-end testing of checkout flow, user authentication, product catalogue, and payment integration.
+
+**Approach:** Risk-based testing (ISTQB CTAL-TM) prioritising payment and authentication flows. OWASP WSTG v4.2 for security coverage.
+
+**Test Levels:**
+- **Unit** — Jest (frontend), Mocha (backend services) — developer-owned
+- **Integration** — API contract tests (Postman/Newman), payment gateway mocks
+- **System** — Playwright E2E covering 15 critical user journeys
+- **Performance** — k6 load tests simulating 500 concurrent users
+
+**Exit Criteria:** 0 open Critical/High defects, >85% test coverage on payment module, all OWASP Top 10 checks passed.
+"""
+
+
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
     st.markdown('<p class="main-header">🧪 QAI Consultant</p>', unsafe_allow_html=True)
@@ -203,6 +251,15 @@ def render_intro():
 3. **Ask your AI assistant to refine** the strategy against your specific codebase, tickets, and architecture
         """)
 
+    with st.expander("📄 See an example of what QAI Consultant generates"):
+        ex_tab1, ex_tab2, ex_tab3 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy"])
+        with ex_tab1:
+            st.markdown(EXAMPLE_RISK)
+        with ex_tab2:
+            st.markdown(EXAMPLE_EFFORT)
+        with ex_tab3:
+            st.markdown(EXAMPLE_STRATEGY)
+
     st.markdown("###")
     if st.button("🚀 Start — Generate a Test Strategy", use_container_width=True, type="primary"):
         st.session_state.current_step = "dialogue"
@@ -219,6 +276,19 @@ def render_dialogue():
     progress = answered / total
     st.progress(progress, text=f"Progress: {answered}/{total} questions answered")
     st.markdown("###")
+
+    selected_template = st.selectbox(
+        "⚡ Quick start with a template",
+        options=[opt[1] for opt in TEMPLATE_OPTIONS],
+        format_func=lambda k: next(label for label, key in TEMPLATE_OPTIONS if key == k),
+        index=0,
+        key="template_selector",
+    )
+    if selected_template and st.button("Apply template", key="apply_template"):
+        for field, value in TEMPLATES[selected_template].items():
+            if field != "label":
+                st.session_state.answers[field] = value
+        st.rerun()
 
     with st.form("dialogue_form"):
         for question in QUESTIONS:
@@ -415,24 +485,48 @@ def render_strategy():
         with st.expander("📚 Knowledge Sources Used"):
             for source in st.session_state.risk_sources:
                 st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
-        st.download_button(
-            label="⬇️ Download Risk Register (.md)",
-            data=st.session_state.risk_register,
-            file_name=f"risk_register_{st.session_state.dialogue.get_context().project_name}.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                label="⬇️ Download (.md)",
+                data=st.session_state.risk_register,
+                file_name=f"risk_register_{st.session_state.dialogue.get_context().project_name}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with dl_col2:
+            pdf_bytes = markdown_to_pdf(st.session_state.risk_register, "Risk Register")
+            st.download_button(
+                label="⬇️ Download (.pdf)",
+                data=pdf_bytes or b"",
+                file_name=f"risk_register_{st.session_state.dialogue.get_context().project_name}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                disabled=pdf_bytes is None,
+            )
 
     with tab2:
         st.markdown(st.session_state.effort_report)
         st.markdown("---")
-        st.download_button(
-            label="⬇️ Download Effort Estimation (.md)",
-            data=st.session_state.effort_report,
-            file_name=f"effort_estimation_{st.session_state.dialogue.get_context().project_name}.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                label="⬇️ Download (.md)",
+                data=st.session_state.effort_report,
+                file_name=f"effort_estimation_{st.session_state.dialogue.get_context().project_name}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with dl_col2:
+            pdf_bytes = markdown_to_pdf(st.session_state.effort_report, "Effort Estimation")
+            st.download_button(
+                label="⬇️ Download (.pdf)",
+                data=pdf_bytes or b"",
+                file_name=f"effort_estimation_{st.session_state.dialogue.get_context().project_name}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                disabled=pdf_bytes is None,
+            )
 
     with tab3:
         st.markdown(st.session_state.strategy)
@@ -440,14 +534,26 @@ def render_strategy():
         with st.expander("📚 Knowledge Sources Used"):
             for source in st.session_state.sources:
                 st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
-        st.download_button(
-            label="⬇️ Download Test Strategy (.md)",
-            data=st.session_state.strategy,
-            file_name=f"test_strategy_{st.session_state.dialogue.get_context().project_name}.md",
-            mime="text/markdown",
-            use_container_width=True,
-            type="primary",
-        )
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                label="⬇️ Download (.md)",
+                data=st.session_state.strategy,
+                file_name=f"test_strategy_{st.session_state.dialogue.get_context().project_name}.md",
+                mime="text/markdown",
+                use_container_width=True,
+                type="primary",
+            )
+        with dl_col2:
+            pdf_bytes = markdown_to_pdf(st.session_state.strategy, "Test Strategy")
+            st.download_button(
+                label="⬇️ Download (.pdf)",
+                data=pdf_bytes or b"",
+                file_name=f"test_strategy_{st.session_state.dialogue.get_context().project_name}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                disabled=pdf_bytes is None,
+            )
 
     # Generate Another button
     st.markdown("###")

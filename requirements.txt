@@ -4,6 +4,7 @@ sentence-transformers==2.7.0
 pypdf==6.9.2
 python-dotenv==1.0.1
 markdown==3.8.1
+xhtml2pdf>=0.2.11
 nltk==3.9.4
 rich==13.7.1
 streamlit==1.37.0
