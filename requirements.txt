@@ -1,3 +1,4 @@
+requests>=2.31.0
 langchain==0.3.27
 langchain-community==0.3.27
 sentence-transformers==2.7.0

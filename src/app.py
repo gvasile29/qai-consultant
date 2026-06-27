@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
 
+import requests
 import streamlit as st
 from agent import QAIAgent
 from dialogue import DialogueManager, QUESTIONS
@@ -97,6 +98,10 @@ def init_session_state():
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
     if "run_count" not in st.session_state:
         st.session_state.run_count = 0
+    if "_badge_fetched" not in st.session_state:
+        st.session_state["_badge_fetched"] = False
+    if "_badge_svg" not in st.session_state:
+        st.session_state["_badge_svg"] = None
 
 
 # ── Load Agent ─────────────────────────────────────────────────────────────────
@@ -123,11 +128,25 @@ def load_agent():
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
-_VISITS_BADGE = (
+_VISITS_BADGE_URL = (
     "https://hits.seeyoufarm.com/api/count/incr/badge.svg"
     "?url=https%3A%2F%2Fappi-consultant-esodgczvwpmozzybuhdhek.streamlit.app%2F"
     "&count_bg=%2300b4d8&title_bg=%23555555&title=visits&edge_flat=true"
 )
+
+
+def _fetch_badge_once():
+    """Fetch the visits badge SVG server-side once per session and cache in session state.
+    Server-side Python is not subject to Streamlit's browser CSP restrictions."""
+    if st.session_state.get("_badge_fetched"):
+        return
+    try:
+        r = requests.get(_VISITS_BADGE_URL, timeout=5)
+        if r.status_code == 200:
+            st.session_state["_badge_svg"] = r.text
+    except Exception:
+        st.session_state["_badge_svg"] = None
+    st.session_state["_badge_fetched"] = True
 
 
 def render_sidebar():
@@ -135,10 +154,8 @@ def render_sidebar():
         st.markdown("## 🧪 QAI Consultant")
         st.markdown("AI-powered QA Architect")
         st.caption(f"v{__version__}")
-        st.markdown(
-            f'<img src="{_VISITS_BADGE}" alt="visit counter" style="height:18px;margin-top:2px;">',
-            unsafe_allow_html=True,
-        )
+        if st.session_state.get("_badge_svg"):
+            st.markdown(st.session_state["_badge_svg"], unsafe_allow_html=True)
         st.divider()
 
         st.markdown("### How it works")
@@ -542,6 +559,7 @@ def main():
     if st.session_state.agent is None:
         st.session_state.agent = agent
 
+    _fetch_badge_once()
     render_sidebar()
 
     step = st.session_state.current_step
