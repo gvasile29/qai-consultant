@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
 
-import requests
 import streamlit as st
 from agent import QAIAgent
 from dialogue import DialogueManager, QUESTIONS
@@ -23,20 +22,6 @@ from version import __version__
 
 setup_logging()
 logger = get_logger(__name__)
-
-
-def fetch_visit_count() -> int | None:
-    """Increment and return the global visit counter via CountAPI. Returns None on error."""
-    try:
-        r = requests.get(
-            "https://api.countapi.xyz/hit/qai-consultant/app-visits",
-            timeout=3,
-        )
-        if r.status_code == 200:
-            return r.json().get("value")
-    except Exception:
-        pass
-    return None
 
 
 # ── Page Config ────────────────────────────────────────────────────────────────
@@ -112,10 +97,6 @@ def init_session_state():
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
     if "run_count" not in st.session_state:
         st.session_state.run_count = 0
-    if "visit_count" not in st.session_state:
-        st.session_state.visit_count = None
-    if "_counted_visit" not in st.session_state:
-        st.session_state["_counted_visit"] = False
 
 
 # ── Load Agent ─────────────────────────────────────────────────────────────────
@@ -142,14 +123,22 @@ def load_agent():
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
+_VISITS_BADGE = (
+    "https://hits.seeyoufarm.com/api/count/incr/badge.svg"
+    "?url=https%3A%2F%2Fappi-consultant-esodgczvwpmozzybuhdhek.streamlit.app%2F"
+    "&count_bg=%2300b4d8&title_bg=%23555555&title=visits&edge_flat=true"
+)
+
+
 def render_sidebar():
     with st.sidebar:
         st.markdown("## 🧪 QAI Consultant")
         st.markdown("AI-powered QA Architect")
-        version_line = f"v{__version__}"
-        if st.session_state.get("visit_count"):
-            version_line += f" · 👥 {st.session_state.visit_count:,} visits"
-        st.caption(version_line)
+        st.caption(f"v{__version__}")
+        st.markdown(
+            f'<img src="{_VISITS_BADGE}" alt="visit counter" style="height:18px;margin-top:2px;">',
+            unsafe_allow_html=True,
+        )
         st.divider()
 
         st.markdown("### How it works")
@@ -552,11 +541,6 @@ def main():
     # Store agent in session state for use across components
     if st.session_state.agent is None:
         st.session_state.agent = agent
-
-    # Count visit once per session (CountAPI — fire-and-forget, silent on error)
-    if not st.session_state["_counted_visit"]:
-        st.session_state.visit_count = fetch_visit_count()
-        st.session_state["_counted_visit"] = True
 
     render_sidebar()
 
