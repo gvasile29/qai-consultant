@@ -98,14 +98,14 @@ def test_risk_register_tab_has_download_button():
     source = read_app_source()
     fn = extract_function(source, "render_strategy")
 
-    assert '"⬇️ Download Risk Register (.md)"' in fn, \
+    assert '"⬇️ Download (.md)"' in fn, \
         "Risk Register download button label not found"
     assert 'risk_register' in fn and 'download_button' in fn, \
         "download_button for risk_register not found"
     # Filename uses project_name
     assert 'risk_register_' in fn, "risk_register filename prefix not found"
 
-    print("  PASS: Risk Register tab has download button '⬇️ Download Risk Register (.md)'")
+    print("  PASS: Risk Register tab has download button '⬇️ Download (.md)'")
 
 
 def test_strategy_tab_has_download_button():
@@ -113,12 +113,12 @@ def test_strategy_tab_has_download_button():
     source = read_app_source()
     fn = extract_function(source, "render_strategy")
 
-    assert '"⬇️ Download Test Strategy (.md)"' in fn, \
+    assert '"⬇️ Download (.md)"' in fn, \
         "Test Strategy download button label not found"
     # Filename uses project_name
     assert 'test_strategy_' in fn, "test_strategy filename prefix not found"
 
-    print("  PASS: Test Strategy tab has download button '⬇️ Download Test Strategy (.md)'")
+    print("  PASS: Test Strategy tab has download button '⬇️ Download (.md)'")
 
 
 def test_render_strategy_stores_risk_in_session():

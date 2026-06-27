@@ -384,11 +384,11 @@ def test_effort_tab_download_button():
     source = read_app_source()
     fn = extract_function(source, "render_strategy")
 
-    assert '"⬇️ Download Effort Estimation (.md)"' in fn, \
+    assert '"⬇️ Download (.md)"' in fn, \
         "Effort Estimation download button label not found"
     assert 'effort_estimation_' in fn, \
         "effort_estimation_ filename prefix not found"
-    print("  PASS: Effort Estimation tab has download button '⬇️ Download Effort Estimation (.md)'")
+    print("  PASS: Effort Estimation tab has download button '⬇️ Download (.md)'")
 
 
 def test_effort_keys_in_init_session_state():
