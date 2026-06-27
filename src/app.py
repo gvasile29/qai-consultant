@@ -137,7 +137,7 @@ def render_sidebar():
 1. **Describe** your project
 2. **Answer** clarifying questions
 3. **Receive** a tailored Test Strategy
-4. **Download** as Markdown
+4. **Download** as Markdown or PDF
         """)
 
         st.divider()
@@ -222,7 +222,7 @@ def render_intro():
     with col2:
         st.info("🧠 **AI analyzes** using QA methodologies & standards")
     with col3:
-        st.info("📄 **Download** your tailored Test Strategy")
+        st.info("📄 **Download** your tailored Test Strategy (Markdown & PDF)")
 
     st.markdown("---")
 
