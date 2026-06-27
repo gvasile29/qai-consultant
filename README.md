@@ -187,7 +187,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v0.6** ✅ Confidence level algorithm — score-based (0-100): PERT spread + capacity gap + data quality + multiplier magnitude
 - **v1.0** ✅ MVP — error handling, input validation, logging, full documentation, tests, Apache 2.0 license
 - **v2.0** ✅ Cloud migration — Ollama → Mistral API + OpenRouter fallback; ChromaDB → Pinecone; deployed to Streamlit Cloud
-- **v2.1** HuggingFace KB — `download_knowledge_base.py` so new users don't need to build the KB manually
+- **v2.1** ⏸️ HuggingFace KB — `download_knowledge_base.py` *(deprioritized — Pinecone migration reduced value; most users use the live app directly)*
 - **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment
 - **v4.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
