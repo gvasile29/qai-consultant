@@ -311,6 +311,19 @@ def render_review():
             st.rerun()
 
 
+def _save_feedback(feedback_value: str, extra_note: str):
+    feedback_dir = Path(__file__).resolve().parent.parent / "knowledge_base" / "generated_strategies"
+    feedback_dir.mkdir(exist_ok=True)
+    feedback_content = f"---\nfeedback: {feedback_value}\nnotes: {extra_note}\n---\n\n"
+    output_path = st.session_state.output_path
+    feedback_path = feedback_dir / output_path.name
+    feedback_path.write_text(
+        feedback_content + output_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    st.success("✅ Strategy saved! Thank you for your feedback.")
+
+
 def render_strategy():
     MAX_RUNS_PER_SESSION = 3
 
@@ -460,36 +473,26 @@ def render_strategy():
         with col3:
             no = st.button("❌ Not useful", use_container_width=True)
 
-        # Show improvement note field immediately when partially is clicked
+        # Persist "partially" across reruns — Streamlit buttons reset to False each rerun,
+        # so we can't rely on the button value when the user is typing in the text input.
         if partially:
+            st.session_state["_feedback_partial"] = True
+
+        if st.session_state.get("_feedback_partial"):
             extra_note = st.text_input("📝 What could be improved?", key="improvement_note")
-            if not extra_note:
-                st.warning("Please describe what could be improved before saving.")
-                st.stop()
-        else:
-            extra_note = ""
+            save_partial = st.button("💾 Save feedback", use_container_width=True, type="primary")
+            if save_partial:
+                if not extra_note.strip():
+                    st.warning("Please describe what could be improved before saving.")
+                else:
+                    _save_feedback("partially", extra_note)
+                    st.session_state["_feedback_partial"] = False
+                    st.session_state.feedback_submitted = True
+                    st.rerun()
 
-        if yes or (partially and extra_note):
-            feedback_dir = Path(__file__).resolve().parent.parent / "knowledge_base" / "generated_strategies"
-            feedback_dir.mkdir(exist_ok=True)
-
-            feedback_value = "yes" if yes else "partially"
-
-            feedback_content = f"""---
-feedback: {feedback_value}
-notes: {extra_note}
----
-
-"""
-            output_path = st.session_state.output_path
-            feedback_path = feedback_dir / output_path.name
-            feedback_path.write_text(
-                feedback_content + output_path.read_text(encoding="utf-8"),
-                encoding="utf-8"
-            )
-
+        if yes:
+            _save_feedback("yes", "")
             st.session_state.feedback_submitted = True
-            st.success("✅ Strategy saved! Thank you for your feedback.")
             st.rerun()
 
         if no:
