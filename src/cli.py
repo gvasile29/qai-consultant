@@ -113,27 +113,38 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
     from risk_analyzer import RiskAnalyzer, build_risk_prompt, RISK_SYSTEM_PROMPT
     from effort_estimator import EffortEstimator
     from strategy_generator import build_strategy_prompt, SYSTEM_PROMPT
+    from test_plan_generator import TestPlanGenerator, build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
 
     generator = StrategyGenerator(agent)
     context = dialogue.get_context()
     risk_analyzer = RiskAnalyzer(agent)
     estimator = EffortEstimator(agent)
+    test_plan_generator = TestPlanGenerator(agent)
 
     # === Parallel RAG retrieval (Pinecone reads, thread-safe, fast) ===
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
         progress.add_task("⚡ Fetching knowledge base context...", total=None)
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             f_risk = executor.submit(
                 agent.retrieve_knowledge, risk_analyzer._build_risk_query(context), RAG_K_GENERATION
             )
             f_strategy = executor.submit(
                 agent.retrieve_knowledge, context.to_rag_query(), RAG_K_GENERATION
             )
+            f_test_plan = executor.submit(
+                agent.retrieve_knowledge, test_plan_generator._build_test_plan_query(context), RAG_K_GENERATION
+            )
             risk_chunks = f_risk.result()
             strategy_chunks = f_strategy.result()
+            test_plan_chunks = f_test_plan.result()
 
     risk_knowledge = agent.format_knowledge_context(risk_chunks)
     strategy_knowledge = agent.format_knowledge_context(strategy_chunks)
+    test_plan_knowledge = agent.format_knowledge_context(test_plan_chunks)
+    test_plan_sources = list({
+        f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+        for c in test_plan_chunks
+    })
     risk_sources = list({
         f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
         for c in risk_chunks
@@ -143,7 +154,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
         for c in strategy_chunks
     })
 
-    # === Step 1/3: Risk Register (streaming) ===
+    # === Step 1/4: Risk Register (streaming) ===
     console.print(Panel("[bold yellow]⚠️  Generating Risk Register...[/bold yellow]", border_style="yellow"))
     risk_prompt = build_risk_prompt(context, risk_knowledge)
     risk_buffer = []
@@ -155,13 +166,13 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
     risk_path = risk_analyzer.save(risk_register, context)
     console.print(f"\n[bold green]✅ Risk Register generated[/bold green] ({len(risk_register)} chars)\n")
 
-    # === Step 2/3: Effort Estimation (deterministic + short LLM narrative) ===
+    # === Step 2/4: Effort Estimation (deterministic + short LLM narrative) ===
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
         progress.add_task("📊 Generating Effort Estimation...", total=None)
         effort_report, effort_data = estimator.estimate(context, risk_register)
         effort_path = estimator.save(effort_report, context)
 
-    # === Step 3/3: Test Strategy (streaming) ===
+    # === Step 3/4: Test Strategy (streaming) ===
     console.print(Panel("[bold cyan]📋 Generating Test Strategy...[/bold cyan]", border_style="cyan"))
     strategy_prompt = build_strategy_prompt(context, strategy_knowledge)
     strategy_buffer = []
@@ -173,6 +184,18 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
     strategy_path = generator.save(strategy, context)
     console.print(f"\n[bold green]✅ Test Strategy generated[/bold green] ({len(strategy)} chars)\n")
 
+    # === Step 4/4: Test Plan (streaming) ===
+    console.print(Panel("[bold blue]📝 Generating Test Plan...[/bold blue]", border_style="blue"))
+    test_plan_prompt = build_test_plan_prompt(context, risk_register, test_plan_knowledge)
+    test_plan_buffer = []
+    with Live(console=console, refresh_per_second=8) as live:
+        for chunk in agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT):
+            test_plan_buffer.append(chunk)
+            live.update(Text("".join(test_plan_buffer)))
+    test_plan = "".join(test_plan_buffer)
+    test_plan_path = test_plan_generator.save(test_plan, context)
+    console.print(f"\n[bold green]✅ Test Plan generated[/bold green] ({len(test_plan)} chars)\n")
+
     return {
         "strategy": strategy,
         "strategy_path": strategy_path,
@@ -182,6 +205,9 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
         "risk_sources": risk_sources,
         "effort_report": effort_report,
         "effort_path": effort_path,
+        "test_plan": test_plan,
+        "test_plan_path": test_plan_path,
+        "test_plan_sources": test_plan_sources,
     }
 
 
@@ -281,6 +307,16 @@ def _run_main_loop(agent: QAIAgent):
             console.print(Markdown(result["strategy"]))
             show_sources(result["sources"])
             console.print(f"\n[bold green]💾 Strategy saved to:[/bold green] [cyan]{result['strategy_path']}[/cyan]")
+
+            # Display Test Plan
+            console.print()
+            console.print(Panel(
+                "[bold blue]📝 Test Plan[/bold blue]",
+                border_style="blue",
+            ))
+            console.print(Markdown(result["test_plan"]))
+            show_sources(result["test_plan_sources"])
+            console.print(f"\n[bold green]💾 Test Plan saved to:[/bold green] [cyan]{result['test_plan_path']}[/cyan]")
 
             output_path = result["strategy_path"]
 

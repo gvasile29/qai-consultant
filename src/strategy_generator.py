@@ -16,6 +16,7 @@ from datetime import datetime
 from agent import QAIAgent, RAG_K_GENERATION
 from dialogue import ProjectContext
 from risk_analyzer import RiskAnalyzer
+from test_plan_generator import TestPlanGenerator
 from effort_estimator import EffortEstimator
 from logger import get_logger
 
@@ -128,7 +129,8 @@ class StrategyGenerator:
 
         # Parallel RAG prefetch — both are read-only Pinecone queries, thread-safe
         logger.info("Prefetching knowledge base context (parallel)...")
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        test_plan_generator = TestPlanGenerator(self.agent)
+        with ThreadPoolExecutor(max_workers=3) as executor:
             f_risk = executor.submit(
                 self.agent.retrieve_knowledge,
                 risk_analyzer._build_risk_query(context),
@@ -139,25 +141,36 @@ class StrategyGenerator:
                 context.to_rag_query(),
                 RAG_K_GENERATION,
             )
+            f_test_plan = executor.submit(
+                self.agent.retrieve_knowledge,
+                test_plan_generator._build_test_plan_query(context),
+                RAG_K_GENERATION,
+            )
             risk_chunks = f_risk.result()
             strategy_chunks = f_strategy.result()
+            test_plan_chunks = f_test_plan.result()
         logger.info(f"RAG prefetch done: {len(risk_chunks)} risk chunks, {len(strategy_chunks)} strategy chunks")
 
-        logger.info("Step 1/3 — Analyzing project risks...")
+        logger.info("Step 1/4 — Analyzing project risks...")
         risk_register, risk_sources = risk_analyzer.analyze(context, chunks=risk_chunks)
         risk_path = risk_analyzer.save(risk_register, context)
         logger.info(f"Risk Register saved: {risk_path.name}")
 
-        logger.info("Step 2/3 — Generating Effort Estimation...")
+        logger.info("Step 2/4 — Generating Effort Estimation...")
         estimator = EffortEstimator(self.agent)
         effort_report, effort_data = estimator.estimate(context, risk_register)
         effort_path = estimator.save(effort_report, context)
         logger.info(f"Effort Report saved: {effort_path.name}")
 
-        logger.info("Step 3/3 — Generating Test Strategy...")
+        logger.info("Step 3/4 — Generating Test Strategy...")
         strategy, sources = self.generate(context, chunks=strategy_chunks)
         strategy_path = self.save(strategy, context)
         logger.info(f"Test Strategy saved: {strategy_path.name}")
+
+        logger.info("Step 4/4 — Generating Test Plan...")
+        test_plan, test_plan_sources = test_plan_generator.generate(context, risk_register, chunks=test_plan_chunks)
+        test_plan_path = test_plan_generator.save(test_plan, context)
+        logger.info(f"Test Plan saved: {test_plan_path.name}")
 
         return {
             "strategy": strategy,
@@ -169,6 +182,9 @@ class StrategyGenerator:
             "effort_report": effort_report,
             "effort_path": effort_path,
             "effort_data": effort_data,
+            "test_plan": test_plan,
+            "test_plan_path": test_plan_path,
+            "test_plan_sources": test_plan_sources,
         }
 
     def generate(self, context: ProjectContext, chunks: list = None) -> tuple:

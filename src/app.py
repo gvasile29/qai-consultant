@@ -21,6 +21,7 @@ from logger import setup_logging, get_logger
 from version import __version__
 from templates import TEMPLATES, TEMPLATE_OPTIONS
 from pdf_export import markdown_to_pdf
+from test_plan_generator import TestPlanGenerator
 
 setup_logging()
 logger = get_logger(__name__)
@@ -95,6 +96,12 @@ def init_session_state():
         st.session_state.effort_report = None
     if "effort_path" not in st.session_state:
         st.session_state.effort_path = None
+    if "test_plan" not in st.session_state:
+        st.session_state.test_plan = None
+    if "test_plan_path" not in st.session_state:
+        st.session_state.test_plan_path = None
+    if "test_plan_sources" not in st.session_state:
+        st.session_state.test_plan_sources = []
     if "current_step" not in st.session_state:
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
     if "run_count" not in st.session_state:
@@ -156,7 +163,9 @@ def render_sidebar():
         if st.button("🔄 Start Over", use_container_width=True):
             for key in ["dialogue", "answers", "strategy", "sources", "output_path",
                         "risk_register", "risk_sources", "risk_path",
-                        "effort_report", "effort_path", "feedback_submitted",
+                        "effort_report", "effort_path",
+                        "test_plan", "test_plan_path", "test_plan_sources",
+                        "feedback_submitted",
                         "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -243,11 +252,17 @@ def render_intro():
             "📋 **Test Strategy**\n\n"
             "ISTQB-aligned approach tailored to your stack, methodology, and compliance requirements."
         )
+    d4, = st.columns(1)
+    with d4:
+        st.success(
+            "📝 **Test Plan**\n\n"
+            "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."
+        )
 
     e1, e2, e3, e4 = st.columns(4)
     e1.metric("⏱️ Time to results", "~2 min", "vs. hours of manual work")
     e2.metric("📚 Standards", "ISTQB · OWASP · ISO", "7,000+ knowledge vectors")
-    e3.metric("📄 Deliverables", "3 documents", "Risk · Effort · Strategy")
+    e3.metric("📄 Deliverables", "4 documents", "Risk · Effort · Strategy · Plan")
     e4.metric("💰 Cost", "Free", "No sign-up required")
 
     st.markdown("---")
@@ -444,10 +459,11 @@ def render_strategy():
         generator = StrategyGenerator(agent)
         risk_analyzer = RiskAnalyzer(agent)
         estimator = EffortEstimator(agent)
+        test_plan_generator = TestPlanGenerator(agent)
 
         # Parallel RAG retrieval (read-only Pinecone, thread-safe)
         with st.spinner("⚡ Fetching knowledge base context..."):
-            with ThreadPoolExecutor(max_workers=2) as executor:
+            with ThreadPoolExecutor(max_workers=3) as executor:
                 f_risk = executor.submit(
                     agent.retrieve_knowledge,
                     risk_analyzer._build_risk_query(context),
@@ -458,8 +474,14 @@ def render_strategy():
                     context.to_rag_query(),
                     RAG_K_GENERATION,
                 )
+                f_test_plan = executor.submit(
+                    agent.retrieve_knowledge,
+                    test_plan_generator._build_test_plan_query(context),
+                    RAG_K_GENERATION,
+                )
                 risk_chunks = f_risk.result()
                 strategy_chunks = f_strategy.result()
+                test_plan_chunks = f_test_plan.result()
 
         risk_sources = list({
             f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
@@ -468,6 +490,10 @@ def render_strategy():
         sources = list({
             f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
             for c in strategy_chunks
+        })
+        test_plan_sources = list({
+            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            for c in test_plan_chunks
         })
 
         # Risk Register (streaming)
@@ -492,6 +518,16 @@ def render_strategy():
         output_path = generator.save(strategy, context)
         st.markdown("---")
 
+        # Test Plan (streaming)
+        from test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
+        st.markdown("#### 📝 Generating Test Plan...")
+        test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
+        test_plan = st.write_stream(
+            agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
+        )
+        test_plan_path = test_plan_generator.save(test_plan, context)
+        st.markdown("---")
+
         st.session_state.strategy = strategy
         st.session_state.run_count = st.session_state.get("run_count", 0) + 1
         st.session_state.sources = sources
@@ -501,9 +537,12 @@ def render_strategy():
         st.session_state.risk_path = risk_path
         st.session_state.effort_report = effort_report
         st.session_state.effort_path = effort_path
+        st.session_state.test_plan = test_plan
+        st.session_state.test_plan_path = test_plan_path
+        st.session_state.test_plan_sources = test_plan_sources
 
     # ── Three Tabs ────────────────────────────────────────────────────────
-    tab1, tab2, tab3 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy"])
+    tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
 
     with tab1:
         st.markdown(st.session_state.risk_register)
@@ -581,12 +620,41 @@ def render_strategy():
                 disabled=pdf_bytes is None,
             )
 
+    with tab4:
+        st.markdown(st.session_state.test_plan)
+        st.markdown("---")
+        with st.expander("📚 Knowledge Sources Used"):
+            for source in st.session_state.test_plan_sources:
+                st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                label="⬇️ Download (.md)",
+                data=st.session_state.test_plan,
+                file_name=f"test_plan_{st.session_state.dialogue.get_context().project_name}.md",
+                mime="text/markdown",
+                use_container_width=True,
+                type="primary",
+            )
+        with dl_col2:
+            pdf_bytes = markdown_to_pdf(st.session_state.test_plan, "Test Plan")
+            st.download_button(
+                label="⬇️ Download (.pdf)",
+                data=pdf_bytes or b"",
+                file_name=f"test_plan_{st.session_state.dialogue.get_context().project_name}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                disabled=pdf_bytes is None,
+            )
+
     # Generate Another button
     st.markdown("###")
     if st.button("🔄 Generate Another Strategy", use_container_width=True):
         for key in ["dialogue", "answers", "strategy", "sources", "output_path",
                     "risk_register", "risk_sources", "risk_path",
-                    "effort_report", "effort_path", "feedback_submitted"]:
+                    "effort_report", "effort_path",
+                    "test_plan", "test_plan_path", "test_plan_sources",
+                    "feedback_submitted"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.session_state.current_step = "intro"
