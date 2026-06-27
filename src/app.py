@@ -226,6 +226,32 @@ def render_intro():
 
     st.markdown("---")
 
+    st.markdown("#### 🎯 What you get in ~2 minutes")
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        st.success(
+            "⚠️ **Risk Register**\n\n"
+            "Prioritized risks with likelihood, impact & mitigation — before a single line of code is written."
+        )
+    with d2:
+        st.success(
+            "📊 **Effort Estimation**\n\n"
+            "PERT-based timeline with team capacity analysis and a confidence score (0–100)."
+        )
+    with d3:
+        st.success(
+            "📋 **Test Strategy**\n\n"
+            "ISTQB-aligned approach tailored to your stack, methodology, and compliance requirements."
+        )
+
+    e1, e2, e3, e4 = st.columns(4)
+    e1.metric("⏱️ Time to results", "~2 min", "vs. hours of manual work")
+    e2.metric("📚 Standards", "ISTQB · OWASP · ISO", "7,000+ knowledge vectors")
+    e3.metric("📄 Deliverables", "3 documents", "Risk · Effort · Strategy")
+    e4.metric("💰 Cost", "Free", "No sign-up required")
+
+    st.markdown("---")
+
     st.info(
         "💡 **Best used at project kick-off** — when you don't yet have code, "
         "architecture docs, or detailed specs to hand an AI assistant. "
