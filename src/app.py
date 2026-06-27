@@ -219,6 +219,32 @@ EXAMPLE_STRATEGY = """
 **Exit Criteria:** 0 open Critical/High defects, >85% test coverage on payment module, all OWASP Top 10 checks passed.
 """
 
+EXAMPLE_TEST_PLAN = """
+### Test Plan — ShopFlow E-Commerce Platform
+
+**Standard:** IEEE 829 | **Methodology:** Scrum
+
+**Test Items:** Checkout flow, user authentication, product catalogue, payment gateway integration, GDPR consent flows.
+
+**Features NOT Tested:** Third-party logistics API (out of scope), admin panel (separate release).
+
+**Entry Criteria:** Build passes CI, test environment deployed, test data seeded, no open Critical defects from previous sprint.
+
+**Exit Criteria:** 0 open Critical/High defects, >90% test cases executed, all OWASP Top 10 checks passed, performance baseline met (p95 < 2s).
+
+**Schedule:**
+
+| Phase | Duration | Owner |
+|-------|----------|-------|
+| Test Design | 3 days | QA Lead |
+| Functional Execution | 8 days | QA Engineers |
+| Security (OWASP) | 3 days | QA Lead |
+| Performance (k6) | 2 days | QA Engineers |
+| Regression & UAT | 4 days | QA + Dev |
+
+**AI Tool Oversight:** Playwright AI used for E2E test generation → all AI-generated test cases reviewed by QA Lead before merge. Copilot suggestions for test data require manual validation against GDPR requirements.
+"""
+
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
@@ -293,13 +319,15 @@ def render_intro():
         """)
 
     with st.expander("📄 See an example of what QAI Consultant generates"):
-        ex_tab1, ex_tab2, ex_tab3 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy"])
+        ex_tab1, ex_tab2, ex_tab3, ex_tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
         with ex_tab1:
             st.markdown(EXAMPLE_RISK)
         with ex_tab2:
             st.markdown(EXAMPLE_EFFORT)
         with ex_tab3:
             st.markdown(EXAMPLE_STRATEGY)
+        with ex_tab4:
+            st.markdown(EXAMPLE_TEST_PLAN)
 
     st.markdown("###")
     if st.button("🚀 Start — Generate a Test Strategy", use_container_width=True, type="primary"):
