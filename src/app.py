@@ -145,6 +145,7 @@ def render_sidebar():
 - 🚗 ISO 26262 & A-SPICE
 - 📋 IEEE 829
 - ⚙️ ISO/IEC 25010
+- 🤖 AI SDLC Adoption (2024–2025)
 - 🧠 Expert Knowledge
         """)
 
@@ -158,7 +159,7 @@ def render_sidebar():
                     del st.session_state[key]
             st.rerun()
 
-        st.markdown("[⭐ Star on GitHub](https://github.com)", unsafe_allow_html=True)
+        st.markdown("[⭐ Star on GitHub](https://github.com/gvasile29/qai-consultant)", unsafe_allow_html=True)
 
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
@@ -175,6 +176,31 @@ def render_intro():
         st.info("📄 **Download** your tailored Test Strategy")
 
     st.markdown("---")
+
+    st.info(
+        "💡 **Best used at project kick-off** — when you don't yet have code, "
+        "architecture docs, or detailed specs to hand an AI assistant. "
+        "QAI Consultant generates a baseline **Risk Register**, **Effort Estimation**, and **Test Strategy** "
+        "grounded in ISTQB, OWASP, and ISO standards. "
+        "Then **feed those docs into Claude Code or your AI IDE** as project context "
+        "to get much more tailored, project-specific output."
+    )
+
+    with st.expander("📊 How is this different from just prompting Claude or Gemini?"):
+        st.markdown("""
+|  | **QAI Consultant** | **General AI (Claude / Gemini)** |
+|---|---|---|
+| Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, 17 AI SDLC case studies | General training data |
+| Structured output | Risk Register + Effort Estimation + Test Strategy | Varies by prompt quality |
+| Project discovery | Guided 11-question dialogue | You write the full prompt |
+| RAG grounding | 7,000+ QA-specific vectors in Pinecone | None |
+| Best for | Early-stage / kick-off, no codebase yet | When you already have project context |
+
+**Recommended workflow:**
+1. **Use QAI Consultant at kick-off** → generates your baseline documents in minutes
+2. **Feed those docs into Claude Code** (or Copilot / Cursor) as project context
+3. **Ask your AI assistant to refine** the strategy against your specific codebase, tickets, and architecture
+        """)
 
     st.markdown("###")
     if st.button("🚀 Start — Generate a Test Strategy", use_container_width=True, type="primary"):
@@ -309,7 +335,7 @@ def render_strategy():
         risk_analyzer = RiskAnalyzer(agent)
         estimator = EffortEstimator(agent)
 
-        # Parallel RAG retrieval (read-only ChromaDB, thread-safe)
+        # Parallel RAG retrieval (read-only Pinecone, thread-safe)
         with st.spinner("⚡ Fetching knowledge base context..."):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 f_risk = executor.submit(
