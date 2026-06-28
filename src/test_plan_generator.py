@@ -6,6 +6,7 @@ Output is a markdown document saved to output/test_plan_*.md.
 Receives the Risk Register to inform test priorities and resource allocation.
 """
 
+import re
 from pathlib import Path
 from datetime import datetime
 from agent import QAIAgent, RAG_K_GENERATION
@@ -168,7 +169,7 @@ class TestPlanGenerator:
         logger.info(f"Test Plan generated ({len(test_plan)} chars)")
 
         sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
             for c in chunks
         })
         return test_plan, sources
@@ -190,9 +191,10 @@ class TestPlanGenerator:
         """Save the generated Test Plan to a timestamped markdown file."""
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "output"
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"test_plan_{context.project_name.replace(' ', '_')}_{timestamp}.md"
+        safe_name = re.sub(r'[^\w\-.]', '_', context.project_name.replace(' ', '_'))
+        filename = f"test_plan_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
         full_content = f"""---
 generated_by: QAI Consultant

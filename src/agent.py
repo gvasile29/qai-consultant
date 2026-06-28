@@ -248,26 +248,29 @@ class QAIAgent:
             List of Document objects with page_content and metadata.
         """
         logger.debug(f"RAG query (k={k}): {query[:80]}...")
-        query_embedding = self.embeddings.embed_query(query)
-        results = self._index.query(
-            vector=query_embedding,
-            top_k=k,
-            namespace=PINECONE_NAMESPACE,
-            include_metadata=True,
-        )
-        chunks = [
-            Document(
-                page_content=match.metadata.get("text", ""),
-                metadata={
-                    "source": match.metadata.get("source", ""),
-                    "category": match.metadata.get("category", ""),
-                    "filename": match.metadata.get("filename", ""),
-                },
+        try:
+            query_embedding = self.embeddings.embed_query(query)
+            results = self._index.query(
+                vector=query_embedding,
+                top_k=k,
+                namespace=PINECONE_NAMESPACE,
+                include_metadata=True,
             )
-            for match in results.matches
-        ]
-        logger.debug(f"Retrieved {len(chunks)} chunks")
-        return chunks
+            chunks = [
+                Document(
+                    page_content=match.metadata.get("text", ""),
+                    metadata={
+                        "source": match.metadata.get("source", ""),
+                        "category": match.metadata.get("category", ""),
+                        "filename": match.metadata.get("filename", ""),
+                    },
+                )
+                for match in results.matches
+            ]
+            logger.debug(f"Retrieved {len(chunks)} chunks")
+            return chunks
+        except Exception as exc:
+            raise QAIKnowledgeBaseError(f"Knowledge base query failed: {exc}") from exc
 
     def format_knowledge_context(self, chunks: list) -> str:
         """
@@ -309,6 +312,7 @@ class QAIAgent:
 
         logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)...")
         content = self._llm_client.chat(messages)
+        content = content or ""
         logger.debug(f"Response received ({len(content)} chars)")
         return content
 

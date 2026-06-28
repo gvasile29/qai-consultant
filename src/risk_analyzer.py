@@ -8,6 +8,7 @@ The Risk Register is also passed to EffortEstimator to calculate risk buffers.
 """
 
 import os
+import re
 from pathlib import Path
 from datetime import datetime
 from agent import QAIAgent, RAG_K_GENERATION
@@ -136,10 +137,11 @@ class RiskAnalyzer:
 
         prompt = build_risk_prompt(context, knowledge_context)
         risk_register = self.agent.ask(prompt, system_prompt=RISK_SYSTEM_PROMPT)
+        risk_register = risk_register or ""
         logger.info(f"Risk Register generated ({len(risk_register)} chars)")
 
         sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
             for c in chunks
         })
 
@@ -164,10 +166,11 @@ class RiskAnalyzer:
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "output"
 
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"risk_register_{context.project_name.replace(' ', '_')}_{timestamp}.md"
+        safe_name = re.sub(r'[^\w\-.]', '_', context.project_name.replace(' ', '_'))
+        filename = f"risk_register_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
 
         full_content = f"""---

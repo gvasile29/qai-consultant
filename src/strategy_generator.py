@@ -10,6 +10,7 @@ Orchestrates the full generation pipeline:
 Output files are saved as timestamped markdown files in output/.
 """
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
@@ -146,31 +147,59 @@ class StrategyGenerator:
                 test_plan_generator._build_test_plan_query(context),
                 RAG_K_GENERATION,
             )
-            risk_chunks = f_risk.result()
-            strategy_chunks = f_strategy.result()
-            test_plan_chunks = f_test_plan.result()
+            try:
+                risk_chunks = f_risk.result()
+            except Exception as exc:
+                logger.warning("Risk RAG prefetch failed: %s", exc)
+                risk_chunks = []
+            try:
+                strategy_chunks = f_strategy.result()
+            except Exception as exc:
+                logger.warning("Strategy RAG prefetch failed: %s", exc)
+                strategy_chunks = []
+            try:
+                test_plan_chunks = f_test_plan.result()
+            except Exception as exc:
+                logger.warning("Test Plan RAG prefetch failed: %s", exc)
+                test_plan_chunks = []
         logger.info(f"RAG prefetch done: {len(risk_chunks)} risk chunks, {len(strategy_chunks)} strategy chunks")
 
         logger.info("Step 1/4 — Analyzing project risks...")
-        risk_register, risk_sources = risk_analyzer.analyze(context, chunks=risk_chunks)
-        risk_path = risk_analyzer.save(risk_register, context)
-        logger.info(f"Risk Register saved: {risk_path.name}")
+        try:
+            risk_register, risk_sources = risk_analyzer.analyze(context, chunks=risk_chunks)
+            risk_path = risk_analyzer.save(risk_register, context)
+            logger.info(f"Risk Register saved: {risk_path.name}")
+        except Exception as exc:
+            logger.error("Risk Register generation failed: %s", exc)
+            risk_register, risk_sources, risk_path = "", [], None
 
         logger.info("Step 2/4 — Generating Effort Estimation...")
-        estimator = EffortEstimator(self.agent)
-        effort_report, effort_data = estimator.estimate(context, risk_register)
-        effort_path = estimator.save(effort_report, context)
-        logger.info(f"Effort Report saved: {effort_path.name}")
+        try:
+            estimator = EffortEstimator(self.agent)
+            effort_report, effort_data = estimator.estimate(context, risk_register)
+            effort_path = estimator.save(effort_report, context)
+            logger.info(f"Effort Report saved: {effort_path.name}")
+        except Exception as exc:
+            logger.error("Effort Estimation failed: %s", exc)
+            effort_report, effort_data, effort_path = "", {}, None
 
         logger.info("Step 3/4 — Generating Test Strategy...")
-        strategy, sources = self.generate(context, chunks=strategy_chunks)
-        strategy_path = self.save(strategy, context)
-        logger.info(f"Test Strategy saved: {strategy_path.name}")
+        try:
+            strategy, sources = self.generate(context, chunks=strategy_chunks)
+            strategy_path = self.save(strategy, context)
+            logger.info(f"Test Strategy saved: {strategy_path.name}")
+        except Exception as exc:
+            logger.error("Test Strategy generation failed: %s", exc)
+            strategy, sources, strategy_path = "", [], None
 
         logger.info("Step 4/4 — Generating Test Plan...")
-        test_plan, test_plan_sources = test_plan_generator.generate(context, risk_register, chunks=test_plan_chunks)
-        test_plan_path = test_plan_generator.save(test_plan, context)
-        logger.info(f"Test Plan saved: {test_plan_path.name}")
+        try:
+            test_plan, test_plan_sources = test_plan_generator.generate(context, risk_register, chunks=test_plan_chunks)
+            test_plan_path = test_plan_generator.save(test_plan, context)
+            logger.info(f"Test Plan saved: {test_plan_path.name}")
+        except Exception as exc:
+            logger.error("Test Plan generation failed: %s", exc)
+            test_plan, test_plan_sources, test_plan_path = "", [], None
 
         return {
             "strategy": strategy,
@@ -214,10 +243,13 @@ class StrategyGenerator:
         prompt = build_strategy_prompt(context, knowledge_context)
         logger.info("Generating Test Strategy via LLM...")
         strategy = self.agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
+        strategy = strategy or ""
+        if not strategy.strip():
+            raise ValueError(f"LLM returned empty Test Strategy for '{context.project_name}'")
         logger.info(f"Test Strategy generated ({len(strategy)} chars)")
 
         sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
             for c in chunks
         })
 
@@ -238,10 +270,11 @@ class StrategyGenerator:
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "output"
 
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"test_strategy_{context.project_name.replace(' ', '_')}_{timestamp}.md"
+        safe_name = re.sub(r'[^\w\-.]', '_', context.project_name.replace(' ', '_'))
+        filename = f"test_strategy_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
 
         # Add metadata header

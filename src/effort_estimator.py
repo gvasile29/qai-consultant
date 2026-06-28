@@ -151,8 +151,8 @@ class EffortEstimator:
     # ── Step 1: Detect project type ────────────────────────────────────────────
 
     def _detect_project_type(self, context: ProjectContext, data: EstimationData):
-        pt = context.project_type.lower()
-        meth = context.methodology.lower()
+        pt = (context.project_type or "").lower()
+        meth = (context.methodology or "").lower()
 
         # Detect project type
         if any(k in pt for k in ["embedded", "firmware", "automotive"]):
@@ -207,8 +207,10 @@ class EffortEstimator:
         # QA baseline = dev_days * (qa_pct / (1 - qa_pct))
         mid_pct = (data.baseline_qa_percent_min + data.baseline_qa_percent_max) / 2 / 100
         if mid_pct < 1:
-            qa_multiplier_min = data.baseline_qa_percent_min / (100 - data.baseline_qa_percent_min)
-            qa_multiplier_max = data.baseline_qa_percent_max / (100 - data.baseline_qa_percent_max)
+            pct_min = min(data.baseline_qa_percent_min, 99)
+            pct_max = min(data.baseline_qa_percent_max, 99)
+            qa_multiplier_min = pct_min / (100 - pct_min)
+            qa_multiplier_max = pct_max / (100 - pct_max)
         else:
             qa_multiplier_min = 0.2
             qa_multiplier_max = 0.3
@@ -219,10 +221,10 @@ class EffortEstimator:
     # ── Step 3: Apply multipliers ──────────────────────────────────────────────
 
     def _apply_multipliers(self, context: ProjectContext, data: EstimationData):
-        compliance = context.compliance_requirements.lower()
-        automation = context.existing_automation.lower()
-        risks = context.known_risks.lower()
-        stack = context.tech_stack.lower()
+        compliance = (context.compliance_requirements or "").lower()
+        automation = (context.existing_automation or "").lower()
+        risks = (context.known_risks or "").lower()
+        stack = (context.tech_stack or "").lower()
 
         total_add = 0.0
 
@@ -300,11 +302,14 @@ class EffortEstimator:
         activities = {k: v for k, v in ACTIVITY_BREAKDOWN.items()
                       if k != "Automation Framework Setup" or data.total_multiplier > 0}
 
-        # Normalize percentages to sum to 100
+        # Normalize raw mid-percentages so they sum to exactly 100
+        raw_total = sum((lo + hi) / 2 for lo, hi in activities.values())
+        norm_scale = 100.0 / raw_total if raw_total > 0 else 1.0
+
         total_o = total_m = total_p = 0
 
         for activity, (pct_lo, pct_hi) in activities.items():
-            pct_mid = (pct_lo + pct_hi) / 2
+            pct_mid = ((pct_lo + pct_hi) / 2) * norm_scale
             # Scale to actual effort
             m = round(mid_effort * pct_mid / 100, 1)
             o = round(m * 0.6, 1)   # optimistic = 60% of most likely
@@ -624,6 +629,8 @@ Write the following sections (keep each concise — 3-5 sentences max):
         return exec_summary, assumptions, recommendations
 
     def _extract_section(self, text: str, section: str) -> Optional[str]:
+        if not text:
+            return None
         pattern = rf"{section}[:\s]*(.*?)(?=\n[A-Z_]{{3,}}[:\s]|\Z)"
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
@@ -634,6 +641,8 @@ Write the following sections (keep each concise — 3-5 sentences max):
 
     def _parse_duration(self, timeline: str) -> int:
         """Parse timeline string to working days."""
+        if not timeline:
+            return 130
         tl = timeline.lower()
         if any(k in tl for k in ["year", "yr"]):
             match = re.search(r"(\d+\.?\d*)\s*(?:year|yr)", tl)
@@ -670,10 +679,11 @@ Write the following sections (keep each concise — 3-5 sentences max):
         """Save the Effort Estimation Report to a markdown file."""
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "output"
-        output_dir.mkdir(exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"effort_estimation_{context.project_name.replace(' ', '_')}_{timestamp}.md"
+        safe_name = re.sub(r'[^\w\-.]', '_', context.project_name.replace(' ', '_'))
+        filename = f"effort_estimation_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
 
         full_content = f"""---

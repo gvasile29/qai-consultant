@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import logging
+from html import escape
 
 import markdown
 
@@ -51,28 +52,33 @@ def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report") -> bytes
         return None
 
     try:
+        if not isinstance(md_text, str):
+            logger.warning("markdown_to_pdf received non-string input: %s", type(md_text))
+            return None
+
         body_html = markdown.markdown(
             md_text,
             extensions=["tables", "fenced_code", "nl2br"],
         )
 
+        safe_title = escape(title)
         html = (
             f'<!DOCTYPE html>\n'
             f'<html>\n'
             f'<head>\n'
             f'  <meta charset="UTF-8" />\n'
-            f'  <title>{title}</title>\n'
+            f'  <title>{safe_title}</title>\n'
             f'  <style>{_CSS}</style>\n'
             f'</head>\n'
             f'<body>\n'
-            f'  <h1>{title}</h1>\n'
+            f'  <h1>{safe_title}</h1>\n'
             f'  {body_html}\n'
             f'</body>\n'
             f'</html>\n'
         )
 
         output = io.BytesIO()
-        result = pisa.CreatePDF(html, dest=output, encoding="UTF-8")
+        result = pisa.CreatePDF(html.encode("utf-8"), dest=output, encoding="UTF-8")
 
         if result.err:
             logger.warning("xhtml2pdf reported %d error(s) during PDF generation.", result.err)

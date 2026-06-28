@@ -134,23 +134,35 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
             f_test_plan = executor.submit(
                 agent.retrieve_knowledge, test_plan_generator._build_test_plan_query(context), RAG_K_GENERATION
             )
-            risk_chunks = f_risk.result()
-            strategy_chunks = f_strategy.result()
-            test_plan_chunks = f_test_plan.result()
+            try:
+                risk_chunks = f_risk.result()
+            except Exception as exc:
+                logger.warning("Risk RAG prefetch failed: %s", exc)
+                risk_chunks = []
+            try:
+                strategy_chunks = f_strategy.result()
+            except Exception as exc:
+                logger.warning("Strategy RAG prefetch failed: %s", exc)
+                strategy_chunks = []
+            try:
+                test_plan_chunks = f_test_plan.result()
+            except Exception as exc:
+                logger.warning("Test Plan RAG prefetch failed: %s", exc)
+                test_plan_chunks = []
 
     risk_knowledge = agent.format_knowledge_context(risk_chunks)
     strategy_knowledge = agent.format_knowledge_context(strategy_chunks)
     test_plan_knowledge = agent.format_knowledge_context(test_plan_chunks)
     test_plan_sources = list({
-        f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
         for c in test_plan_chunks
     })
     risk_sources = list({
-        f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
         for c in risk_chunks
     })
     sources = list({
-        f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
         for c in strategy_chunks
     })
 
@@ -342,18 +354,16 @@ def _run_main_loop(agent: QAIAgent):
                 if feedback == "partially":
                     extra_note = Prompt.ask("  [yellow]What could be improved?[/yellow]")
 
-                # Add feedback metadata to the strategy file
-                feedback_content = f"""---
-feedback: {feedback}
-notes: {extra_note}
----
-
-"""
+                # Strip existing YAML front matter before prepending feedback block
+                original_text = output_path.read_text(encoding="utf-8")
+                if original_text.startswith("---"):
+                    end = original_text.find("---", 3)
+                    body = original_text[end + 3:].lstrip("\n") if end != -1 else original_text
+                else:
+                    body = original_text
+                feedback_content = f"---\nfeedback: {feedback}\nnotes: {extra_note}\n---\n\n"
                 feedback_path = feedback_dir / output_path.name
-                feedback_path.write_text(
-                    feedback_content + output_path.read_text(encoding="utf-8"),
-                    encoding="utf-8"
-                )
+                feedback_path.write_text(feedback_content + body, encoding="utf-8")
                 console.print(f"[bold green]✅ Strategy saved to knowledge base![/bold green] [dim]{feedback_path}[/dim]")
 
             elif feedback == "no":

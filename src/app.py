@@ -102,6 +102,14 @@ def init_session_state():
         st.session_state.test_plan_path = None
     if "test_plan_sources" not in st.session_state:
         st.session_state.test_plan_sources = []
+    if "risk_pdf_bytes" not in st.session_state:
+        st.session_state.risk_pdf_bytes = None
+    if "effort_pdf_bytes" not in st.session_state:
+        st.session_state.effort_pdf_bytes = None
+    if "strategy_pdf_bytes" not in st.session_state:
+        st.session_state.strategy_pdf_bytes = None
+    if "test_plan_pdf_bytes" not in st.session_state:
+        st.session_state.test_plan_pdf_bytes = None
     if "current_step" not in st.session_state:
         st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
     if "run_count" not in st.session_state:
@@ -166,10 +174,13 @@ def render_sidebar():
                         "risk_register", "risk_sources", "risk_path",
                         "effort_report", "effort_path",
                         "test_plan", "test_plan_path", "test_plan_sources",
-                        "feedback_submitted",
-                        "current_step"]:
+                        "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
+                        "feedback_submitted", "_feedback_partial",
+                        "run_count", "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
+            for q in QUESTIONS:
+                st.session_state.pop(f"input_{q['key']}", None)
             st.rerun()
 
         st.markdown("[⭐ Star on GitHub](https://github.com/gvasile29/qai-consultant)", unsafe_allow_html=True)
@@ -350,7 +361,7 @@ def render_dialogue():
     selected_template = st.selectbox(
         "⚡ Quick start with a template",
         options=[opt[1] for opt in TEMPLATE_OPTIONS],
-        format_func=lambda k: next(label for label, key in TEMPLATE_OPTIONS if key == k),
+        format_func=lambda k: next((label for label, key in TEMPLATE_OPTIONS if key == k), "— Unknown —"),
         index=0,
         key="template_selector",
     )
@@ -358,6 +369,7 @@ def render_dialogue():
         for field, value in TEMPLATES[selected_template].items():
             if field != "label":
                 st.session_state.answers[field] = value
+                st.session_state[f"input_{field}"] = value
         st.rerun()
 
     with st.form("dialogue_form"):
@@ -453,16 +465,30 @@ def render_review():
 
 
 def _save_feedback(feedback_value: str, extra_note: str):
-    feedback_dir = Path(__file__).resolve().parent.parent / "knowledge_base" / "generated_strategies"
-    feedback_dir.mkdir(exist_ok=True)
-    feedback_content = f"---\nfeedback: {feedback_value}\nnotes: {extra_note}\n---\n\n"
-    output_path = st.session_state.output_path
-    feedback_path = feedback_dir / output_path.name
-    feedback_path.write_text(
-        feedback_content + output_path.read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
-    st.success("✅ Strategy saved! Thank you for your feedback.")
+    output_path = st.session_state.get("output_path")
+    if not output_path:
+        st.warning("No strategy file found — feedback cannot be saved.")
+        return
+    if not output_path.exists():
+        st.warning("Strategy file was deleted — feedback cannot be saved.")
+        return
+    try:
+        feedback_dir = Path(__file__).resolve().parent.parent / "knowledge_base" / "generated_strategies"
+        feedback_dir.mkdir(exist_ok=True)
+        original_text = output_path.read_text(encoding="utf-8")
+        # Strip existing YAML front matter to avoid duplicate --- blocks on re-ingestion
+        if original_text.startswith("---"):
+            end = original_text.find("---", 3)
+            body = original_text[end + 3:].lstrip("\n") if end != -1 else original_text
+        else:
+            body = original_text
+        feedback_content = f"---\nfeedback: {feedback_value}\nnotes: {extra_note}\n---\n\n"
+        feedback_path = feedback_dir / output_path.name
+        feedback_path.write_text(feedback_content + body, encoding="utf-8")
+        st.success("✅ Strategy saved! Thank you for your feedback.")
+    except Exception as e:
+        logger.error(f"Feedback save failed: {e}")
+        st.error("❌ Could not save feedback. Please try again.")
 
 
 def render_strategy():
@@ -478,13 +504,19 @@ def render_strategy():
     st.markdown("## 📄 Generated Test Strategy")
     st.markdown("---")
 
+    agent = st.session_state.agent
+    if agent is None:
+        st.error("❌ Agent not initialised — please refresh the page.")
+        st.stop()
+
     if st.session_state.strategy is None:
         from concurrent.futures import ThreadPoolExecutor
         from agent import RAG_K_GENERATION
         from risk_analyzer import build_risk_prompt, RISK_SYSTEM_PROMPT
 
+        st.session_state.run_count += 1
+
         context = st.session_state.dialogue.get_context()
-        agent = st.session_state.agent
         generator = StrategyGenerator(agent)
         risk_analyzer = RiskAnalyzer(agent)
         estimator = EffortEstimator(agent)
@@ -508,35 +540,52 @@ def render_strategy():
                     test_plan_generator._build_test_plan_query(context),
                     RAG_K_GENERATION,
                 )
-                risk_chunks = f_risk.result()
-                strategy_chunks = f_strategy.result()
-                test_plan_chunks = f_test_plan.result()
+                try:
+                    risk_chunks = f_risk.result()
+                except Exception as exc:
+                    logger.warning("Risk RAG prefetch failed: %s", exc)
+                    risk_chunks = []
+                try:
+                    strategy_chunks = f_strategy.result()
+                except Exception as exc:
+                    logger.warning("Strategy RAG prefetch failed: %s", exc)
+                    strategy_chunks = []
+                try:
+                    test_plan_chunks = f_test_plan.result()
+                except Exception as exc:
+                    logger.warning("Test Plan RAG prefetch failed: %s", exc)
+                    test_plan_chunks = []
 
         risk_sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
             for c in risk_chunks
         })
         sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
             for c in strategy_chunks
         })
         test_plan_sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
+            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
             for c in test_plan_chunks
         })
 
-        # Risk Register (streaming)
+        # Risk Register (streaming) — save to session state immediately after
         st.markdown("#### ⚠️ Generating Risk Register...")
         risk_prompt = build_risk_prompt(context, agent.format_knowledge_context(risk_chunks))
         risk_register = st.write_stream(
             agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
         )
         risk_path = risk_analyzer.save(risk_register, context)
+        st.session_state.risk_register = risk_register
+        st.session_state.risk_sources = risk_sources
+        st.session_state.risk_path = risk_path
 
         # Effort Estimation (deterministic + short LLM narrative)
         with st.spinner("📊 Generating Effort Estimation..."):
             effort_report, effort_data = estimator.estimate(context, risk_register)
             effort_path = estimator.save(effort_report, context)
+        st.session_state.effort_report = effort_report
+        st.session_state.effort_path = effort_path
 
         # Test Strategy (streaming)
         st.markdown("#### 📋 Generating Test Strategy...")
@@ -546,6 +595,9 @@ def render_strategy():
         )
         output_path = generator.save(strategy, context)
         st.markdown("---")
+        st.session_state.strategy = strategy
+        st.session_state.sources = sources
+        st.session_state.output_path = output_path
 
         # Test Plan (streaming)
         from test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
@@ -556,22 +608,20 @@ def render_strategy():
         )
         test_plan_path = test_plan_generator.save(test_plan, context)
         st.markdown("---")
-
-        st.session_state.strategy = strategy
-        st.session_state.run_count = st.session_state.get("run_count", 0) + 1
-        st.session_state.sources = sources
-        st.session_state.output_path = output_path
-        st.session_state.risk_register = risk_register
-        st.session_state.risk_sources = risk_sources
-        st.session_state.risk_path = risk_path
-        st.session_state.effort_report = effort_report
-        st.session_state.effort_path = effort_path
         st.session_state.test_plan = test_plan
         st.session_state.test_plan_path = test_plan_path
         st.session_state.test_plan_sources = test_plan_sources
 
+        # Pre-compute PDF bytes once — avoids regenerating on every re-render
+        st.session_state.risk_pdf_bytes = markdown_to_pdf(risk_register, "Risk Register")
+        st.session_state.effort_pdf_bytes = markdown_to_pdf(effort_report, "Effort Estimation")
+        st.session_state.strategy_pdf_bytes = markdown_to_pdf(strategy, "Test Strategy")
+        st.session_state.test_plan_pdf_bytes = markdown_to_pdf(test_plan, "Test Plan")
+
     # ── Three Tabs ────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
+
+    project_name = st.session_state.dialogue.get_context().project_name
 
     with tab1:
         st.markdown(st.session_state.risk_register)
@@ -584,16 +634,16 @@ def render_strategy():
             st.download_button(
                 label="⬇️ Download (.md)",
                 data=st.session_state.risk_register,
-                file_name=f"risk_register_{st.session_state.dialogue.get_context().project_name}.md",
+                file_name=f"risk_register_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
             )
         with dl_col2:
-            pdf_bytes = markdown_to_pdf(st.session_state.risk_register, "Risk Register")
+            pdf_bytes = st.session_state.risk_pdf_bytes
             st.download_button(
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"risk_register_{st.session_state.dialogue.get_context().project_name}.pdf",
+                file_name=f"risk_register_{project_name}.pdf",
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -607,16 +657,16 @@ def render_strategy():
             st.download_button(
                 label="⬇️ Download (.md)",
                 data=st.session_state.effort_report,
-                file_name=f"effort_estimation_{st.session_state.dialogue.get_context().project_name}.md",
+                file_name=f"effort_estimation_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
             )
         with dl_col2:
-            pdf_bytes = markdown_to_pdf(st.session_state.effort_report, "Effort Estimation")
+            pdf_bytes = st.session_state.effort_pdf_bytes
             st.download_button(
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"effort_estimation_{st.session_state.dialogue.get_context().project_name}.pdf",
+                file_name=f"effort_estimation_{project_name}.pdf",
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -633,17 +683,17 @@ def render_strategy():
             st.download_button(
                 label="⬇️ Download (.md)",
                 data=st.session_state.strategy,
-                file_name=f"test_strategy_{st.session_state.dialogue.get_context().project_name}.md",
+                file_name=f"test_strategy_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
                 type="primary",
             )
         with dl_col2:
-            pdf_bytes = markdown_to_pdf(st.session_state.strategy, "Test Strategy")
+            pdf_bytes = st.session_state.strategy_pdf_bytes
             st.download_button(
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"test_strategy_{st.session_state.dialogue.get_context().project_name}.pdf",
+                file_name=f"test_strategy_{project_name}.pdf",
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -660,17 +710,17 @@ def render_strategy():
             st.download_button(
                 label="⬇️ Download (.md)",
                 data=st.session_state.test_plan,
-                file_name=f"test_plan_{st.session_state.dialogue.get_context().project_name}.md",
+                file_name=f"test_plan_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
                 type="primary",
             )
         with dl_col2:
-            pdf_bytes = markdown_to_pdf(st.session_state.test_plan, "Test Plan")
+            pdf_bytes = st.session_state.test_plan_pdf_bytes
             st.download_button(
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"test_plan_{st.session_state.dialogue.get_context().project_name}.pdf",
+                file_name=f"test_plan_{project_name}.pdf",
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -683,9 +733,12 @@ def render_strategy():
                     "risk_register", "risk_sources", "risk_path",
                     "effort_report", "effort_path",
                     "test_plan", "test_plan_path", "test_plan_sources",
-                    "feedback_submitted"]:
+                    "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
+                    "feedback_submitted", "_feedback_partial"]:
             if key in st.session_state:
                 del st.session_state[key]
+        for q in QUESTIONS:
+            st.session_state.pop(f"input_{q['key']}", None)
         st.session_state.current_step = "intro"
         st.rerun()
 

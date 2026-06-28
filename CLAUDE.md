@@ -38,22 +38,30 @@ PINECONE_INDEX_NAME=qai-consultant
 ```
 User Input
   → DialogueManager (11 questions → ProjectContext)
-  → generate_all() — parallel RAG prefetch (ThreadPoolExecutor, 2 workers)
-      → [parallel] _build_risk_query()  → retrieve_knowledge(k=5) → Pinecone
-      → [parallel] context.to_rag_query() → retrieve_knowledge(k=5) → Pinecone
-  → RiskAnalyzer.analyze(context, chunks=prefetched)
+  → generate_all() — parallel RAG prefetch (ThreadPoolExecutor, 3 workers)
+      → [parallel] _build_risk_query()          → retrieve_knowledge(k=5) → Pinecone
+      → [parallel] context.to_rag_query()       → retrieve_knowledge(k=5) → Pinecone
+      → [parallel] _build_test_plan_query()     → retrieve_knowledge(k=5) → Pinecone
+      (each future wrapped in try/except → falls back to [] on Pinecone error)
+  → RiskAnalyzer.analyze(context, chunks=prefetched)   [per-step try/except in generate_all()]
       → build_risk_prompt(context, knowledge_context)
       → agent.ask_streaming(prompt) → Mistral API / OpenRouter (streamed)
-      → Risk Register saved to output/
-  → EffortEstimator.estimate(context, risk_register)
-      → deterministic PERT + multipliers + confidence score
+      → Risk Register saved to output/  [filename sanitized via regex, mkdir parents=True]
+  → EffortEstimator.estimate(context, risk_register)   [per-step try/except in generate_all()]
+      → deterministic PERT + multipliers (normalized to 100%) + confidence score
       → agent.ask(narrative_prompt) → Mistral API (short, ~600 char prompt)
       → Effort Report saved to output/
-  → StrategyGenerator.generate(context, chunks=prefetched)
+  → StrategyGenerator.generate(context, chunks=prefetched)  [per-step try/except]
       → build_strategy_prompt(context, knowledge_context)
       → agent.ask_streaming(prompt) → Mistral API / OpenRouter (streamed)
+      → raises ValueError if LLM returns empty string
       → Test Strategy saved to output/
+  → TestPlanGenerator.generate(context, risk_register, chunks=prefetched)  [per-step try/except]
+      → build_test_plan_prompt(context, risk_register, knowledge_context)
+      → agent.ask_streaming(prompt) → Mistral API / OpenRouter (streamed)
+      → Test Plan saved to output/
   → Feedback prompt → if yes/partially → saved to knowledge_base/generated_strategies/
+      (existing YAML front matter stripped before prepending feedback block)
 ```
 
 ### Source Files (`src/`)
@@ -69,7 +77,7 @@ User Input
 | `version.py` | `__version__` = "2.0.0" — version string displayed in CLI banner and Streamlit sidebar |
 | `logger.py` | `get_logger()` + `setup_logging()` — centralized logging to `logs/qai_consultant.log`; file handler (DEBUG) + console handler (WARNING+) |
 | `cli.py` | Terminal UI using `rich` — parallel RAG prefetch → Risk Register (streaming via `rich.live.Live`) → Effort spinner → Strategy (streaming via `rich.live.Live`) → feedback loop |
-| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; Risk + Strategy stream via `st.write_stream()`; results shown in 3 tabs; uses `@st.cache_resource` for agent |
+| `app.py` | Streamlit web UI — 4-step state machine: `intro → dialogue → review → strategy`; Risk + Strategy + Test Plan stream via `st.write_stream()`; results shown in 4 tabs; PDF bytes cached in session state after generation; uses `@st.cache_resource` for agent |
 
 ### Key Configuration (`src/agent.py` config block)
 
@@ -146,6 +154,8 @@ python -m pytest tests/test_agent.py::test_kb_missing_raises_error -v  # single 
 
 > **Rule:** After every code change, run relevant tests before committing. Add new tests for every new feature.
 
+> **Baseline (v2.0.1):** 104 passed, 7 pre-existing fixture errors (`test_full_estimate_bmw`, `test_risk_analyzer` — require live `agent` fixture, run only with valid API keys).
+
 ## Roadmap
 
 - **v0.1** ✅ Core agent + CLI + Streamlit Web UI
@@ -156,9 +166,20 @@ python -m pytest tests/test_agent.py::test_kb_missing_raises_error -v  # single 
 - **v0.6** ✅ Confidence level algorithm — score-based (0-100) with 4 factors
 - **v1.0** ✅ MVP — error handling, input validation, logging, docstrings, tests, INSTALL.md, CONTRIBUTING.md, version display
 - **v2.0** ✅ Cloud migration — Ollama → Mistral API + OpenRouter fallback; ChromaDB → Pinecone; deployed to Streamlit Cloud
+- **v2.0.1** ✅ Stability — 27 bugs fixed across 8 files: PERT normalization, template no-op, PDF freeze, run_count bypass, session state cleanup, filename sanitization, RAG fallback, per-step exception isolation, None guards
 - **v2.1** ⏸️ HuggingFace KB — `download_knowledge_base.py` *(deprioritized — Pinecone migration reduced value; most users use the live app directly)*
 - **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment
 - **v4.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
 
 Keep each version's scope tight — implement incrementally in this order.
+
+## Gotchas
+
+- **PERT normalization:** `ACTIVITY_BREAKDOWN` percentages sum to 106–121% raw. `_pert_breakdown()` normalizes at runtime via `norm_scale`. Never remove this step when adding/editing activities.
+- **Streamlit widget state:** `st.session_state["input_{key}"]` and `st.session_state.answers[key]` are separate layers. Both must be updated together when pre-filling fields (e.g. template application). Updating only `answers` leaves widgets unchanged on re-render.
+- **PDF caching:** `markdown_to_pdf()` is slow (1–5s). Results are cached in `st.session_state.*_pdf_bytes` after generation. Never call it inside the tab rendering block — it re-executes on every re-render.
+- **Session state cleanup:** Both "Start Over" and "Generate Another Strategy" must clear: answers, widget input keys, PDF byte caches, `_feedback_partial`, and `run_count`. Missing any key causes stale data or broken run limits across sessions.
+- **Filename sanitization:** All `save()` methods apply `re.sub(r'[^\w\-.]', '_', ...)` before constructing file paths. Windows does not allow `:`, `*`, `?`, `<`, `>`, `|` in filenames — project names with these chars will crash without this guard.
+- **RAG futures:** All three `ThreadPoolExecutor` future `.result()` calls are wrapped in `try/except` with fallback to `[]`. A Pinecone timeout must not abort the entire pipeline.
+- **Per-step isolation:** `generate_all()` wraps each of the 4 steps (Risk, Effort, Strategy, Plan) in its own `try/except`. Failure of step 4 must not discard results from steps 1–3.

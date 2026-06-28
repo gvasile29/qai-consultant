@@ -9,7 +9,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-2.0.0-green.svg)
+![Version](https://img.shields.io/badge/version-2.0.1-green.svg)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
 ---
@@ -77,15 +77,16 @@ QAI Consultant eliminates this bottleneck by combining established QA methodolog
 
 ## What QAI Consultant Generates
 
-From a single 11-question dialogue, QAI Consultant automatically generates **three documents**:
+From a single 11-question dialogue, QAI Consultant automatically generates **four documents**:
 
 | Document | What it contains |
 |---|---|
 | ⚠️ **Risk Register** | Risk matrix, likelihood/impact analysis, mitigations per risk |
-| 📊 **Effort Estimation Report** | PERT-based breakdown, team capacity analysis, risk buffer |
-| 📋 **Test Strategy** | Full strategy document backed by ISTQB, OWASP, ISO standards |
+| 📊 **Effort Estimation Report** | PERT-based breakdown, team capacity analysis, confidence score |
+| 📋 **Test Strategy** | ISTQB-aligned strategy tailored to your stack, methodology, and compliance |
+| 📝 **Test Plan** | IEEE 829-aligned plan with entry/exit criteria, schedule, and AI tool oversight |
 
-All outputs are saved as Markdown files and available for download.
+All outputs are saved as Markdown files and available for PDF download.
 
 ---
 
@@ -99,6 +100,7 @@ QAI Consultant's recommendations are grounded in real QA standards and methodolo
 - 🏭 **A-SPICE** — Automotive SPICE process reference model (SWE.4, SWE.5, SWE.6)
 - 📋 **IEEE 829** — Test documentation standard
 - ⚙️ **ISO/IEC 25010** — Software product quality model
+- 🤖 **AI Test Planning** — 17 real-world AI SDLC case studies + prompt-based test design guides (2024–2025)
 - 🧠 **Expert Knowledge** — Real QA scenarios and lessons learned from practitioners
 
 ---
@@ -132,15 +134,17 @@ cp .env.example .env
 ```
 You describe your project (11 questions)
         ↓
-QAI retrieves relevant knowledge from Pinecone (RAG)
+QAI retrieves relevant knowledge from Pinecone (parallel RAG, 3 threads)
         ↓
-QAI analyzes risks from your context (Mistral API)
+QAI analyzes risks from your context → Risk Register (Mistral API)
         ↓
-QAI estimates effort using PERT + industry benchmarks
+QAI estimates effort using PERT + industry benchmarks → Effort Report
         ↓
-QAI generates a Test Strategy backed by QA standards (Mistral API)
+QAI generates a Test Strategy backed by QA standards → Test Strategy (Mistral API)
         ↓
-Three documents ready for download
+QAI generates an IEEE 829-aligned Test Plan → Test Plan (Mistral API)
+        ↓
+Four documents ready for Markdown + PDF download
 ```
 
 LLM calls use **Mistral API** as the primary provider, with **OpenRouter** as automatic fallback.
@@ -187,6 +191,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v0.6** ✅ Confidence level algorithm — score-based (0-100): PERT spread + capacity gap + data quality + multiplier magnitude
 - **v1.0** ✅ MVP — error handling, input validation, logging, full documentation, tests, Apache 2.0 license
 - **v2.0** ✅ Cloud migration — Ollama → Mistral API + OpenRouter fallback; ChromaDB → Pinecone; deployed to Streamlit Cloud
+- **v2.0.1** ✅ Stability — 27 bugs fixed: PERT normalization, template application, PDF caching, session state, filename sanitization, RAG fallback, per-step exception isolation
 - **v2.1** ⏸️ HuggingFace KB — `download_knowledge_base.py` *(deprioritized — Pinecone migration reduced value; most users use the live app directly)*
 - **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment
