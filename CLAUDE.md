@@ -156,6 +156,31 @@ python -m pytest tests/test_agent.py::test_kb_missing_raises_error -v  # single 
 
 > **Baseline (v2.0.1):** 104 passed, 7 pre-existing fixture errors (`test_full_estimate_bmw`, `test_risk_analyzer` — require live `agent` fixture, run only with valid API keys).
 
+## Evals (`evals/` — release gate)
+
+A release gate that treats the app like a model under test ("are the numbers and documents it produces honest?"), separate from `tests/`. Two independent tiers; exits non-zero if either fails. The eval functions **are** the assertions — there is no `tests/` wrapper for this module by design.
+
+```bash
+python -m evals.run                  # both tiers
+python -m evals.run --det            # tier 1 only (keyless, no LLM)
+python -m evals.estimate_integrity   # tier 1 standalone
+python -m evals.rag                  # tier 2 standalone
+```
+
+**Tier 1 — `estimate_integrity` (deterministic, keyless):** runs the *real shipped* `InputValidator` / `EffortEstimator` (stubs only the heavy `agent` module) on golden inputs. 5 metrics: `duration_bounds`, `team_restatement_invariance`, `name_display_fidelity`, `confidence_magnitude_sanity`, `no_fabricated_versions`. No LLM, no API keys; CI-safe. A red row names a real defect in the shipped logic.
+
+**Tier 2 — `rag` (classical RAG metrics, fully local):** builds an in-memory cosine index over `knowledge_base/*.md` with the app's embedding model (`all-MiniLM-L6-v2`, via `langchain-huggingface`) — no Pinecone, no keys. 5 metrics. Keyless (no Ollama): `context_recall@k` + `context_precision_mrr` (reuse the `expects` labels). Need a generated answer via local Ollama (default `qwen2.5:7b`, override `OLLAMA_MODEL`): `faithfulness` + `answer_relevance` (LLM-judged) and `source_attribution` (regex over the answer's `[Source N]` citations — so it SKIPs without Ollama too). Judged metrics SKIP, never fail, when Ollama is unreachable, and SKIP below a half-of-cases quorum rather than report a mean over thin data.
+
+| File | Role |
+|------|------|
+| `estimate_integrity.py` | Tier 1 checks + runner; `golden.jsonl` = cases, `captured_test_plan.md` = fixture for the version check |
+| `rag.py` | Tier 2 metrics + local index; `rag_golden.jsonl` = (query → expected source) cases |
+| `ollama.py` | Stdlib Ollama client for the judged metrics |
+| `thresholds.py` | The gate spec — every floor + one line of rationale |
+| `run.py` | Aggregate gate over both tiers |
+
+> **Skip semantics:** judged metrics SKIP (never fail) when Ollama is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still runs the full deterministic tier. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
+
 ## Roadmap
 
 - **v0.1** ✅ Core agent + CLI + Streamlit Web UI

@@ -1,0 +1,7 @@
+{"id": "dur_his_hint_june", "kind": "duration", "input": "release in June 2026", "note": "verbatim from the app's own placeholder hint for this field"}
+{"id": "dur_ongoing_year", "kind": "duration", "input": "Ongoing product on monthly sprints; next major release September 2026", "note": "a realistic ongoing-product timeline"}
+{"id": "dur_control_months", "kind": "duration", "input": "3 months", "note": "control: a clean answer that must keep passing"}
+{"id": "dur_control_ongoing", "kind": "duration", "input": "ongoing product with monthly sprints", "note": "control: the app's other placeholder hint"}
+{"id": "team_his_hint_or", "kind": "team_invariance", "base": "3 frontend + 2 backend", "restated": "3 frontend + 2 backend, or 5 full-stack developers", "note": "verbatim from the app's own placeholder hint; the 'or' clause restates, it does not add"}
+{"id": "name_special_chars", "kind": "name", "input": "Acme: Project Hub (β) — Tëam/Sync™ #1", "note": "special characters the release notes claim to handle"}
+{"id": "name_control_singleword", "kind": "name", "input": "Checkout-Service", "note": "control: a single-token name the validator leaves intact — proves the check fires only when spaces are dropped, not on every name"}
