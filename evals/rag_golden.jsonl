@@ -1,0 +1,6 @@
+{"query": "How should I prioritize tests by failure likelihood and business impact?", "expects": ["Risk_Based_Testing"], "judge": true}
+{"query": "What proportion of unit, integration, and end-to-end tests should a suite have?", "expects": ["Test_Pyramid", "Agile_Testing"], "judge": true}
+{"query": "Specify behaviour with Given-When-Then scenarios driven from examples", "expects": ["BDD_TDD"], "judge": true}
+{"query": "Standard structure for a test plan and test documentation deliverables", "expects": ["IEEE_829"], "judge": true}
+{"query": "Software product quality characteristics: maintainability, reliability, security", "expects": ["ISO_IEC_25010"], "judge": true}
+{"query": "Whole-team quadrant approach to quality across iterative delivery", "expects": ["Agile_Testing"], "judge": true}

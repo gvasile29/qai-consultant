@@ -156,6 +156,31 @@ python -m pytest tests/test_agent.py::test_kb_missing_raises_error -v  # single 
 
 > **Baseline (v2.0.1):** 104 passed, 7 pre-existing fixture errors (`test_full_estimate_bmw`, `test_risk_analyzer` — require live `agent` fixture, run only with valid API keys).
 
+## Evals (`evals/` — release gate)
+
+A release gate that treats the app like a model under test ("are the numbers and documents it produces honest?"), separate from `tests/`. Two independent tiers; exits non-zero if either fails. The eval functions **are** the assertions — there is no `tests/` wrapper for this module by design.
+
+```bash
+python -m evals.run                  # both tiers
+python -m evals.run --det            # tier 1 only (keyless, no LLM)
+python -m evals.estimate_integrity   # tier 1 standalone
+python -m evals.rag                  # tier 2 standalone
+```
+
+**Tier 1 — `estimate_integrity` (deterministic, keyless):** runs the *real shipped* `InputValidator` / `EffortEstimator` (stubs only the heavy `agent` module) on golden inputs. 5 metrics: `duration_bounds`, `team_restatement_invariance`, `name_display_fidelity`, `confidence_magnitude_sanity`, `no_fabricated_versions`. No LLM, no API keys; CI-safe. A red row names a real defect in the shipped logic.
+
+**Tier 2 — `rag` (classical RAG metrics, fully local):** builds an in-memory cosine index over `knowledge_base/*.md` with the app's own embedding model (`all-MiniLM-L6-v2`, same `langchain_community` import as `src/agent.py`) — no Pinecone, no keys. 5 metrics. Keyless: `context_recall@k` + `context_precision_mrr` (reuse the `expects` labels). Need a generated answer, so they go through the app's own `LLMClient` (`judge.py`) — the production Mistral model: `faithfulness` + `answer_relevance` (LLM-judged) and `source_attribution` (regex over `[Source N]` citations). They need `MISTRAL_API_KEY`; judged metrics SKIP, never fail, when the keys are absent or the provider is unreachable, and SKIP below a half-of-cases quorum.
+
+| File | Role |
+|------|------|
+| `estimate_integrity.py` | Tier 1 checks + runner; `golden.jsonl` = cases, `captured_test_plan.md` = fixture for the version check |
+| `rag.py` | Tier 2 metrics + local index; `rag_golden.jsonl` = (query → expected source) cases |
+| `judge.py` | LLM judge/generator for the judged metrics, via the app's `LLMClient` (production Mistral) |
+| `thresholds.py` | The gate spec — every floor + one line of rationale |
+| `run.py` | Aggregate gate over both tiers |
+
+> **Skip semantics:** judged metrics SKIP (never fail) when the judge backend is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still runs the full deterministic tier. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
+
 ## Roadmap
 
 - **v0.1** ✅ Core agent + CLI + Streamlit Web UI
