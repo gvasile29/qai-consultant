@@ -37,8 +37,22 @@ from . import thresholds as T
 
 _DIR = Path(__file__).resolve().parent
 _KB = _DIR.parent / "knowledge_base"
-_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # matches src/agent.py
+_SRC = _DIR.parent / "src"
+_EMBEDDING_MODEL_DEFAULT = "sentence-transformers/all-MiniLM-L6-v2"  # vendored fallback
 _DOC_CHARS = 4000   # per-file text embedded; enough to characterise a topic doc
+
+
+def _embedding_model() -> str:
+    """The app's embedding model. Imported from src/agent.py so the eval can never
+    drift from what ingest.py used; falls back to the vendored default when src (with
+    its heavy pinecone/mistral/openai imports) is not installed in the eval env."""
+    try:
+        if str(_SRC) not in sys.path:
+            sys.path.insert(0, str(_SRC))
+        from agent import EMBEDDING_MODEL  # noqa: PLC0415
+        return EMBEDDING_MODEL
+    except Exception:  # noqa: BLE001 — src not importable here → use the vendored default
+        return _EMBEDDING_MODEL_DEFAULT
 _SRC_CHARS = 1500   # per-source text shown to the model AND the faithfulness judge
 _ANS_CHARS = 3000   # answer text shown to the judges
 
@@ -79,8 +93,11 @@ def _judged_skip(note: str) -> list[Metric]:
 # ── Local index (app's embedding model, cosine, no Pinecone) ─────────────────────
 
 def _kb_docs() -> list[tuple[str, str]]:
-    """(filename, text) for every markdown file in the knowledge base."""
-    return [(p.name, p.read_text(encoding="utf-8")[:_DOC_CHARS]) for p in sorted(_KB.rglob("*.md"))]
+    """(relative-path, text) for every markdown file in the knowledge base. The path is
+    relative to the KB root (not just p.name) so same-named files in different
+    subdirectories stay distinct."""
+    return [(str(p.relative_to(_KB)), p.read_text(encoding="utf-8")[:_DOC_CHARS])
+            for p in sorted(_KB.rglob("*.md"))]
 
 
 class _Index:
@@ -89,7 +106,7 @@ class _Index:
 
     def __init__(self) -> None:
         from langchain_huggingface import HuggingFaceEmbeddings  # noqa: PLC0415
-        self._emb = HuggingFaceEmbeddings(model_name=_EMBEDDING_MODEL)
+        self._emb = HuggingFaceEmbeddings(model_name=_embedding_model())
         self._docs = _kb_docs()
         self._vecs = self._emb.embed_documents([t for _, t in self._docs])
         self._norms = [math.sqrt(sum(x * x for x in v)) for v in self._vecs]  # precomputed once
@@ -129,7 +146,10 @@ def _golden() -> list[dict]:
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict) and "query" in obj and "expects" in obj:
-            cases.append(obj)
+            if isinstance(obj["expects"], str):   # tolerate a bare string; a str would
+                obj["expects"] = [obj["expects"]]  # otherwise iterate as chars and inflate recall
+            if isinstance(obj["expects"], list):
+                cases.append(obj)
     return cases
 
 

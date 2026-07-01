@@ -12,7 +12,7 @@ QAI Consultant is a Python-based AI agent that acts as a senior QA Architect. It
 
 ```bash
 pip install -r requirements.txt          # Runtime dependencies
-pip install -r requirements-dev.txt      # + ruff + pytest (for development)
+pip install -r requirements-dev.txt      # + ruff + pytest + evals RAG deps (langchain-huggingface)
 
 # Prerequisites: copy .env.example → .env and fill in the 4 API keys
 cp .env.example .env

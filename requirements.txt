@@ -1,6 +1,5 @@
 langchain==0.3.27
 langchain-community==0.3.27
-langchain-huggingface==1.2.2
 sentence-transformers==2.7.0
 pypdf==6.9.2
 python-dotenv==1.0.1

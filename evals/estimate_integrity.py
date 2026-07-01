@@ -222,16 +222,26 @@ def check_no_fabricated_versions() -> tuple[Finding, ...]:
 # ── Runner ───────────────────────────────────────────────────────────────────────
 
 def run_all() -> list[CheckOutcome]:
+    # _load_target() overwrites sys.modules["agent"] with a stub; restore the prior
+    # module afterwards so evals can share a process (e.g. a pytest session) without
+    # leaving the real `agent` shadowed by the stub.
+    prev_agent = sys.modules.get("agent")
     iv_cls, ctx_cls, est_cls = _load_target()
     iv = iv_cls()
     est = est_cls.__new__(est_cls)  # pure-method calls; no agent needed
-    return [
-        CheckOutcome("duration_bounds", check_duration_bounds(est)),
-        CheckOutcome("team_restatement_invariance", check_team_restatement_invariance(est)),
-        CheckOutcome("name_display_fidelity", check_name_display_fidelity(iv)),
-        CheckOutcome("confidence_magnitude_sanity", check_confidence_magnitude_sanity(ctx_cls, est_cls)),
-        CheckOutcome("no_fabricated_versions", check_no_fabricated_versions()),
-    ]
+    try:
+        return [
+            CheckOutcome("duration_bounds", check_duration_bounds(est)),
+            CheckOutcome("team_restatement_invariance", check_team_restatement_invariance(est)),
+            CheckOutcome("name_display_fidelity", check_name_display_fidelity(iv)),
+            CheckOutcome("confidence_magnitude_sanity", check_confidence_magnitude_sanity(ctx_cls, est_cls)),
+            CheckOutcome("no_fabricated_versions", check_no_fabricated_versions()),
+        ]
+    finally:
+        if prev_agent is not None:
+            sys.modules["agent"] = prev_agent
+        else:
+            sys.modules.pop("agent", None)
 
 
 def format_table(outcomes: list[CheckOutcome]) -> str:

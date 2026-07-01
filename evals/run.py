@@ -31,9 +31,11 @@ def main(argv: list[str]) -> int:
             print("\n══ rag (classical RAG metrics, local) ══")
             print(rag.format_table(rag_metrics))
             rag_ok = all(m.passed for m in rag_metrics)
-        except Exception as exc:  # noqa: BLE001 — an infra failure in the optional tier must not
-            # discard the deterministic verdict; treat as a non-fatal skip.
-            print(f"\n[rag] tier skipped — unexpected error: {type(exc).__name__}: {exc}")
+        except Exception as exc:  # noqa: BLE001 — keep the deterministic verdict, but an
+            # UNEXPECTED crash here (rag.run_all already converts infra failures to SKIP)
+            # means the tier could not run, so it fails the gate rather than passing silently.
+            print(f"\n[rag] tier errored (did not run): {type(exc).__name__}: {exc}")
+            rag_ok = False
 
     overall = det_ok and rag_ok
     print(f"\nRelease gate: {'PASS' if overall else 'FAIL'} "
