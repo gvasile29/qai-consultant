@@ -1,15 +1,12 @@
-"""Estimate-integrity gate: deterministic checks over QAI Consultant's real logic.
-
-Every check exercises the *actual* shipped functions (``InputValidator``,
-``EffortEstimator``) — nothing is re-implemented here — and records any defect as a
-``Finding``. Issues surface as failing checks, not prose: run it and read the table.
-A green table means the estimator round-trips its inputs honestly and bounds its
-outputs. Keyless and instant — no LLM, no API keys — so it drops straight into CI.
+"""Estimate-integrity gate: deterministic checks over QAI Consultant's real shipped
+functions (``InputValidator``, ``EffortEstimator``) — nothing re-implemented. Issues
+surface as failing checks, not prose; a green table means inputs round-trip honestly.
+Keyless and instant (no LLM, no keys), so it drops straight into CI.
 
     python -m evals.estimate_integrity          # exits non-zero if any check fails
 
-Golden cases live in ``golden.jsonl`` (append a line with the matching ``kind`` to
-add a case). The fabricated-version check reads the captured ``captured_test_plan.md``.
+Golden cases live in ``golden.jsonl``; the fabricated-version check reads
+``captured_test_plan.md``.
 """
 
 from __future__ import annotations
@@ -36,9 +33,8 @@ def _load_target():
     if str(_SRC_DIR) not in sys.path:
         sys.path.insert(0, str(_SRC_DIR))
 
-    # ALWAYS install the stub (do not gate on "agent" not in sys.modules): the keyless
-    # gate must never reach the real Pinecone/LLM client even if a prior import — e.g.
-    # a pytest session that touched src/agent — already put the real module in cache.
+    # ALWAYS install the stub (don't gate on "agent" not in sys.modules): the keyless
+    # gate must not reach the real Pinecone/LLM client even if a prior import cached it.
     stub = types.ModuleType("agent")
 
     class QAIAgent:  # minimal stand-in; deterministic steps never call it
@@ -177,13 +173,11 @@ def check_confidence_magnitude_sanity(ProjectContext, EffortEstimator) -> tuple[
     return ()
 
 
-# A "version" is a v-prefixed number (v1.2, v15.4) OR an unambiguous 3-part X.Y.Z.
-# Bare two-part decimals are NOT versions — this avoids flagging legitimate figures in
-# a deliverable (PERT "22.5 person-days", "99.9% uptime", numbered headings like "4.2").
+# A "version" is v-prefixed (v1.2, v15.4) or 3-part X.Y.Z — NOT a bare two-part decimal,
+# so real figures (PERT "22.5", "99.9%", heading "4.2") aren't flagged as fabricated.
 _VERSION = re.compile(r"\b(?:v\d+\.\d+(?:\.\d+)?|\d+\.\d+\.\d+)\b")
-# The 11 user answers for the captured run — the source of truth the artifact must not
-# exceed. This MUST describe the same project as captured_test_plan.md (the version-check
-# pair); it is independent of check_confidence_magnitude_sanity's separate context.
+# The 11 user answers for the captured run — must describe the same project as
+# captured_test_plan.md (the version-check pair), independent of the confidence check.
 _RUN_INPUTS = (
     "Acme Project Hub "
     "A team task and project management tool for small teams. Users create projects, "

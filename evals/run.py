@@ -1,7 +1,7 @@
 """Release gate: run both eval tiers, exit non-zero if either fails.
 
-Skipped metrics (no Ollama / no sentence-transformers) do NOT fail the gate, so a
-bare CI box still gets the full keyless deterministic tier.
+Skipped metrics (no MISTRAL_API_KEY / no sentence-transformers) do NOT fail the gate,
+so a bare CI box still gets the full keyless deterministic tier.
 
     python -m evals.run         # both tiers
     python -m evals.run --det   # keyless deterministic tier only
@@ -31,9 +31,8 @@ def main(argv: list[str]) -> int:
             print("\n══ rag (classical RAG metrics, local) ══")
             print(rag.format_table(rag_metrics))
             rag_ok = all(m.passed for m in rag_metrics)
-        except Exception as exc:  # noqa: BLE001 — keep the deterministic verdict, but an
-            # UNEXPECTED crash here (rag.run_all already converts infra failures to SKIP)
-            # means the tier could not run, so it fails the gate rather than passing silently.
+        except Exception as exc:  # noqa: BLE001 — infra failures already SKIP inside run_all;
+            # an unexpected crash here fails the gate rather than passing silently.
             print(f"\n[rag] tier errored (did not run): {type(exc).__name__}: {exc}")
             rag_ok = False
 

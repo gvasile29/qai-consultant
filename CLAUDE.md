@@ -12,7 +12,7 @@ QAI Consultant is a Python-based AI agent that acts as a senior QA Architect. It
 
 ```bash
 pip install -r requirements.txt          # Runtime dependencies
-pip install -r requirements-dev.txt      # + ruff + pytest + evals RAG deps (langchain-huggingface)
+pip install -r requirements-dev.txt      # + ruff + pytest (for development)
 
 # Prerequisites: copy .env.example → .env and fill in the 4 API keys
 cp .env.example .env
@@ -169,17 +169,17 @@ python -m evals.rag                  # tier 2 standalone
 
 **Tier 1 — `estimate_integrity` (deterministic, keyless):** runs the *real shipped* `InputValidator` / `EffortEstimator` (stubs only the heavy `agent` module) on golden inputs. 5 metrics: `duration_bounds`, `team_restatement_invariance`, `name_display_fidelity`, `confidence_magnitude_sanity`, `no_fabricated_versions`. No LLM, no API keys; CI-safe. A red row names a real defect in the shipped logic.
 
-**Tier 2 — `rag` (classical RAG metrics, fully local):** builds an in-memory cosine index over `knowledge_base/*.md` with the app's embedding model (`all-MiniLM-L6-v2`, via `langchain-huggingface`) — no Pinecone, no keys. 5 metrics. Keyless (no Ollama): `context_recall@k` + `context_precision_mrr` (reuse the `expects` labels). Need a generated answer via local Ollama (default `qwen2.5:7b`, override `OLLAMA_MODEL`): `faithfulness` + `answer_relevance` (LLM-judged) and `source_attribution` (regex over the answer's `[Source N]` citations — so it SKIPs without Ollama too). Judged metrics SKIP, never fail, when Ollama is unreachable, and SKIP below a half-of-cases quorum rather than report a mean over thin data.
+**Tier 2 — `rag` (classical RAG metrics, fully local):** builds an in-memory cosine index over `knowledge_base/*.md` with the app's own embedding model (`all-MiniLM-L6-v2`, same `langchain_community` import as `src/agent.py`) — no Pinecone, no keys. 5 metrics. Keyless: `context_recall@k` + `context_precision_mrr` (reuse the `expects` labels). Need a generated answer, so they go through the app's own `LLMClient` (`judge.py`) — the production Mistral model: `faithfulness` + `answer_relevance` (LLM-judged) and `source_attribution` (regex over `[Source N]` citations). They need `MISTRAL_API_KEY`; judged metrics SKIP, never fail, when the keys are absent or the provider is unreachable, and SKIP below a half-of-cases quorum.
 
 | File | Role |
 |------|------|
 | `estimate_integrity.py` | Tier 1 checks + runner; `golden.jsonl` = cases, `captured_test_plan.md` = fixture for the version check |
 | `rag.py` | Tier 2 metrics + local index; `rag_golden.jsonl` = (query → expected source) cases |
-| `ollama.py` | Stdlib Ollama client for the judged metrics |
+| `judge.py` | LLM judge/generator for the judged metrics, via the app's `LLMClient` (production Mistral) |
 | `thresholds.py` | The gate spec — every floor + one line of rationale |
 | `run.py` | Aggregate gate over both tiers |
 
-> **Skip semantics:** judged metrics SKIP (never fail) when Ollama is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still runs the full deterministic tier. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
+> **Skip semantics:** judged metrics SKIP (never fail) when the judge backend is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still runs the full deterministic tier. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
 
 ## Roadmap
 

@@ -6,19 +6,18 @@ the app ships (``all-MiniLM-L6-v2``), then measures five metrics:
   - Context Recall@k       (judge-free)  — does retrieval surface a labelled source doc?
   - Context Precision (MRR) (judge-free)  — how highly is the labelled source ranked?
   - Source Attribution      (regex)       — do the answer's [Source N] cites point at real chunks?
-  - Faithfulness            (Ollama judge) — are the answer's claims grounded in the context?
-  - Answer Relevance        (Ollama judge) — does the answer address the query?
+  - Faithfulness            (LLM judge)   — are the answer's claims grounded in the context?
+  - Answer Relevance        (LLM judge)   — does the answer address the query?
 
-Retrieval is keyless and deterministic (local embeddings). The judged metrics
-(faithfulness, answer relevance, source attribution — the last needs a generated
-answer) SKIP, never fail, when Ollama is unreachable. The whole suite SKIPs if the
-embedding stack is unavailable — so it stays CI-safe.
+Retrieval is keyless and deterministic (local embeddings). The three judged metrics
+go through the app's LLMClient (``judge.py``, production Mistral) and SKIP — never
+fail — without a key; the whole suite SKIPs if the embedding stack is absent, so a
+bare CI box still runs the keyless tiers.
 
     python -m evals.rag
 
-Note: a local cosine index over the markdown KB tests embedding/retrieval *quality*,
-not the production Pinecone wiring. For "local Pinecone" instead, run the Pinecone
-Local emulator and ingest the KB; the metrics below are independent of that choice.
+Note: the local cosine index tests embedding/retrieval quality, not the production
+Pinecone wiring.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import ollama
+from . import judge
 from . import thresholds as T
 
 _DIR = Path(__file__).resolve().parent
@@ -43,16 +42,18 @@ _DOC_CHARS = 4000   # per-file text embedded; enough to characterise a topic doc
 
 
 def _embedding_model() -> str:
-    """The app's embedding model. Imported from src/agent.py so the eval can never
-    drift from what ingest.py used; falls back to the vendored default when src (with
-    its heavy pinecone/mistral/openai imports) is not installed in the eval env."""
+    """The app's embedding model, imported from agent.py so the eval can't drift from
+    ingest.py; vendored default when src deps aren't installed. A rename raises
+    ImportError (not ModuleNotFoundError), left uncaught so real drift surfaces."""
     try:
         if str(_SRC) not in sys.path:
             sys.path.insert(0, str(_SRC))
         from agent import EMBEDDING_MODEL  # noqa: PLC0415
         return EMBEDDING_MODEL
-    except Exception:  # noqa: BLE001 — src not importable here → use the vendored default
+    except ModuleNotFoundError:
         return _EMBEDDING_MODEL_DEFAULT
+
+
 _SRC_CHARS = 1500   # per-source text shown to the model AND the faithfulness judge
 _ANS_CHARS = 3000   # answer text shown to the judges
 
@@ -93,9 +94,8 @@ def _judged_skip(note: str) -> list[Metric]:
 # ── Local index (app's embedding model, cosine, no Pinecone) ─────────────────────
 
 def _kb_docs() -> list[tuple[str, str]]:
-    """(relative-path, text) for every markdown file in the knowledge base. The path is
-    relative to the KB root (not just p.name) so same-named files in different
-    subdirectories stay distinct."""
+    """(relative-path, text) per KB markdown file — relative path, not p.name, so
+    same-named files in different subdirs stay distinct."""
     return [(str(p.relative_to(_KB)), p.read_text(encoding="utf-8")[:_DOC_CHARS])
             for p in sorted(_KB.rglob("*.md"))]
 
@@ -105,7 +105,8 @@ class _Index:
     weights are unavailable; callers treat any failure as SKIP."""
 
     def __init__(self) -> None:
-        from langchain_huggingface import HuggingFaceEmbeddings  # noqa: PLC0415
+        # Same embeddings class the app uses (src/agent.py) — no extra dependency.
+        from langchain_community.embeddings import HuggingFaceEmbeddings  # noqa: PLC0415
         self._emb = HuggingFaceEmbeddings(model_name=_embedding_model())
         self._docs = _kb_docs()
         self._vecs = self._emb.embed_documents([t for _, t in self._docs])
@@ -136,9 +137,14 @@ class _Index:
 
 @functools.lru_cache(maxsize=1)
 def _golden() -> list[dict]:
-    """Parse rag_golden.jsonl once; skip blank and malformed lines rather than crash."""
+    """Parse rag_golden.jsonl once; a missing file or blank/malformed lines yield an
+    empty/short list (→ the metrics SKIP) rather than crashing the tier."""
+    try:
+        text = (_DIR / "rag_golden.jsonl").read_text(encoding="utf-8")
+    except OSError:
+        return []
     cases = []
-    for line in (_DIR / "rag_golden.jsonl").read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         if not line.strip():
             continue
         try:
@@ -216,30 +222,24 @@ def _attr_counts(answer: str, k: int) -> tuple[int, int]:
 
 
 def _grade_case(index: _Index, case: dict) -> tuple[float, float, int, int]:
-    """Generate one answer over numbered sources and grade it. The faithfulness judge
-    sees the SAME sources string the model saw (no extra truncation), so claims are
-    not spuriously marked unsupported. Raises on a failed generation/judge call."""
+    """Generate one answer over numbered sources and grade it (the faithfulness judge
+    sees the same sources the model saw). Raises on a failed generation/judge call."""
     chunks = index.chunks(case["query"], T.RAG_K)
     sources = "\n\n".join(f"[Source {i + 1}] {t[:_SRC_CHARS]}" for i, t in enumerate(chunks))
-    answer = ollama.chat([
-        {"role": "system", "content": _QA_SYS},
-        {"role": "user", "content": f"SOURCES:\n{sources}\n\nQUERY:\n{case['query']}"},
-    ], temperature=0.0, max_tokens=2500)  # temp 0 → deterministic answer, less run-to-run score variance;
-    #                                       max_tokens headroom for reasoning models' think trace
-    faith = _score(ollama.judge_json(_FAITH_SYS, f"CONTEXT:\n{sources}\n\nANSWER:\n{answer[:_ANS_CHARS]}"))
-    rel = _score(ollama.judge_json(_RELEVANCE_SYS, f"QUERY:\n{case['query']}\n\nANSWER:\n{answer[:_ANS_CHARS]}"))
+    answer = judge.generate(_QA_SYS, f"SOURCES:\n{sources}\n\nQUERY:\n{case['query']}")
+    faith = _score(judge.judge_json(_FAITH_SYS, f"CONTEXT:\n{sources}\n\nANSWER:\n{answer[:_ANS_CHARS]}"))
+    rel = _score(judge.judge_json(_RELEVANCE_SYS, f"QUERY:\n{case['query']}\n\nANSWER:\n{answer[:_ANS_CHARS]}"))
     valid, total = _attr_counts(answer, len(chunks))
     return faith, rel, valid, total
 
 
 def judged_quality(index: _Index) -> list[Metric]:
-    """Generate an answer per judged query over numbered sources, then score
-    faithfulness + answer relevance (Ollama judge) and source attribution (regex).
-    SKIPs all three if Ollama is unreachable. A case that errors is dropped (any
-    exception isolated to that case); if fewer than a quorum survive, the metrics
-    SKIP rather than report a mean over too-thin data."""
-    if not ollama.reachable():
-        return _judged_skip(f"SKIP (no Ollama at {ollama.BASE})")
+    """Generate an answer per judged query, then score faithfulness + answer relevance
+    (LLM judge) and source attribution (regex). SKIP without a key; a case that errors
+    is dropped, and if fewer than a quorum survive the metrics SKIP rather than report
+    a mean over thin data."""
+    if not judge.has_keys():
+        return _judged_skip("SKIP (no judge key)")
     cases = [c for c in _golden() if c.get("judge")]
     if not cases:
         return _judged_skip("SKIP (no judged golden cases)")
