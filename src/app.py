@@ -494,7 +494,7 @@ def _save_feedback(feedback_value: str, extra_note: str):
 def render_strategy():
     MAX_RUNS_PER_SESSION = 3
 
-    if st.session_state.run_count >= MAX_RUNS_PER_SESSION:
+    if st.session_state.get("run_count", 0) >= MAX_RUNS_PER_SESSION:
         st.warning(
             f"⚠️ You've used all {MAX_RUNS_PER_SESSION} free runs for this session. "
             "Refresh the page to start a new session."
@@ -504,12 +504,12 @@ def render_strategy():
     st.markdown("## 📄 Generated Test Strategy")
     st.markdown("---")
 
-    agent = st.session_state.agent
+    agent = st.session_state.get("agent")
     if agent is None:
         st.error("❌ Agent not initialised — please refresh the page.")
         st.stop()
 
-    if st.session_state.strategy is None:
+    if st.session_state.get("strategy") is None:
         from concurrent.futures import ThreadPoolExecutor
         from agent import RAG_K_GENERATION
         from risk_analyzer import build_risk_prompt, RISK_SYSTEM_PROMPT
@@ -810,12 +810,12 @@ def main():
         st.stop()
 
     # Store agent in session state for use across components
-    if st.session_state.agent is None:
+    if st.session_state.get("agent") is None:
         st.session_state.agent = agent
 
     render_sidebar()
 
-    step = st.session_state.current_step
+    step = st.session_state.get("current_step", "intro")
 
     if step == "intro":
         render_intro()
