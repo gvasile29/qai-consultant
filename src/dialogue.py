@@ -95,9 +95,11 @@ class InputValidator:
             return self._validate_default(key, cleaned)
 
     def _validate_project_name(self, value: str) -> ValidationResult:
-        """Project name is used in filenames — strip invalid chars, enforce length."""
+        """Project name is shown in the UI and in generated documents, so spaces are
+        preserved for display fidelity — only OS-reserved filename characters are
+        stripped. Each save() method applies its own independent filename
+        sanitization (space → underscore) when building an actual file path."""
         cleaned = re.sub(INVALID_FILENAME_CHARS, "", value).strip()
-        cleaned = re.sub(r"\s+", "_", cleaned)  # spaces → underscores
 
         if not cleaned:
             return ValidationResult(
