@@ -30,6 +30,10 @@ from typing import Optional
 from agent import QAIAgent
 from dialogue import ProjectContext
 
+MAX_PLAUSIBLE_DURATION_DAYS = 1825  # ~5 working-years; a parsed timeline beyond this is
+                                     # almost certainly a parsing error (e.g. a calendar
+                                     # year misread as a month/week count), not a real project
+
 # ── Baseline Benchmarks ────────────────────────────────────────────────────────
 
 BASELINE_QA_PERCENT = {
@@ -467,6 +471,12 @@ class EffortEstimator:
         magnitude_score = max(0, 10 - int(data.total_multiplier / 10))
         score += magnitude_score
 
+        # ── Absolute magnitude guard ───────────────────────────────────────────
+        # However well the four factors score, a physically-implausible duration
+        # must never read "High" — this is a floor, not a fifth scored factor.
+        if data.project_duration_days > MAX_PLAUSIBLE_DURATION_DAYS and score >= 70:
+            score = 69
+
         # ── Map score to label ─────────────────────────────────────────────────
         data.confidence_score = score
         if score >= 70:
@@ -618,6 +628,8 @@ Write the following sections (keep each concise — 3-5 sentences max):
 - **PERT Expected Need:** {data.pert_total_expected} person-days
 - {gap_status}"""
 
+    _NARRATIVE_SECTION_NAMES = ("EXECUTIVE_SUMMARY", "ASSUMPTIONS", "RECOMMENDATIONS")
+
     def _parse_narrative(self, narrative: str) -> tuple:
         """Extract narrative sections from LLM response."""
         exec_summary = self._extract_section(narrative, "EXECUTIVE_SUMMARY") or \
@@ -629,9 +641,26 @@ Write the following sections (keep each concise — 3-5 sentences max):
         return exec_summary, assumptions, recommendations
 
     def _extract_section(self, text: str, section: str) -> Optional[str]:
+        """Pull one requested section out of the LLM's narrative response.
+
+        The LLM reliably renders each section as its own markdown heading —
+        bold, numbered, sometimes with a space instead of the underscore we
+        asked for (e.g. "### **2. ASSUMPTIONS**" for "ASSUMPTIONS",
+        "EXECUTIVE SUMMARY" for "EXECUTIVE_SUMMARY") rather than the plain
+        "LABEL:" this used to assume. A stop condition tied to that exact
+        format never matches the (also-decorated) next section, so the
+        current section silently swallows every section after it — visible
+        as a whole section duplicated verbatim under two headings. Stopping
+        at the next *known* section name — regardless of what markdown
+        decorates it — fixes that.
+        """
         if not text:
             return None
-        pattern = rf"{section}[:\s]*(.*?)(?=\n[A-Z_]{{3,}}[:\s]|\Z)"
+        name = section.replace("_", "[_ ]")
+        other_names = "|".join(
+            s.replace("_", "[_ ]") for s in self._NARRATIVE_SECTION_NAMES if s != section
+        )
+        pattern = rf"{name}\**[:\s]*(.*?)(?=[#*\d.\s-]*(?:{other_names})|\Z)"
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()
@@ -640,37 +669,52 @@ Write the following sections (keep each concise — 3-5 sentences max):
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     def _parse_duration(self, timeline: str) -> int:
-        """Parse timeline string to working days."""
+        """Parse timeline string to working days.
+
+        A bare 4+ digit number (e.g. "2026") is a calendar year mentioned
+        alongside a target date, never a month/week count — excluded via
+        `\\b(\\d{1,3})\\b` so "release in June 2026" doesn't parse as 2026
+        months. The final result is clamped to MAX_PLAUSIBLE_DURATION_DAYS
+        as a safety net against any other mis-parse.
+        """
         if not timeline:
             return 130
         tl = timeline.lower()
         if any(k in tl for k in ["year", "yr"]):
             match = re.search(r"(\d+\.?\d*)\s*(?:year|yr)", tl)
             years = float(match.group(1)) if match else 1
-            return int(years * 230)
-        if "month" in tl:
-            match = re.search(r"(\d+)", tl)
-            months = int(match.group(1)) if match else 6
-            return months * 21
-        if "week" in tl:
-            match = re.search(r"(\d+)", tl)
-            weeks = int(match.group(1)) if match else 4
-            return weeks * 5
-        # Try to extract a bare number (assume months)
-        match = re.search(r"(\d+)", tl)
-        if match:
-            return int(match.group(1)) * 21
-        return 130  # default: ~6 months
+            days = int(years * 230)
+        else:
+            num_pattern = r"\b(\d{1,3})\b"  # 1-3 digits only; excludes 4-digit years
+            if "month" in tl:
+                match = re.search(num_pattern, tl)
+                months = int(match.group(1)) if match else 6
+                days = months * 21
+            elif "week" in tl:
+                match = re.search(num_pattern, tl)
+                weeks = int(match.group(1)) if match else 4
+                days = weeks * 5
+            else:
+                match = re.search(num_pattern, tl)
+                days = int(match.group(1)) * 21 if match else 130  # default: ~6 months
+        return min(days, MAX_PLAUSIBLE_DURATION_DAYS)
 
     def _parse_team_size(self, team_str: str) -> int:
-        """Parse team size string to integer."""
+        """Parse team size string to integer.
+
+        An "A, or B" clause restates the same team two ways (a headcount
+        alternative, e.g. "3 frontend + 2 backend, or 5 full-stack") rather
+        than describing additional people — only the numbers before the
+        first standalone "or" are summed, so a restatement isn't double-counted.
+        """
         if not team_str:
             return 1
         ts = team_str.lower()
         # Handle "no dedicated QA" etc.
         if any(k in ts for k in ["no dedicated", "none", "developers test"]):
             return 0
-        numbers = re.findall(r"\d+", ts)
+        first_alternative = re.split(r"\bor\b", ts)[0]
+        numbers = re.findall(r"\d+", first_alternative)
         if numbers:
             return sum(int(n) for n in numbers)
         return 1

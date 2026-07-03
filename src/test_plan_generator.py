@@ -24,6 +24,10 @@ Your Test Plans are:
 - Risk-informed — test items and priorities derived from the Risk Register
 - AI-aware — addresses AI tools used by the team and their QA implications
 - Practical — measurable entry/exit criteria, concrete schedule, clear responsibilities
+- Honest — never state a specific fact (version number, date, tool name) that was not
+  provided in the PROJECT CONTEXT, RISK REGISTER, or KNOWLEDGE BASE; omit or write
+  "not specified" instead of inventing one. A fabricated fact in an official QA
+  deliverable is worse than an admitted gap.
 """
 
 
@@ -52,8 +56,10 @@ Brief description of the project under test and the purpose of this test plan.
 State how this Test Plan relates to the Test Strategy.
 
 ## 2. Test Items
-List the specific software components, modules, and features that will be tested.
-Include version information where applicable.
+List the specific software components, modules, and features that will be tested, based
+strictly on the TECH STACK given in the project context. Include a version number ONLY if
+the user's tech stack description states one explicitly; otherwise write "version not
+specified" — never invent a plausible-looking version number.
 
 ## 3. Features to be Tested
 Detailed list of features/functions in scope, with rationale derived from the Risk Register.

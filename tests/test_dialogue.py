@@ -8,7 +8,7 @@ Covers (21 tests):
 InputValidator:
 1.  Empty string → invalid, error contains "Please provide"
 2.  Whitespace-only string → invalid
-3.  project_name: valid name → spaces converted to underscores
+3.  project_name: valid name → spaces preserved (display fidelity)
 4.  project_name: name with invalid filename chars (/ \\ : * ?) → chars stripped
 5.  project_name: only invalid chars (e.g. '???') → invalid
 6.  project_name: name > 50 chars → truncated to 50 chars
@@ -70,12 +70,13 @@ def test_whitespace_only_invalid():
     print("  PASS: '   ' → invalid")
 
 
-def test_project_name_spaces_to_underscores():
-    """Valid project name: spaces are replaced with underscores in cleaned output."""
+def test_project_name_preserves_spaces():
+    """Valid project name: spaces are preserved in cleaned output (display fidelity);
+    filename sanitization happens independently in each save() method."""
     result = _v().validate("project_name", "My Cool Project")
     assert result.valid, f"Expected valid, got error: '{result.error}'"
-    assert result.cleaned == "My_Cool_Project", \
-        f"Expected 'My_Cool_Project', got '{result.cleaned}'"
+    assert result.cleaned == "My Cool Project", \
+        f"Expected 'My Cool Project', got '{result.cleaned}'"
     print(f"  PASS: 'My Cool Project' → cleaned = '{result.cleaned}'")
 
 
@@ -287,8 +288,8 @@ if __name__ == "__main__":
             test_empty_string_invalid),
         ("whitespace-only string → invalid",
             test_whitespace_only_invalid),
-        ("project_name: spaces → underscores in cleaned",
-            test_project_name_spaces_to_underscores),
+        ("project_name: spaces preserved in cleaned",
+            test_project_name_preserves_spaces),
         ("project_name: invalid filename chars (/ : ?) stripped",
             test_project_name_strips_invalid_filename_chars),
         ("project_name: only invalid chars → invalid",

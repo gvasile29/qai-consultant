@@ -170,6 +170,74 @@ def test_parse_team_size_range():
     print("  PASS: '5 developers' -> team size 5")
 
 
+# The narrative format the LLM actually renders, captured live from a real call:
+# a markdown heading, bold, and a leading number around each section label — not
+# the plain "LABEL:" the old _extract_section regex assumed.
+_REALISTIC_NARRATIVE = """### **1. EXECUTIVE SUMMARY**
+The effort estimation ranges between 213.6-594.6 person-days, reflecting a 45% adjustment.
+
+---
+
+### **2. ASSUMPTIONS**
+- **Scope Stability**: Functional requirements remain consistent.
+- **Compliance Readiness**: PCI-DSS and GDPR controls are pre-validated.
+
+---
+### **3. RECOMMENDATIONS**
+1. **Prioritize Automation**: Allocate 20% of QA effort to regression suites.
+2. **Resource Augmentation**: Consider a temporary QA lead.
+"""
+
+
+def test_extract_section_handles_markdown_heading_format():
+    """_extract_section finds EXECUTIVE_SUMMARY even when the LLM renders it as
+    a numbered, bold markdown heading with a space instead of an underscore
+    ("### **1. EXECUTIVE SUMMARY**") rather than the plain "LABEL:" format."""
+    est = make_dummy_estimator()
+    result = est._extract_section(_REALISTIC_NARRATIVE, "EXECUTIVE_SUMMARY")
+    assert result is not None, "Expected EXECUTIVE_SUMMARY to be found despite markdown decoration"
+    assert "213.6-594.6" in result, f"Expected the summary text, got: {result!r}"
+    print("  PASS: EXECUTIVE_SUMMARY extracted despite '### **1. EXECUTIVE SUMMARY**' formatting")
+
+
+def test_extract_section_assumptions_does_not_swallow_recommendations():
+    """_extract_section's ASSUMPTIONS capture must stop before RECOMMENDATIONS
+    even though the RECOMMENDATIONS heading is itself markdown-decorated
+    ("### **3. RECOMMENDATIONS**") — reproduces a live bug where the whole
+    Recommendations section was duplicated verbatim inside Assumptions &
+    Constraints because the old regex's stop condition never matched a
+    decorated heading and fell through to end-of-string instead."""
+    est = make_dummy_estimator()
+    assumptions = est._extract_section(_REALISTIC_NARRATIVE, "ASSUMPTIONS")
+    assert assumptions is not None, "Expected ASSUMPTIONS to be found"
+    assert "Prioritize Automation" not in assumptions, \
+        f"ASSUMPTIONS swallowed the RECOMMENDATIONS section: {assumptions!r}"
+    assert "Scope Stability" in assumptions
+    print("  PASS: ASSUMPTIONS stops before RECOMMENDATIONS, no duplication")
+
+
+def test_extract_section_recommendations_extracted_cleanly():
+    """RECOMMENDATIONS extracts its own content correctly and completely."""
+    est = make_dummy_estimator()
+    recommendations = est._extract_section(_REALISTIC_NARRATIVE, "RECOMMENDATIONS")
+    assert recommendations is not None, "Expected RECOMMENDATIONS to be found"
+    assert "Prioritize Automation" in recommendations
+    assert "Resource Augmentation" in recommendations
+    print("  PASS: RECOMMENDATIONS extracted cleanly")
+
+
+def test_parse_narrative_no_duplication_end_to_end():
+    """_parse_narrative() on a realistic markdown-decorated LLM response
+    produces three DISTINCT sections — no section's content reappears in
+    another (the end-to-end regression check for the live duplication bug)."""
+    est = make_dummy_estimator()
+    exec_summary, assumptions, recommendations = est._parse_narrative(_REALISTIC_NARRATIVE)
+    assert "Prioritize Automation" not in assumptions, "Recommendations leaked into assumptions"
+    assert "Scope Stability" not in recommendations, "Assumptions leaked into recommendations"
+    assert "213.6-594.6" in exec_summary
+    print("  PASS: exec_summary / assumptions / recommendations are distinct, no cross-contamination")
+
+
 def test_detect_project_type_embedded():
     """'automotive embedded system' detects as 'embedded'."""
     est = make_dummy_estimator()
@@ -542,6 +610,14 @@ if __name__ == "__main__":
             test_parse_team_size_2),
         ("_parse_team_size: '5 developers' -> 5",
             test_parse_team_size_range),
+        ("_extract_section: finds EXECUTIVE_SUMMARY despite markdown heading",
+            test_extract_section_handles_markdown_heading_format),
+        ("_extract_section: ASSUMPTIONS does not swallow RECOMMENDATIONS",
+            test_extract_section_assumptions_does_not_swallow_recommendations),
+        ("_extract_section: RECOMMENDATIONS extracted cleanly",
+            test_extract_section_recommendations_extracted_cleanly),
+        ("_parse_narrative: no cross-section duplication end-to-end",
+            test_parse_narrative_no_duplication_end_to_end),
         ("project type 'automotive embedded system' -> 'embedded'",
             test_detect_project_type_embedded),
         ("methodology 'V-model' -> 'v-model'",
