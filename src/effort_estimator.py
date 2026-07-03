@@ -628,6 +628,8 @@ Write the following sections (keep each concise — 3-5 sentences max):
 - **PERT Expected Need:** {data.pert_total_expected} person-days
 - {gap_status}"""
 
+    _NARRATIVE_SECTION_NAMES = ("EXECUTIVE_SUMMARY", "ASSUMPTIONS", "RECOMMENDATIONS")
+
     def _parse_narrative(self, narrative: str) -> tuple:
         """Extract narrative sections from LLM response."""
         exec_summary = self._extract_section(narrative, "EXECUTIVE_SUMMARY") or \
@@ -639,9 +641,26 @@ Write the following sections (keep each concise — 3-5 sentences max):
         return exec_summary, assumptions, recommendations
 
     def _extract_section(self, text: str, section: str) -> Optional[str]:
+        """Pull one requested section out of the LLM's narrative response.
+
+        The LLM reliably renders each section as its own markdown heading —
+        bold, numbered, sometimes with a space instead of the underscore we
+        asked for (e.g. "### **2. ASSUMPTIONS**" for "ASSUMPTIONS",
+        "EXECUTIVE SUMMARY" for "EXECUTIVE_SUMMARY") rather than the plain
+        "LABEL:" this used to assume. A stop condition tied to that exact
+        format never matches the (also-decorated) next section, so the
+        current section silently swallows every section after it — visible
+        as a whole section duplicated verbatim under two headings. Stopping
+        at the next *known* section name — regardless of what markdown
+        decorates it — fixes that.
+        """
         if not text:
             return None
-        pattern = rf"{section}[:\s]*(.*?)(?=\n[A-Z_]{{3,}}[:\s]|\Z)"
+        name = section.replace("_", "[_ ]")
+        other_names = "|".join(
+            s.replace("_", "[_ ]") for s in self._NARRATIVE_SECTION_NAMES if s != section
+        )
+        pattern = rf"{name}\**[:\s]*(.*?)(?=[#*\d.\s-]*(?:{other_names})|\Z)"
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()

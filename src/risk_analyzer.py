@@ -61,11 +61,12 @@ Provide a summary table:
 |---|---|---|---|---|---|
 | R01 | ... | High/Medium/Low | High/Medium/Low | Critical/High/Medium/Low | 1/2/3/... |
 
-(List ALL identified risks sorted by priority)
+(List the 5-7 MOST CRITICAL risks, sorted by priority — a shorter register where every
+listed risk gets full detail below beats a longer one that runs out of space partway through)
 
 ## Detailed Risk Analysis
 
-For each risk, provide:
+For each risk listed in the matrix above, provide:
 
 ### R01 — [Risk Title]
 - **Category:** [Technical / Process / Compliance / Resource / External]
