@@ -18,10 +18,10 @@ import types
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import ensure_src_on_path
 from . import thresholds as T
 
 _DIR = Path(__file__).resolve().parent
-_SRC_DIR = _DIR.parent / "src"
 
 
 # ── Import the real shipped code (stub only the heavy LLM client) ────────────────
@@ -30,8 +30,7 @@ def _load_target():
     """Import the app's real modules. ``effort_estimator`` imports the heavyweight
     ``agent`` module (langchain/pinecone/openai) only to call ``agent.ask`` for the
     narrative; the deterministic pipeline never touches it, so we stub it."""
-    if str(_SRC_DIR) not in sys.path:
-        sys.path.insert(0, str(_SRC_DIR))
+    ensure_src_on_path()
 
     # ALWAYS install the stub (don't gate on "agent" not in sys.modules): the keyless
     # gate must not reach the real Pinecone/LLM client even if a prior import cached it.
@@ -161,7 +160,8 @@ def check_confidence_magnitude_sanity(ProjectContext, EffortEstimator) -> tuple[
     from agent import QAIAgent  # noqa: PLC0415 — the stub installed by _load_target()
     _, data = EffortEstimator(QAIAgent()).estimate(ctx)
 
-    impossible = data.project_duration_days > T.CONFIDENCE_HIGH_FORBIDDEN_ABOVE_DAYS
+    impossible = (data.project_duration_days > T.CONFIDENCE_HIGH_FORBIDDEN_ABOVE_DAYS
+                  or data.pert_total_expected > T.CONFIDENCE_HIGH_FORBIDDEN_ABOVE_PERSON_DAYS)
     if impossible and data.confidence_level == "High":
         return (Finding(
             case=f'timeline "{ctx.timeline}"',
@@ -220,10 +220,10 @@ def run_all() -> list[CheckOutcome]:
     # module afterwards so evals can share a process (e.g. a pytest session) without
     # leaving the real `agent` shadowed by the stub.
     prev_agent = sys.modules.get("agent")
-    iv_cls, ctx_cls, est_cls = _load_target()
-    iv = iv_cls()
-    est = est_cls.__new__(est_cls)  # pure-method calls; no agent needed
     try:
+        iv_cls, ctx_cls, est_cls = _load_target()  # installs the stub — inside try so the
+        iv = iv_cls()                               # finally restore runs even if this raises
+        est = est_cls.__new__(est_cls)  # pure-method calls; no agent needed
         return [
             CheckOutcome("duration_bounds", check_duration_bounds(est)),
             CheckOutcome("team_restatement_invariance", check_team_restatement_invariance(est)),
@@ -254,7 +254,11 @@ def format_table(outcomes: list[CheckOutcome]) -> str:
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # findings contain non-ASCII; don't crash on cp1252/ascii
-    outcomes = run_all()
+    try:
+        outcomes = run_all()
+    except Exception as exc:  # noqa: BLE001 — missing/corrupt golden or bad input → report, not traceback
+        print(f"\nestimate_integrity errored (did not run): {type(exc).__name__}: {exc}")
+        return 1
     print(format_table(outcomes))
     ok = all(o.passed for o in outcomes)
     total_defects = sum(len(o.findings) for o in outcomes)

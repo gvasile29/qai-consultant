@@ -9,23 +9,27 @@ judge scores vary a little run-to-run.
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
+import threading
 
-_SRC = Path(__file__).resolve().parent.parent / "src"
+from . import ensure_src_on_path
+
 LABEL = "mistral"
 
 _client = None
+_client_lock = threading.Lock()
 
 
 def _secret(name: str) -> str:
-    """A key via the app's own lookup (.env / env / Streamlit); '' if absent."""
+    """A key via the app's own lookup (.env / env / Streamlit); '' if absent.
+
+    Only a missing key (ValueError) or absent app deps (ModuleNotFoundError) count as
+    "no key". A real ImportError in agent.py's chain is left to propagate — otherwise a
+    broken import would be silently misreported as an unconfigured .env."""
+    ensure_src_on_path()
     try:
-        if str(_SRC) not in sys.path:
-            sys.path.insert(0, str(_SRC))
         from agent import _get_secret  # noqa: PLC0415
         return _get_secret(name)
-    except Exception:  # noqa: BLE001 — missing key / src not importable → unset
+    except (ValueError, ModuleNotFoundError):
         return ""
 
 
@@ -36,15 +40,19 @@ def has_keys() -> bool:
 
 def _get_client():
     global _client
-    if _client is None:
-        if str(_SRC) not in sys.path:
-            sys.path.insert(0, str(_SRC))
-        from agent import LLMClient  # noqa: PLC0415
-        _client = LLMClient(
-            mistral_api_key=_secret("MISTRAL_API_KEY"),
-            # openai>=2.x rejects an empty key at construction, so pass a placeholder.
-            openrouter_api_key=_secret("OPENROUTER_API_KEY") or "unset",
-        )
+    if _client is None:                       # double-checked: judged cases run in threads
+        with _client_lock:
+            if _client is None:
+                ensure_src_on_path()
+                from agent import LLMClient  # noqa: PLC0415
+                # Placeholder for an empty key on either provider: an empty Mistral key
+                # builds a malformed `Bearer ` header (hard error, not a clean fallback),
+                # and openai>=2.x rejects an empty key at construction. "unset" makes both
+                # a clean 401 → LLMClient falls back / the metric SKIPs, never crashes.
+                _client = LLMClient(
+                    mistral_api_key=_secret("MISTRAL_API_KEY") or "unset",
+                    openrouter_api_key=_secret("OPENROUTER_API_KEY") or "unset",
+                )
     return _client
 
 

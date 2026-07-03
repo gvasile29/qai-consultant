@@ -33,7 +33,7 @@ Builds an in-memory index over `knowledge_base/*.md` with the app's own embeddin
 | `answer_relevance` | LLM judge (does the answer address the query?) | 0.70 |
 | `source_attribution` | regex over a generated answer (do its `[Source N]` cites point at retrieved chunks?) | 0.90 |
 
-Recall and precision are keyless and deterministic. The other three need a generated answer, so they go through the app's own `LLMClient` (`judge.py`) — the production Mistral model, the same one the app ships. Set `MISTRAL_API_KEY` (and `OPENROUTER_API_KEY` for the fallback) to run them. They **SKIP — never fail** — when the keys are absent or the provider is unreachable (and SKIP below a half-of-cases quorum rather than score thin data). The whole tier SKIPs if the embedding stack is unavailable, so a bare CI box still gets the full deterministic tier plus the keyless retrieval metrics.
+Recall and precision are keyless and deterministic. The other three need a generated answer, so they go through the app's own `LLMClient` (`judge.py`) — the production Mistral model, the same one the app ships. Set `MISTRAL_API_KEY` (and `OPENROUTER_API_KEY` for the fallback) to run them. They **SKIP — never fail** — when the keys are absent or the provider is unreachable (and SKIP below a half-of-cases quorum rather than score thin data). Recall/MRR are keyless but still need the embedding stack (installed via `requirements.txt`); if it's absent the whole RAG tier SKIPs. The one tier that runs on any bare box is `estimate_integrity` (no LLM, no keys, no embedding stack).
 
 ## Layout
 

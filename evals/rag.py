@@ -9,10 +9,11 @@ the app ships (``all-MiniLM-L6-v2``), then measures five metrics:
   - Faithfulness            (LLM judge)   — are the answer's claims grounded in the context?
   - Answer Relevance        (LLM judge)   — does the answer address the query?
 
-Retrieval is keyless and deterministic (local embeddings). The three judged metrics
-go through the app's LLMClient (``judge.py``, production Mistral) and SKIP — never
-fail — without a key; the whole suite SKIPs if the embedding stack is absent, so a
-bare CI box still runs the keyless tiers.
+Retrieval (recall/MRR) is keyless but NOT dependency-free — it needs the embedding
+stack (installed via requirements.txt). The three judged metrics additionally go
+through the app's LLMClient (``judge.py``, production Mistral) and SKIP — never fail —
+without a key. If the embedding stack is absent the whole rag suite SKIPs; the truly
+dependency-free tier is ``estimate_integrity`` (it runs on any box).
 
     python -m evals.rag
 
@@ -28,26 +29,25 @@ import json
 import math
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import judge
+from . import ensure_src_on_path, judge
 from . import thresholds as T
 
 _DIR = Path(__file__).resolve().parent
 _KB = _DIR.parent / "knowledge_base"
-_SRC = _DIR.parent / "src"
 _EMBEDDING_MODEL_DEFAULT = "sentence-transformers/all-MiniLM-L6-v2"  # vendored fallback
 _DOC_CHARS = 4000   # per-file text embedded; enough to characterise a topic doc
 
 
 def _embedding_model() -> str:
     """The app's embedding model, imported from agent.py so the eval can't drift from
-    ingest.py; vendored default when src deps aren't installed. A rename raises
-    ImportError (not ModuleNotFoundError), left uncaught so real drift surfaces."""
+    it; vendored default when src deps aren't installed. A rename raises ImportError
+    (not ModuleNotFoundError), left uncaught so real drift surfaces."""
     try:
-        if str(_SRC) not in sys.path:
-            sys.path.insert(0, str(_SRC))
+        ensure_src_on_path()
         from agent import EMBEDDING_MODEL  # noqa: PLC0415
         return EMBEDDING_MODEL
     except ModuleNotFoundError:
@@ -152,10 +152,14 @@ def _golden() -> list[dict]:
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict) and "query" in obj and "expects" in obj:
-            if isinstance(obj["expects"], str):   # tolerate a bare string; a str would
-                obj["expects"] = [obj["expects"]]  # otherwise iterate as chars and inflate recall
-            if isinstance(obj["expects"], list):
-                cases.append(obj)
+            exp = obj["expects"]
+            exp = [exp] if isinstance(exp, str) else exp
+            if isinstance(exp, list):
+                # keep only non-empty strings: a non-string element would crash the
+                # `e in filename` scan, and an empty string matches every filename.
+                obj["expects"] = [e for e in exp if isinstance(e, str) and e.strip()]
+                if obj["expects"]:
+                    cases.append(obj)
     return cases
 
 
@@ -167,7 +171,10 @@ def retrieval_metrics(index: _Index) -> list[Metric]:
     a query legitimately served by more than one doc is not under-counted."""
     cases = _golden()
     if not cases:
-        return [Metric(n, None, t, note="SKIP (no golden cases)") for n, t in _METRICS[:2]]
+        # The retrieval tier's dataset is required; a missing/empty/all-corrupt
+        # rag_golden.jsonl → FAIL, not a silent SKIP-as-pass.
+        return [Metric(n, 0.0, t, note="FAIL: no golden cases (missing/empty/corrupt rag_golden.jsonl)")
+                for n, t in _METRICS[:2]]
     hits, rrs = 0, []
     for c in cases:
         files = index.retrieve(c["query"], T.RAG_K)
@@ -245,17 +252,27 @@ def judged_quality(index: _Index) -> list[Metric]:
         return _judged_skip("SKIP (no judged golden cases)")
     faith, rel = [], []
     valid_cites = total_cites = failed = 0
-    for c in cases:
-        try:
-            f, r, v, t = _grade_case(index, c)
-        except Exception:  # noqa: BLE001 — isolate ANY per-case failure (transport, JSON, key)
-            failed += 1
-            continue
-        faith.append(f)
-        rel.append(r)
-        valid_cites += v
-        total_cites += t
+    # Cases run concurrently, capped low to stay within the paid API's rate limit; a
+    # case that errors is isolated (dropped), same as the sequential path.
+    with ThreadPoolExecutor(max_workers=T.JUDGE_MAX_WORKERS) as pool:
+        futures = [pool.submit(_grade_case, index, c) for c in cases]
+        for fut in futures:
+            try:
+                f, r, v, t = fut.result()
+            except Exception:  # noqa: BLE001 — isolate ANY per-case failure (transport, JSON, key)
+                failed += 1
+                continue
+            faith.append(f)
+            rel.append(r)
+            valid_cites += v
+            total_cites += t
     n = len(faith)
+    if n == 0:
+        # A key is configured (we passed has_keys) but NOTHING graded → the judge is
+        # broken/unreachable (invalid key, provider down, rate-limited), not "thin data".
+        # FAIL loudly instead of a silent SKIP-as-pass. (Also guards the n>0 division below.)
+        note = f"FAIL: judge produced no scores — {failed}/{len(cases)} cases errored (check keys/provider)"
+        return [Metric(name, 0.0, thr, note=note) for name, thr in _METRICS[2:]]
     quorum = math.ceil(T.JUDGED_QUORUM_MIN * len(cases))
     if n < quorum:
         return _judged_skip(f"SKIP (only {n}/{len(cases)} cases graded, below quorum {quorum})")
@@ -295,7 +312,11 @@ def format_table(metrics: list[Metric]) -> str:
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # gate output contains non-ASCII; don't crash on cp1252/ascii
-    metrics = run_all()
+    try:
+        metrics = run_all()
+    except Exception as exc:  # noqa: BLE001 — report a clean failure, not a traceback
+        print(f"\nRAG tier errored (did not run): {type(exc).__name__}: {exc}")
+        return 1
     print(format_table(metrics))
     ok = all(m.passed for m in metrics)
     print(f"\nRAG metrics: {'PASS' if ok else 'FAIL'} "

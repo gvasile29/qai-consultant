@@ -15,3 +15,14 @@
 ``thresholds.py`` is the gate spec; ``golden.jsonl`` / ``rag_golden.jsonl`` are the
 datasets (append a line to add a case).
 """
+
+import sys
+from pathlib import Path
+
+
+def ensure_src_on_path() -> None:
+    """Put the app's ``src/`` on sys.path (idempotent) so the eval can import the real
+    modules. Deliberately not removed afterwards — later lazy imports still need it."""
+    src = str(Path(__file__).resolve().parent.parent / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)

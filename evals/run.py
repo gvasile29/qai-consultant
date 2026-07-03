@@ -18,10 +18,15 @@ def main(argv: list[str]) -> int:
     det_only = "--det" in argv
 
     from . import estimate_integrity as det
-    det_outcomes = det.run_all()
     print("══ estimate_integrity (deterministic, keyless) ══")
-    print(det.format_table(det_outcomes))
-    det_ok = all(o.passed for o in det_outcomes)
+    try:
+        det_outcomes = det.run_all()
+        print(det.format_table(det_outcomes))
+        det_ok = all(o.passed for o in det_outcomes)
+    except Exception as exc:  # noqa: BLE001 — a crash (missing/corrupt golden, bad input)
+        # can't evaluate the checks → FAIL the gate loudly rather than abort with a traceback.
+        print(f"[estimate_integrity] tier errored (did not run): {type(exc).__name__}: {exc}")
+        det_ok = False
 
     rag_ok = True
     if not det_only:

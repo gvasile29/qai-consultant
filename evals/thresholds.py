@@ -19,7 +19,10 @@ TEAM_RESTATEMENT_DELTA_MAX = 0
 NAME_MUST_PRESERVE_SPACES = True
 
 # A physically-impossible magnitude must never read "High" confidence. Zero-tol.
+# Checked on BOTH axes: an absurd duration OR an absurd effort (person-days) — either
+# alone is a parse artifact, and "High" on either is the cardinal sin.
 CONFIDENCE_HIGH_FORBIDDEN_ABOVE_DAYS = DURATION_MAX_DAYS
+CONFIDENCE_HIGH_FORBIDDEN_ABOVE_PERSON_DAYS = 20000  # ~90 person-years of QA effort = artifact
 
 # Version strings in a deliverable that the user never supplied (fabricated). Zero-tol.
 FABRICATED_FACTS_MAX = 0
@@ -32,3 +35,4 @@ FAITHFULNESS_MIN = 0.70   # answer grounded in the sources; margin for judge var
 ANSWER_RELEVANCE_MIN = 0.7  # the answer must substantively address the query, not generic filler
 SOURCE_ATTRIBUTION_MIN = 0.9  # >=90% of [Source N] citations must point at a retrieved chunk (no invented provenance)
 JUDGED_QUORUM_MIN = 0.5       # >=half of judged cases must grade successfully, else the judged metrics SKIP (not pass on thin data)
+JUDGE_MAX_WORKERS = 3         # concurrent judged cases — capped low to stay under the paid API's rate limit
