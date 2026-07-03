@@ -144,7 +144,9 @@ RAG_K_GENERATION = 5        # chunks for Risk Register + Test Strategy prompts
 PINECONE_NAMESPACE = "knowledge-base"   # must match PINECONE_NAMESPACE in ingest.py
 
 # ── LLM Generation Parameters ──────────────────────────────────────────────────
-LLM_NUM_PREDICT = 1500      # max output tokens — prevents runaway generation
+LLM_NUM_PREDICT = 2000      # max output tokens — prevents runaway generation; 1500 was
+                            # observed truncating the Risk Register/Test Strategy mid-sentence
+                            # on realistic projects (test_num_predict_is_capped caps this at 2000)
 LLM_TEMPERATURE = 0.1       # near-deterministic
 
 

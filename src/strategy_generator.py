@@ -67,7 +67,8 @@ List the features, modules, and systems that are in scope for testing.
 List what is explicitly excluded from testing and the reason why.
 
 ## 4. Risk Assessment
-Identify and rate the top risks (High/Medium/Low) based on the project context.
+Identify and rate the top 5-7 risks (High/Medium/Low) based on the project context —
+prioritize covering fewer risks completely over listing more and running out of space.
 For each risk: describe it, rate its likelihood and impact, and suggest mitigation.
 
 ## 5. Test Types Recommended
