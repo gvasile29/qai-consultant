@@ -570,30 +570,51 @@ def render_strategy():
         })
 
         # Risk Register (streaming) — save to session state immediately after
+        # Each step below is isolated in its own try/except, mirroring
+        # StrategyGenerator.generate_all()'s per-step isolation: a transient
+        # LLM outage (both Mistral and OpenRouter unavailable — observed to
+        # become non-negligible under concurrent load) must fail that one
+        # step with a clear message, not crash the whole page with a raw
+        # traceback and discard whatever already generated successfully.
         st.markdown("#### ⚠️ Generating Risk Register...")
         risk_prompt = build_risk_prompt(context, agent.format_knowledge_context(risk_chunks))
-        risk_register = st.write_stream(
-            agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
-        )
-        risk_path = risk_analyzer.save(risk_register, context)
+        try:
+            risk_register = st.write_stream(
+                agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
+            )
+            risk_path = risk_analyzer.save(risk_register, context)
+        except Exception as exc:
+            logger.error("Risk Register generation failed: %s", exc)
+            st.error(f"❌ Risk Register generation failed: {exc}")
+            risk_register, risk_path = "", None
         st.session_state.risk_register = risk_register
         st.session_state.risk_sources = risk_sources
         st.session_state.risk_path = risk_path
 
         # Effort Estimation (deterministic + short LLM narrative)
-        with st.spinner("📊 Generating Effort Estimation..."):
-            effort_report, effort_data = estimator.estimate(context, risk_register)
-            effort_path = estimator.save(effort_report, context)
+        try:
+            with st.spinner("📊 Generating Effort Estimation..."):
+                effort_report, effort_data = estimator.estimate(context, risk_register)
+                effort_path = estimator.save(effort_report, context)
+        except Exception as exc:
+            logger.error("Effort Estimation generation failed: %s", exc)
+            st.error(f"❌ Effort Estimation generation failed: {exc}")
+            effort_report, effort_path = "", None
         st.session_state.effort_report = effort_report
         st.session_state.effort_path = effort_path
 
         # Test Strategy (streaming)
         st.markdown("#### 📋 Generating Test Strategy...")
         strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
-        strategy = st.write_stream(
-            agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
-        )
-        output_path = generator.save(strategy, context)
+        try:
+            strategy = st.write_stream(
+                agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
+            )
+            output_path = generator.save(strategy, context)
+        except Exception as exc:
+            logger.error("Test Strategy generation failed: %s", exc)
+            st.error(f"❌ Test Strategy generation failed: {exc}")
+            strategy, output_path = "", None
         st.markdown("---")
         st.session_state.strategy = strategy
         st.session_state.sources = sources
@@ -603,10 +624,15 @@ def render_strategy():
         from test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
         st.markdown("#### 📝 Generating Test Plan...")
         test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
-        test_plan = st.write_stream(
-            agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
-        )
-        test_plan_path = test_plan_generator.save(test_plan, context)
+        try:
+            test_plan = st.write_stream(
+                agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
+            )
+            test_plan_path = test_plan_generator.save(test_plan, context)
+        except Exception as exc:
+            logger.error("Test Plan generation failed: %s", exc)
+            st.error(f"❌ Test Plan generation failed: {exc}")
+            test_plan, test_plan_path = "", None
         st.markdown("---")
         st.session_state.test_plan = test_plan
         st.session_state.test_plan_path = test_plan_path

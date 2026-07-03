@@ -136,6 +136,45 @@ def test_render_strategy_stores_risk_in_session():
     print("  PASS: render_strategy() stores risk_register, risk_sources, risk_path in session state")
 
 
+# Each of the 4 generation calls, found by a fingerprint that's unique to that
+# step and doesn't move if unrelated lines above it change.
+_GENERATION_STEP_FINGERPRINTS = {
+    "Risk Register": "agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)",
+    "Effort Estimation": "estimator.estimate(context, risk_register)",
+    "Test Strategy": "agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)",
+    "Test Plan": "agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)",
+}
+
+
+def test_render_strategy_isolates_each_generation_step():
+    """Each of the 4 live generation calls (Risk Register, Effort Estimation,
+    Test Strategy, Test Plan) in render_strategy() is wrapped in its own
+    try/except, mirroring StrategyGenerator.generate_all()'s documented
+    per-step isolation (CLAUDE.md: "Failure of step 4 must not discard
+    results from steps 1-3"). Concurrent-load stress testing showed both LLM
+    providers failing simultaneously becomes non-negligible at ~50 concurrent
+    users (observed ~14% single-provider rate-limit rate) — without this,
+    render_strategy() crashed the whole Streamlit page with a raw traceback
+    for every affected user instead of failing just that one step.
+    """
+    fn = extract_function(read_app_source(), "render_strategy")
+    lines = fn.splitlines()
+    for step_name, fingerprint in _GENERATION_STEP_FINGERPRINTS.items():
+        call_lines = [i for i, line in enumerate(lines) if fingerprint in line]
+        assert call_lines, f"Could not find the {step_name} generation call in render_strategy()"
+        call_line = call_lines[0]
+        # A 'try:' must appear above this call, with no unindented ('except'
+        # or blank-then-dedent) statement breaking the block in between.
+        preceding = lines[:call_line]
+        try_lines = [i for i, line in enumerate(preceding) if line.strip() == "try:"]
+        assert try_lines, f"{step_name} generation call is not inside a try block"
+        # An 'except' must close that same try block somewhere after the call.
+        following = lines[call_line:]
+        assert any(line.strip().startswith("except") for line in following[:15]), \
+            f"{step_name} generation call's try block has no except within a few lines after it"
+    print("  PASS: all 4 generation steps in render_strategy() are individually try/except-wrapped")
+
+
 def test_generate_another_clears_risk_keys():
     """'Generate Another Strategy' deletes all risk-related keys + feedback_submitted."""
     GENERATE_ANOTHER_KEYS = [
@@ -298,6 +337,8 @@ if __name__ == "__main__":
             test_strategy_tab_has_download_button),
         ("render_strategy() stores risk data in session state",
             test_render_strategy_stores_risk_in_session),
+        ("render_strategy() isolates each of the 4 generation steps",
+            test_render_strategy_isolates_each_generation_step),
         ("Generate Another clears all 9 keys incl. risk keys",
             test_generate_another_clears_risk_keys),
         ("Generate Another cleanup logic (simulated)",
