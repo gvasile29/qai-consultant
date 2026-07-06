@@ -9,7 +9,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-2.0.1-green.svg)
+![Version](https://img.shields.io/badge/version-2.0.2-green.svg)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
 ---
@@ -192,6 +192,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v1.0** ✅ MVP — error handling, input validation, logging, full documentation, tests, Apache 2.0 license
 - **v2.0** ✅ Cloud migration — Ollama → Mistral API + OpenRouter fallback; ChromaDB → Pinecone; deployed to Streamlit Cloud
 - **v2.0.1** ✅ Stability — 27 bugs fixed: PERT normalization, template application, PDF caching, session state, filename sanitization, RAG fallback, per-step exception isolation
+- **v2.0.2** ✅ Stability — release-gate evals (estimate integrity + RAG metrics), 5 estimation/validation defects fixed, session-state crash fix, narrative duplication/truncation fixes, per-step generation isolation from LLM outages
 - **v2.1** ⏸️ HuggingFace KB — `download_knowledge_base.py` *(deprioritized — Pinecone migration reduced value; most users use the live app directly)*
 - **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment

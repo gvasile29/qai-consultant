@@ -192,6 +192,7 @@ python -m evals.rag                  # tier 2 standalone
 - **v1.0** ✅ MVP — error handling, input validation, logging, docstrings, tests, INSTALL.md, CONTRIBUTING.md, version display
 - **v2.0** ✅ Cloud migration — Ollama → Mistral API + OpenRouter fallback; ChromaDB → Pinecone; deployed to Streamlit Cloud
 - **v2.0.1** ✅ Stability — 27 bugs fixed across 8 files: PERT normalization, template no-op, PDF freeze, run_count bypass, session state cleanup, filename sanitization, RAG fallback, per-step exception isolation, None guards
+- **v2.0.2** ✅ Stability — release-gate evals added (`evals/` — estimate integrity + RAG metrics, judged via the app's own `LLMClient`); 5 estimation/validation defects fixed (duration bounds, team restatement, name fidelity, confidence magnitude sanity, fabricated versions in Test Plan); session-state `AttributeError` crash fix; narrative duplication + truncation fixes; `LLM_NUM_PREDICT` raised to 4000; per-step generation isolation from LLM outages
 - **v2.1** ⏸️ HuggingFace KB — `download_knowledge_base.py` *(deprioritized — Pinecone migration reduced value; most users use the live app directly)*
 - **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment
