@@ -8,7 +8,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
-![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Version](https://img.shields.io/badge/version-2.0.2-green.svg)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -100,7 +100,7 @@ QAI Consultant's recommendations are grounded in real QA standards and methodolo
 - 🏭 **A-SPICE** — Automotive SPICE process reference model (SWE.4, SWE.5, SWE.6)
 - 📋 **IEEE 829** — Test documentation standard
 - ⚙️ **ISO/IEC 25010** — Software product quality model
-- 🤖 **AI Test Planning** — 17 real-world AI SDLC case studies + prompt-based test design guides (2024–2025)
+- 🤖 **AI Test Planning** — 17 real-world AI SDLC case studies (2024–2025)
 - 🧠 **Expert Knowledge** — Real QA scenarios and lessons learned from practitioners
 
 ---
@@ -222,6 +222,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 | "Missing required secret: 'PINECONE_API_KEY'" | Add your Pinecone key to `.env` |
 | "Knowledge base is empty" | Run `python src/ingest.py` to push documents to Pinecone |
 | "Both Mistral API and OpenRouter are unavailable" | Check API keys are valid and have credits |
-| Windows encoding errors | Set `PYTHONIOENCODING=utf-8` before running |
 
 > 📖 Full troubleshooting guide: [INSTALL.md](INSTALL.md#troubleshooting)
