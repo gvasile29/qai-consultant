@@ -20,10 +20,22 @@ os.environ["CHROMA_TELEMETRY"] = "False"
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
 sys.path.insert(0, str(APP_SRC))
+
+
+@pytest.fixture(scope="module")
+def agent():
+    """Real QAIAgent for the LLM smoke test; SKIP (not ERROR) without live API keys."""
+    from agent import QAIAgent
+    try:
+        return QAIAgent()
+    except Exception as exc:
+        pytest.skip(f"live agent unavailable ({type(exc).__name__}: {exc}) — requires API keys")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
