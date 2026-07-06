@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from agent import QAIAgent, QAIConnectionError, QAIKnowledgeBaseError
+from agent import QAIAgent, QAIConnectionError, QAIKnowledgeBaseError, clean_markdown_html
 
 
 def _mock_pinecone_client(vector_count: int = 5):
@@ -161,6 +161,38 @@ def test_ask_streaming_yields_chunks():
         f"Expected ['Hello', ' world', '!'], got: {chunks}"
 
 
+def test_clean_markdown_html_replaces_br_tags():
+    """clean_markdown_html() replaces <br>/<br/>/</br> (with an optional trailing
+    '-' bullet) with '; ' — Streamlit's st.markdown() and Rich's Markdown() don't
+    interpret raw HTML, so an unreplaced tag shows as literal text in the output."""
+    cell = "≥85% coverage achieved. <br> - All critical defects fixed. <br/> - Static analysis passes."
+    cleaned = clean_markdown_html(cell)
+    assert "<br" not in cleaned and "</br>" not in cleaned, f"Tag survived: {cleaned}"
+    assert cleaned == "≥85% coverage achieved. ; All critical defects fixed. ; Static analysis passes.", cleaned
+
+    assert clean_markdown_html("a</br>b") == "a; b"
+    assert clean_markdown_html("a<BR />b") == "a; b"
+    assert clean_markdown_html("no tags here") == "no tags here"
+
+
+def test_ask_applies_clean_markdown_html():
+    """QAIAgent.ask() sanitizes <br> tags out of the LLM response before returning."""
+    mock_pc, mock_index = _mock_pinecone_client(vector_count=5)
+
+    with patch("agent._get_secret", side_effect=lambda k: "fake-value"), \
+         patch("agent.HuggingFaceEmbeddings"), \
+         patch("agent.Pinecone", return_value=mock_pc), \
+         patch("agent.LLMClient") as mock_llm_cls:
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = "Item one. <br> - Item two."
+        mock_llm_cls.return_value = mock_llm
+        agent_instance = QAIAgent()
+
+    result = agent_instance.ask("test prompt")
+    assert "<br" not in result, f"<br> tag leaked into ask() result: {result}"
+    assert result == "Item one. ; Item two.", result
+
+
 if __name__ == "__main__":
     tests = [
         ("Pinecone connection fails → QAIKnowledgeBaseError", test_kb_missing_raises_error),
@@ -170,6 +202,8 @@ if __name__ == "__main__":
         ("QAIKnowledgeBaseError mentions 'python src/ingest.py'", test_kb_error_message_mentions_ingest),
         ("QAIConnectionError mentions .env / secrets", test_connection_error_message_mentions_api_keys),
         ("ask_streaming() yields incremental text chunks", test_ask_streaming_yields_chunks),
+        ("clean_markdown_html() replaces <br> tags", test_clean_markdown_html_replaces_br_tags),
+        ("ask() applies clean_markdown_html() to the response", test_ask_applies_clean_markdown_html),
     ]
     passed = failed = 0
     for name, fn in tests:

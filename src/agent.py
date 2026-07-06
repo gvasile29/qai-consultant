@@ -4,6 +4,7 @@ Connects to Mistral API (LLM) and Pinecone (knowledge base) and provides RAG que
 """
 
 import os
+import re
 from pathlib import Path
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -15,6 +16,18 @@ from openai import OpenAI
 
 setup_logging()
 logger = get_logger(__name__)
+
+# Mistral/OpenRouter often use raw <br> tags for multi-line markdown table cells
+# (GFM tables can't contain a literal newline). Neither Streamlit's st.markdown()
+# nor Rich's Markdown() interpret raw HTML by default, so an unreplaced tag shows
+# up as literal "<br>" text in the rendered/saved output.
+_BR_TAG = re.compile(r"</?br\s*/?>\s*-?\s*", re.IGNORECASE)
+
+
+def clean_markdown_html(text: str) -> str:
+    """Replace literal <br>/<br/>/</br> tags (optionally followed by a stray '-'
+    bullet marker) with a plain-text separator that reads fine inline."""
+    return _BR_TAG.sub("; ", text)
 
 
 def _get_secret(key: str) -> str:
@@ -316,7 +329,7 @@ class QAIAgent:
 
         logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)...")
         content = self._llm_client.chat(messages)
-        content = content or ""
+        content = clean_markdown_html(content or "")
         logger.debug(f"Response received ({len(content)} chars)")
         return content
 
