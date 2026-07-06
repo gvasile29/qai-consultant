@@ -32,6 +32,8 @@ os.environ["CHROMA_TELEMETRY"] = "False"
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "src"
 APP_PY = SRC_DIR / "app.py"
@@ -40,6 +42,16 @@ sys.path.insert(0, str(SRC_DIR))
 
 from dialogue import ProjectContext
 from effort_estimator import EffortEstimator, EstimationData, BASELINE_QA_PERCENT
+
+
+@pytest.fixture(scope="module")
+def agent():
+    """Real QAIAgent for the LLM smoke test; SKIP (not ERROR) without live API keys."""
+    from agent import QAIAgent
+    try:
+        return QAIAgent()
+    except Exception as exc:
+        pytest.skip(f"live agent unavailable ({type(exc).__name__}: {exc}) — requires API keys")
 
 
 # ── BMW ECU sample context (triggers all 5 key multipliers) ─────────────────

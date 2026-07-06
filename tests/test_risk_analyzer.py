@@ -19,6 +19,8 @@ import re
 import tempfile
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
@@ -67,6 +69,34 @@ def load_agent():
     return QAIAgent()
 
 
+# ── Fixtures (pytest mode only; the __main__ runner below wires these by hand) ──
+
+@pytest.fixture(scope="module")
+def agent():
+    """Real QAIAgent for the LLM smoke tests; SKIP (not ERROR) without live API keys."""
+    try:
+        return load_agent()
+    except Exception as exc:
+        pytest.skip(f"live agent unavailable ({type(exc).__name__}: {exc}) — requires API keys")
+
+
+@pytest.fixture(scope="module")
+def _generated_risk_register(agent):
+    """One real analyze() call, shared by risk_register/sources so downstream tests
+    don't each pay for a separate LLM+RAG round trip."""
+    return RiskAnalyzer(agent).analyze(BMW_CONTEXT)
+
+
+@pytest.fixture(scope="module")
+def risk_register(_generated_risk_register):
+    return _generated_risk_register[0]
+
+
+@pytest.fixture(scope="module")
+def sources(_generated_risk_register):
+    return _generated_risk_register[1]
+
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 def test_build_risk_prompt_structure():
@@ -95,21 +125,14 @@ def test_build_risk_query_includes_compliance_and_risks():
     print(f"  PASS: RAG query = {query}")
 
 
-def test_risk_register_sections(agent):
+def test_risk_register_sections(risk_register: str):
     """analyze() returns markdown with all required sections."""
-    analyzer = RiskAnalyzer(agent)
-
-    print("  Calling RiskAnalyzer.analyze() with BMW context...")
-    risk_register, sources = analyzer.analyze(BMW_CONTEXT)
-
     missing = [s for s in REQUIRED_SECTIONS if s not in risk_register]
     assert not missing, f"Missing sections in Risk Register: {missing}"
 
     print("  PASS: All required sections present in generated Risk Register")
     for section in REQUIRED_SECTIONS:
         print(f"    + {section}")
-
-    return risk_register, sources
 
 
 def test_risk_ids_present(risk_register: str):
@@ -131,8 +154,8 @@ def test_risk_matrix_table(risk_register: str):
     assert "Impact" in risk_register, "Table column 'Impact' missing"
     assert "Risk Level" in risk_register, "Table column 'Risk Level' missing"
 
-    # Verify at least one table row with a risk ID
-    assert re.search(r'\|\s*R\d{2}\s*\|', risk_register), \
+    # Verify at least one table row with a risk ID (tolerate markdown bold: | **R01** |)
+    assert re.search(r'\|\s*\*{0,2}R\d{2}\*{0,2}\s*\|', risk_register), \
         "No table row with risk ID found in Risk Matrix"
 
     print("  PASS: Risk matrix table present with correct columns and data rows")
@@ -156,8 +179,6 @@ def test_save_creates_file_with_frontmatter(agent, risk_register: str):
 
     print(f"  PASS: File saved: {output_path.relative_to(REPO_ROOT)}")
     print(f"        Frontmatter: {content[:160].strip()}")
-
-    return output_path
 
 
 def test_sources_non_empty(sources: list):
@@ -213,20 +234,30 @@ if __name__ == "__main__":
         sys.exit(1 if failed else 0)
 
     # Generate risk register once; feed to subsequent tests
-    risk_register = sources = output_path = None
+    risk_register = sources = None
 
-    print("\n[TEST] analyze() returns all required sections")
+    print("  Calling RiskAnalyzer.analyze() with BMW context...")
     try:
-        risk_register, sources = test_risk_register_sections(agent)
-        passed += 1
-    except AssertionError as e:
-        print(f"  FAIL: {e}")
-        failed += 1
+        risk_register, sources = RiskAnalyzer(agent).analyze(BMW_CONTEXT)
     except Exception as e:
         import traceback
-        print(f"  ERROR: {type(e).__name__}: {e}")
+        print(f"\n  ERROR generating Risk Register: {e}")
         traceback.print_exc()
         failed += 1
+
+    if risk_register:
+        print("\n[TEST] analyze() returns all required sections")
+        try:
+            test_risk_register_sections(risk_register)
+            passed += 1
+        except AssertionError as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+        except Exception as e:
+            import traceback
+            print(f"  ERROR: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            failed += 1
 
     if risk_register:
         for name, fn, args in [

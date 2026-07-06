@@ -29,16 +29,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pytest pytest-mock
 
-      - name: Run tests (excluding Ollama/ChromaDB integration tests)
+      - name: Run tests
         env:
           ANONYMIZED_TELEMETRY: "False"
           CHROMA_TELEMETRY: "False"
         run: |
-          python -m pytest tests/ -v \
-            --ignore=tests/test_risk_analyzer.py \
-            --deselect=tests/test_app_v03.py::test_both_documents_generated_and_stored \
-            --deselect=tests/test_effort_estimator.py::test_full_estimate_bmw \
-            -p no:warnings
+          python -m pytest tests/ -v -p no:warnings
+        # Live-LLM tests (test_risk_analyzer.py, test_app_v03.py::test_both_documents_...,
+        # test_effort_estimator.py::test_full_estimate_bmw) SKIP themselves via the
+        # `agent` fixture when no API keys are configured — no ignore/deselect needed.
 
   lint:
     name: Lint (ruff)
