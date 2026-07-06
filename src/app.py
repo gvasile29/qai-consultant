@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
 
 import streamlit as st
-from agent import QAIAgent
+from agent import QAIAgent, clean_markdown_html
 from dialogue import DialogueManager, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer
@@ -579,9 +579,9 @@ def render_strategy():
         st.markdown("#### ⚠️ Generating Risk Register...")
         risk_prompt = build_risk_prompt(context, agent.format_knowledge_context(risk_chunks))
         try:
-            risk_register = st.write_stream(
+            risk_register = clean_markdown_html(st.write_stream(
                 agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
-            )
+            ))
             risk_path = risk_analyzer.save(risk_register, context)
         except Exception as exc:
             logger.error("Risk Register generation failed: %s", exc)
@@ -607,9 +607,9 @@ def render_strategy():
         st.markdown("#### 📋 Generating Test Strategy...")
         strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
         try:
-            strategy = st.write_stream(
+            strategy = clean_markdown_html(st.write_stream(
                 agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
-            )
+            ))
             output_path = generator.save(strategy, context)
         except Exception as exc:
             logger.error("Test Strategy generation failed: %s", exc)
@@ -625,9 +625,9 @@ def render_strategy():
         st.markdown("#### 📝 Generating Test Plan...")
         test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
         try:
-            test_plan = st.write_stream(
+            test_plan = clean_markdown_html(st.write_stream(
                 agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
-            )
+            ))
             test_plan_path = test_plan_generator.save(test_plan, context)
         except Exception as exc:
             logger.error("Test Plan generation failed: %s", exc)

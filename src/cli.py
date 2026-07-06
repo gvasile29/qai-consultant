@@ -18,7 +18,7 @@ from rich.table import Table
 from rich.text import Text
 from rich import print as rprint
 
-from agent import QAIAgent, QAIConnectionError, QAIModelError, QAIKnowledgeBaseError
+from agent import QAIAgent, QAIConnectionError, QAIModelError, QAIKnowledgeBaseError, clean_markdown_html
 from dialogue import DialogueManager
 from strategy_generator import StrategyGenerator
 from logger import setup_logging, get_logger
@@ -174,7 +174,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
         for chunk in agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT):
             risk_buffer.append(chunk)
             live.update(Text("".join(risk_buffer)))
-    risk_register = "".join(risk_buffer)
+    risk_register = clean_markdown_html("".join(risk_buffer))
     risk_path = risk_analyzer.save(risk_register, context)
     console.print(f"\n[bold green]✅ Risk Register generated[/bold green] ({len(risk_register)} chars)\n")
 
@@ -192,7 +192,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
         for chunk in agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT):
             strategy_buffer.append(chunk)
             live.update(Text("".join(strategy_buffer)))
-    strategy = "".join(strategy_buffer)
+    strategy = clean_markdown_html("".join(strategy_buffer))
     strategy_path = generator.save(strategy, context)
     console.print(f"\n[bold green]✅ Test Strategy generated[/bold green] ({len(strategy)} chars)\n")
 
@@ -204,7 +204,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
         for chunk in agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT):
             test_plan_buffer.append(chunk)
             live.update(Text("".join(test_plan_buffer)))
-    test_plan = "".join(test_plan_buffer)
+    test_plan = clean_markdown_html("".join(test_plan_buffer))
     test_plan_path = test_plan_generator.save(test_plan, context)
     console.print(f"\n[bold green]✅ Test Plan generated[/bold green] ({len(test_plan)} chars)\n")
 
