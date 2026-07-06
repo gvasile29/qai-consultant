@@ -231,6 +231,9 @@ def show_sources(sources: list):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # emoji/markdown output; don't crash on cp1252/ascii
+
     print_banner()
     print_intro()
 
