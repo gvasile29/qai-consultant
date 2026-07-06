@@ -6,55 +6,17 @@
 |---|---|---|
 | Python | 3.10+ | Check: `python --version` |
 | Git | Any | For cloning the repo |
-| Ollama | Latest | LLM runtime — see below |
-| RAM | 8GB+ | Mistral 7B requires ~4GB |
-| Disk | 5GB+ | ChromaDB + model weights |
+| Mistral API key | — | Free tier at [console.mistral.ai](https://console.mistral.ai/) |
+| OpenRouter API key | — | Free tier at [openrouter.ai/keys](https://openrouter.ai/keys) — automatic fallback if Mistral is unavailable |
+| Pinecone API key + index | — | Free tier at [pinecone.io](https://www.pinecone.io/) |
+
+QAI Consultant runs entirely on cloud APIs — no local GPU, no Ollama, no local vector
+database. RAM/disk requirements are whatever `pip install` needs for the Python
+dependencies (a few hundred MB); there is no local model to download or cache.
 
 ---
 
-## Step 1 — Install Ollama
-
-Ollama runs the Mistral LLM locally on your machine.
-
-### Windows
-Download and run the installer from: https://ollama.ai/download/windows
-
-### macOS
-```bash
-brew install ollama
-```
-Or download from: https://ollama.ai/download/mac
-
-### Linux
-```bash
-curl -fsSL https://ollama.ai/install.sh | sh
-```
-
-**Verify installation:**
-```bash
-ollama --version
-```
-
----
-
-## Step 2 — Pull the Quantized Mistral Model
-
-```bash
-ollama pull mistral:7b-instruct-q4_0
-```
-
-This downloads ~4GB (4-bit quantized — ~3x faster on CPU than the default float16 `mistral` tag).
-Run it once — the model is cached locally.
-
-**Verify:**
-```bash
-ollama list
-# Should show: mistral:7b-instruct-q4_0   ...   4.1 GB
-```
-
----
-
-## Step 3 — Clone the Repository
+## Step 1 — Clone the Repository
 
 ```bash
 git clone https://github.com/gvasile29/qai-consultant.git
@@ -63,7 +25,7 @@ cd qai-consultant
 
 ---
 
-## Step 4 — Create a Virtual Environment (Recommended)
+## Step 2 — Create a Virtual Environment (Recommended)
 
 ### Windows
 ```bash
@@ -79,61 +41,69 @@ source venv/bin/activate
 
 ---
 
-## Step 5 — Install Dependencies
+## Step 3 — Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-This installs LangChain, ChromaDB, Sentence Transformers, Streamlit, and all other dependencies.
-First install may take 2-5 minutes as it downloads the embedding model (~90MB).
+This installs LangChain (embeddings only), Sentence Transformers, Streamlit, the
+Mistral/OpenAI/Pinecone SDKs, and all other runtime dependencies.
+
+For running the test suite or the `evals/` release gate, also install:
+```bash
+pip install -r requirements-dev.txt
+```
 
 ---
 
-## Step 6 — Add Knowledge Base Files
+## Step 4 — Set Up API Keys
 
-QAI Consultant needs QA knowledge documents to generate strategies.
+Copy the example env file and fill in your four keys:
 
-### Required folder structure
-```
-knowledge_base/
-├── standards/          ← QA standards (ISTQB, OWASP, ISO, etc.)
-├── methodologies/      ← Testing methodologies (Agile, Risk-Based, etc.)
-├── articles/           ← QA articles and guides
-└── expert_knowledge/   ← Domain-specific expert knowledge
+```bash
+cp .env.example .env
 ```
 
-### What to add
-- **ISTQB syllabus PDFs** — download free from https://www.istqb.org
-- **OWASP guides** — download free from https://owasp.org
-- **Your own MD files** — see [CONTRIBUTING.md](CONTRIBUTING.md)
+```
+MISTRAL_API_KEY=...
+OPENROUTER_API_KEY=...
+PINECONE_API_KEY=...
+PINECONE_INDEX_NAME=qai-consultant
+```
 
-> The `methodologies/` and `expert_knowledge/` folders already contain
-> markdown files included in the repository.
+| Key | Where to get it |
+|---|---|
+| `MISTRAL_API_KEY` | [console.mistral.ai](https://console.mistral.ai/) → API Keys |
+| `OPENROUTER_API_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `PINECONE_API_KEY` | [pinecone.io](https://www.pinecone.io/) → API Keys |
+| `PINECONE_INDEX_NAME` | Name of a Pinecone index you create (dimensions: **384**, metric: **cosine**, to match the `all-MiniLM-L6-v2` embedding model) |
+
+> Running on Streamlit Cloud instead? Add the same four keys to the app's
+> **Secrets** panel — `agent.py`'s `_get_secret()` checks Streamlit secrets first,
+> then falls back to `.env`.
 
 ---
 
-## Step 7 — Build the Knowledge Base
+## Step 5 — Build the Knowledge Base
 
 ```bash
 python src/ingest.py
 ```
 
-This processes all files in `knowledge_base/` and builds the ChromaDB vector store.
+This chunks every file in `knowledge_base/` (1000 chars, 200 overlap), embeds each
+chunk with `all-MiniLM-L6-v2`, and upserts them into your Pinecone index. Re-run this
+any time you add or change knowledge base files — there is no automatic watcher.
 
-- First run: **5-10 minutes** (downloads embedding model + processes all documents)
-- Subsequent runs: faster (only new/changed files are re-processed)
-- Output: `chroma_db/` folder (gitignored)
-
-**Expected output:**
+**Expected output (truncated):**
 ```
-✅ Ingested 42 files → 6,486 chunks
-ChromaDB ready at: chroma_db/
+Ingested N files → M chunks
+Upserted to Pinecone index 'qai-consultant' (namespace: knowledge-base)
 ```
 
 ---
 
-## Step 8 — Run QAI Consultant
+## Step 6 — Run QAI Consultant
 
 ### Option A — Terminal UI (CLI)
 ```bash
@@ -150,62 +120,52 @@ Then open: http://localhost:8501
 
 ## Verification Checklist
 
-- [ ] `ollama list` shows `mistral:7b-instruct-q4_0`
+- [ ] `.env` has all four keys filled in (or Streamlit secrets configured)
 - [ ] `python src/ingest.py` completes without errors
-- [ ] `chroma_db/` folder exists and is non-empty
 - [ ] `python src/cli.py` shows the QAI Consultant banner
 - [ ] First question appears: "What is the name of your project?"
+- [ ] Answering all 11 questions and confirming produces a Risk Register, Effort
+      Estimation Report, Test Strategy, and Test Plan
 
 ---
 
 ## Troubleshooting
 
-### ❌ "Ollama is not running"
-```bash
-# Start Ollama in a separate terminal
-ollama serve
-```
-Keep this terminal open while using QAI Consultant.
+### ❌ "Missing required secret: 'MISTRAL_API_KEY'" (or any other key)
+Add the missing key to `.env` (local) or your Streamlit Cloud app's Secrets panel
+(deployed). See Step 4.
 
-### ❌ "Model 'mistral:7b-instruct-q4_0' not found"
-```bash
-ollama pull mistral:7b-instruct-q4_0
-```
-
-### ❌ "Knowledge base not found"
+### ❌ "Knowledge base is empty" / retrieval returns nothing
 ```bash
 python src/ingest.py
 ```
-Make sure you have files in `knowledge_base/` first.
+Make sure you have files in `knowledge_base/` and that `PINECONE_INDEX_NAME` points
+at the same index you just ingested into.
 
-### ❌ "Knowledge base is empty"
-Add documents to `knowledge_base/` subfolders, then re-run `python src/ingest.py`.
+### ❌ "Both Mistral API and OpenRouter are unavailable"
+Both providers failed for this request — check that both keys are valid and have
+remaining credits/quota. `LLMClient` tries Mistral first and only raises this once
+the OpenRouter fallback has also failed.
 
-### ❌ Slow generation (>1 minute per section)
-Normal on first call — model loading into memory.
-After the first generation, subsequent calls in the same session are faster (~30–60s each).
-Expected total time for all three documents: **2–3 minutes** on CPU with the quantized model.
-
-### ❌ Windows: encoding errors during ingest
-```bash
-# Set UTF-8 encoding
-set PYTHONIOENCODING=utf-8
-python src/ingest.py
-```
-
-### ❌ pip install fails on sentence-transformers
+### ❌ pip install fails on sentence-transformers / torch
 ```bash
 pip install --upgrade pip
-pip install sentence-transformers
+pip install -r requirements.txt
 ```
+On some platforms `sentence-transformers` needs a recent `pip` to resolve its
+`torch` dependency correctly.
+
+### ❌ Pinecone dimension/metric mismatch on ingest
+Your index must be created with **dimension 384** and **metric cosine** — these
+match `sentence-transformers/all-MiniLM-L6-v2`, the embedding model both `ingest.py`
+and the app use. A mismatched index will reject upserts or return irrelevant matches.
 
 ---
 
 ## Windows-Specific Notes
 
 - Use `python` instead of `python3`
-- Use `venv\Scripts\activate` (backslash) to activate virtual environment
-- If Ollama doesn't start: run as Administrator or check Windows Defender firewall
+- Use `venv\Scripts\activate` (backslash) to activate the virtual environment
 - Long path issues: enable long paths in Windows 10/11 settings
 
 ---
@@ -213,8 +173,6 @@ pip install sentence-transformers
 ## macOS-Specific Notes
 
 - Use `python3` and `pip3`
-- On Apple Silicon (M1/M2/M3): Ollama runs natively — no GPU config needed
-- If `brew install ollama` fails: use the direct download from ollama.ai
 
 ---
 
@@ -223,4 +181,4 @@ pip install sentence-transformers
 Open an issue on GitHub with:
 1. Your OS and Python version
 2. The exact error message
-3. Output of `ollama list`
+3. Whether the failure happens during `ingest.py`, the CLI, or the Streamlit app

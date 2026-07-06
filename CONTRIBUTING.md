@@ -111,7 +111,7 @@ Use the prompts in `knowledge_base/expert_knowledge/` as a guide.
 ## After Adding Files
 
 ```bash
-# Re-ingest to update ChromaDB
+# Re-ingest to update the Pinecone index
 python src/ingest.py
 
 # Verify the new content was ingested
@@ -119,8 +119,8 @@ python src/ingest.py
 # ✅ Ingested: your_file.md → N chunks
 ```
 
-If the app is already running, the **auto re-ingest watcher** (v0.5) will
-detect new files and ingest them automatically within 3 seconds.
+There is no automatic file watcher — re-run `python src/ingest.py` any time you
+add or change a knowledge base file, including while the app is already running.
 
 ---
 
