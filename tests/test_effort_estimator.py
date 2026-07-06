@@ -547,6 +547,24 @@ def test_cli_generate_strategy_returns_effort_keys():
     print("  PASS: generate_strategy() returns effort_report and effort_path")
 
 
+def test_cli_main_reconfigures_stdout_utf8():
+    """main() reconfigures stdout to UTF-8 before any output.
+
+    Without this, a non-UTF-8 Windows console (e.g. codepage 850/1252, or any
+    redirected/piped stdout) crashes with UnicodeEncodeError the moment Rich
+    renders its first spinner/emoji — before the dialogue even starts. Verified
+    live: `python src/cli.py` piped to a file crashes without this guard, and
+    completes successfully with it. Mirrors the same guard already present in
+    evals/run.py and evals/rag.py.
+    """
+    source = read_cli_source()
+    fn = extract_function(source, "main")
+
+    assert "sys.stdout.reconfigure" in fn, \
+        "main() no longer reconfigures stdout to UTF-8 — Windows console crash regression"
+    print("  PASS: main() reconfigures stdout to UTF-8 before any output")
+
+
 # ── LLM smoke test ───────────────────────────────────────────────────────────
 
 def test_full_estimate_bmw(agent):
