@@ -78,6 +78,17 @@ def run_dialogue(dialogue: DialogueManager) -> bool:
 
         console.print()
 
+    # Optional free-text context — Enter to skip
+    console.print("[bold]Anything else QAI should know?[/bold] [dim](optional — Enter to skip)[/dim]")
+    console.print("[dim]  → e.g., legacy constraints, third-party dependencies, team specifics[/dim]")
+    while True:
+        answer = Prompt.ask("  [cyan]Additional context[/cyan]", default="", show_default=False)
+        result = dialogue.set_additional_context(answer)
+        if result.valid:
+            break
+        console.print(f"[yellow]  ⚠️  {result.error}[/yellow]")
+    console.print()
+
     return True
 
 
@@ -100,6 +111,7 @@ def show_context_summary(dialogue: DialogueManager):
     table.add_row("Known Risks", context.known_risks[:80] + "..." if len(context.known_risks) > 80 else context.known_risks)
     table.add_row("Existing Automation", context.existing_automation)
     table.add_row("Compliance", context.compliance_requirements)
+    table.add_row("Additional Context", (context.additional_context[:80] + "..." if len(context.additional_context) > 80 else context.additional_context) or "—")
 
     console.print()
     console.print(table)
@@ -280,6 +292,24 @@ def _run_main_loop(agent: QAIAgent):
 
         # Show summary
         show_context_summary(dialogue)
+
+        # Offer a second chance to edit the additional context before generating
+        edit_extra = Prompt.ask(
+            "[bold]Edit the additional context before generating?[/bold]",
+            choices=["yes", "no"],
+            default="no"
+        )
+        if edit_extra == "yes":
+            current = dialogue.get_context().additional_context
+            console.print(f"[dim]Current additional context:[/dim] {current or '—'}")
+            console.print("[dim]Enter the full replacement text (empty input clears it).[/dim]")
+            while True:
+                answer = Prompt.ask("  [cyan]Additional context[/cyan]", default="", show_default=False)
+                result = dialogue.set_additional_context(answer)
+                if result.valid:
+                    break
+                console.print(f"[yellow]  ⚠️  {result.error}[/yellow]")
+            show_context_summary(dialogue)
 
         # Confirm before generating
         confirm = Prompt.ask(

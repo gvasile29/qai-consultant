@@ -43,6 +43,7 @@ from dialogue import (
     InputValidator, DialogueManager, ProjectContext,
     QUESTIONS, ValidationResult,
     MAX_ANSWER_LENGTH, MAX_PROJECT_NAME_LENGTH, MIN_DESCRIPTION_LENGTH,
+    MAX_ADDITIONAL_CONTEXT_LENGTH,
 )
 
 
@@ -187,6 +188,88 @@ def test_answer_too_long_invalid():
     print(f"  PASS: {len(long_answer)}-char answer → invalid (error: '{result.error[:60]}...')")
 
 
+# ── Additional context tests ──────────────────────────────────────────────────
+
+def test_additional_context_empty_valid():
+    """validate_additional_context: empty/whitespace → valid with cleaned='' (field is optional)."""
+    for raw in ["", "   ", "\n\t "]:
+        result = _v().validate_additional_context(raw)
+        assert result.valid, f"Expected valid for {raw!r}, got error: '{result.error}'"
+        assert result.cleaned == "", f"Expected cleaned='' for {raw!r}, got '{result.cleaned}'"
+    print("  PASS: empty/whitespace additional context → valid, cleaned=''")
+
+
+def test_additional_context_length_boundary():
+    """validate_additional_context: exactly 2000 chars valid; 2001 invalid with 'too long'."""
+    at_limit = "x" * MAX_ADDITIONAL_CONTEXT_LENGTH
+    result = _v().validate_additional_context(at_limit)
+    assert result.valid, f"Expected valid at {MAX_ADDITIONAL_CONTEXT_LENGTH} chars, got: '{result.error}'"
+
+    over_limit = "x" * (MAX_ADDITIONAL_CONTEXT_LENGTH + 1)
+    result = _v().validate_additional_context(over_limit)
+    assert not result.valid, f"Expected invalid at {len(over_limit)} chars"
+    assert "too long" in result.error.lower(), \
+        f"Expected 'too long' in error, got: '{result.error}'"
+    print(f"  PASS: {MAX_ADDITIONAL_CONTEXT_LENGTH} chars valid; {MAX_ADDITIONAL_CONTEXT_LENGTH + 1} → invalid ('too long')")
+
+
+def test_additional_context_dangerous_chars_stripped():
+    """validate_additional_context: dangerous chars (<>{}) stripped, result still valid."""
+    result = _v().validate_additional_context("legacy system<>{} with SOAP APIs")
+    assert result.valid, f"Expected valid after stripping, got: '{result.error}'"
+    for ch in "<>{}":
+        assert ch not in result.cleaned, \
+            f"Dangerous char '{ch}' should be stripped from '{result.cleaned}'"
+    print(f"  PASS: dangerous chars stripped; cleaned='{result.cleaned}'")
+
+
+def test_set_additional_context_valid_stored():
+    """set_additional_context: valid input lands on context.additional_context."""
+    dm = DialogueManager()
+    result = dm.set_additional_context("The backend depends on a legacy SOAP service.")
+    assert result.valid, f"Expected valid, got error: '{result.error}'"
+    assert dm.context.additional_context == "The backend depends on a legacy SOAP service.", \
+        f"Expected stored text, got '{dm.context.additional_context}'"
+    print("  PASS: set_additional_context() stores valid text on the context")
+
+
+def test_set_additional_context_invalid_keeps_prior_value():
+    """set_additional_context: invalid input returns valid=False and leaves the prior value intact."""
+    dm = DialogueManager()
+    dm.set_additional_context("prior value")
+    result = dm.set_additional_context("x" * (MAX_ADDITIONAL_CONTEXT_LENGTH + 1))
+    assert not result.valid, "Expected valid=False for over-length input"
+    assert dm.context.additional_context == "prior value", \
+        f"Prior value should be untouched, got '{dm.context.additional_context}'"
+    print("  PASS: invalid set_additional_context() leaves prior value intact")
+
+
+def test_to_summary_includes_additional_context_when_set():
+    """to_summary() includes the ADDITIONAL CONTEXT section only when the field is set."""
+    ctx = ProjectContext(project_name="MyProject")
+    assert "ADDITIONAL CONTEXT FROM THE USER" not in ctx.to_summary(), \
+        "Empty additional_context must not add a section to to_summary()"
+
+    ctx.additional_context = "Depends on a legacy SOAP service."
+    summary = ctx.to_summary()
+    assert "ADDITIONAL CONTEXT FROM THE USER" in summary, \
+        "Section header missing from to_summary() when additional_context is set"
+    assert "Depends on a legacy SOAP service." in summary, \
+        "Additional context text missing from to_summary()"
+    print("  PASS: to_summary() includes section when set, omits when empty")
+
+
+def test_reset_clears_additional_context():
+    """reset() clears additional_context along with the rest of the context."""
+    dm = DialogueManager()
+    dm.set_additional_context("some extra context here")
+    assert dm.context.additional_context, "Precondition: additional_context should be set"
+    dm.reset()
+    assert dm.context.additional_context == "", \
+        f"After reset: expected '', got '{dm.context.additional_context}'"
+    print("  PASS: reset() clears additional_context")
+
+
 # ── DialogueManager tests ─────────────────────────────────────────────────────
 
 def test_11_questions_defined():
@@ -312,6 +395,21 @@ if __name__ == "__main__":
             test_dangerous_chars_stripped),
         ("answer > 500 chars → invalid, 'too long' in error",
             test_answer_too_long_invalid),
+        # Additional context
+        ("additional_context: empty/whitespace → valid, cleaned=''",
+            test_additional_context_empty_valid),
+        ("additional_context: 2000 chars valid, 2001 → 'too long'",
+            test_additional_context_length_boundary),
+        ("additional_context: dangerous chars stripped, still valid",
+            test_additional_context_dangerous_chars_stripped),
+        ("set_additional_context: valid text stored on context",
+            test_set_additional_context_valid_stored),
+        ("set_additional_context: invalid input keeps prior value",
+            test_set_additional_context_invalid_keeps_prior_value),
+        ("to_summary(): section present when set, absent when empty",
+            test_to_summary_includes_additional_context_when_set),
+        ("reset() clears additional_context",
+            test_reset_clears_additional_context),
         # DialogueManager
         ("QUESTIONS list has exactly 11 entries",
             test_11_questions_defined),

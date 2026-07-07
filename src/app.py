@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parent))
 
 import streamlit as st
 from agent import QAIAgent, clean_markdown_html
-from dialogue import DialogueManager, QUESTIONS
+from dialogue import DialogueManager, InputValidator, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer
 from effort_estimator import EffortEstimator
@@ -181,6 +181,8 @@ def render_sidebar():
                     del st.session_state[key]
             for q in QUESTIONS:
                 st.session_state.pop(f"input_{q['key']}", None)
+            st.session_state.pop("input_additional_context", None)
+            st.session_state.pop("review_additional_context", None)
             st.rerun()
 
         st.markdown("[⭐ Star on GitHub](https://github.com/gvasile29/qai-consultant)", unsafe_allow_html=True)
@@ -385,11 +387,23 @@ def render_dialogue():
             )
             st.markdown("###")
 
+        # Optional free-text context — deliberately NOT in st.session_state.answers:
+        # the progress bar divides by len(QUESTIONS) and this field must not count.
+        st.markdown("**Anything else QAI should know? (optional)**")
+        st.caption("💡 e.g., legacy constraints, third-party dependencies, team specifics — used to tailor all generated documents")
+        st.text_area(
+            label="Anything else QAI should know? (optional)",
+            key="input_additional_context",
+            max_chars=2000,
+            height=120,
+            label_visibility="collapsed",
+        )
+        st.markdown("###")
+
         submitted = st.form_submit_button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
 
     if submitted:
         # Validate all answers using InputValidator
-        from dialogue import InputValidator
         validator = InputValidator()
         errors = []
         cleaned_answers = {}
@@ -403,6 +417,12 @@ def render_dialogue():
             else:
                 cleaned_answers[key] = result.cleaned
 
+        extra_result = validator.validate_additional_context(
+            st.session_state.get("input_additional_context", "")
+        )
+        if not extra_result.valid:
+            errors.append(f"**Additional context**: {extra_result.error}")
+
         if errors:
             st.warning("⚠️ Please fix the following before continuing:")
             for err in errors:
@@ -412,6 +432,10 @@ def render_dialogue():
             dialogue = DialogueManager()
             for question in QUESTIONS:
                 dialogue.submit_answer(cleaned_answers[question["key"]])
+            dialogue.set_additional_context(extra_result.cleaned)
+            # Refresh the review pre-fill — safe here because the review
+            # widget is not instantiated during this rerun.
+            st.session_state["review_additional_context"] = extra_result.cleaned
             st.session_state.dialogue = dialogue
             st.session_state.current_step = "review"
             st.rerun()
@@ -452,16 +476,42 @@ def render_review():
     st.markdown("**Project Description**")
     st.info(context.project_description)
 
+    st.markdown("**Additional Context**")
+    # Seed-if-absent: passing value= when the key already exists in session
+    # state would trigger Streamlit's "default value + Session State" warning.
+    if "review_additional_context" not in st.session_state:
+        st.session_state["review_additional_context"] = context.additional_context
+    st.text_area(
+        label="Additional context (optional — edit, extend, or clear before generating)",
+        key="review_additional_context",
+        max_chars=2000,
+        height=120,
+    )
+
     st.markdown("---")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("← Go Back & Edit", use_container_width=True):
+            # Carry review edits back to the dialogue widget — safe here
+            # because the dialogue widget is not instantiated during this rerun.
+            st.session_state["input_additional_context"] = st.session_state.get(
+                "review_additional_context", ""
+            )
             st.session_state.current_step = "dialogue"
             st.rerun()
     with col2:
         if st.button("🤖 Generate Test Strategy", use_container_width=True, type="primary"):
-            st.session_state.current_step = "strategy"
-            st.rerun()
+            validator = InputValidator()
+            result = validator.validate_additional_context(
+                st.session_state.get("review_additional_context", "")
+            )
+            if not result.valid:
+                st.error(f"⚠️ Additional context: {result.error}")
+            else:
+                st.session_state.dialogue.set_additional_context(result.cleaned)
+                st.session_state["input_additional_context"] = result.cleaned
+                st.session_state.current_step = "strategy"
+                st.rerun()
 
 
 def _save_feedback(feedback_value: str, extra_note: str):
@@ -765,6 +815,8 @@ def render_strategy():
                 del st.session_state[key]
         for q in QUESTIONS:
             st.session_state.pop(f"input_{q['key']}", None)
+        st.session_state.pop("input_additional_context", None)
+        st.session_state.pop("review_additional_context", None)
         st.session_state.current_step = "intro"
         st.rerun()
 
