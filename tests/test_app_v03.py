@@ -303,6 +303,19 @@ def test_risk_analyzer_imported_at_module_level():
     print("  PASS: RiskAnalyzer imported at module level")
 
 
+def test_cleanup_blocks_do_not_clear_release_notes_seen():
+    """Neither 'Start Over' (render_sidebar) nor 'Generate Another Strategy'
+    (render_strategy) may clear release_notes_seen — it's a session-wide
+    'have you seen this' flag, not per-run state (inverse of
+    test_cleanup_blocks_clear_additional_context_keys, which asserts presence)."""
+    source = read_app_source()
+    for fn_name in ["render_sidebar", "render_strategy"]:
+        fn = extract_function(source, fn_name)
+        assert '"release_notes_seen"' not in fn, \
+            f"{fn_name}() must NOT clear release_notes_seen"
+    print("  PASS: neither cleanup block clears release_notes_seen")
+
+
 # ── Release Notes (v2.5.0) ────────────────────────────────────────────────────
 
 def test_sidebar_has_release_notes_expander():
