@@ -303,6 +303,80 @@ def test_risk_analyzer_imported_at_module_level():
     print("  PASS: RiskAnalyzer imported at module level")
 
 
+def test_cleanup_blocks_do_not_clear_release_notes_seen():
+    """Neither 'Start Over' (render_sidebar) nor 'Generate Another Strategy'
+    (render_strategy) may clear release_notes_seen — it's a session-wide
+    'have you seen this' flag, not per-run state (inverse of
+    test_cleanup_blocks_clear_additional_context_keys, which asserts presence)."""
+    source = read_app_source()
+    for fn_name in ["render_sidebar", "render_strategy"]:
+        fn = extract_function(source, fn_name)
+        assert '"release_notes_seen"' not in fn, \
+            f"{fn_name}() must NOT clear release_notes_seen"
+    print("  PASS: neither cleanup block clears release_notes_seen")
+
+
+# ── Release Notes (v2.5.0) ────────────────────────────────────────────────────
+
+def test_sidebar_has_release_notes_expander():
+    """render_sidebar() has a 'Release Notes' expander rendering load_changelog()'s output."""
+    fn = extract_function(read_app_source(), "render_sidebar")
+    assert 'st.expander("📋 Release Notes")' in fn, \
+        "render_sidebar() is missing the '📋 Release Notes' expander"
+    assert "st.markdown(load_changelog())" in fn, \
+        "render_sidebar() must render load_changelog()'s output via st.markdown(...)"
+    print("  PASS: sidebar has a 'Release Notes' expander rendering load_changelog()")
+
+
+def test_load_changelog_reads_real_file():
+    """load_changelog() actually reads the real CHANGELOG.md once it exists."""
+    import app
+    app.load_changelog.clear()
+    content = app.load_changelog()
+    assert content.strip(), "load_changelog() returned empty content"
+    assert "2.5.0" in content, "load_changelog() content does not mention 2.5.0"
+    print("  PASS: load_changelog() reads the real CHANGELOG.md")
+
+
+def test_load_changelog_fallback_on_missing_file(monkeypatch):
+    """load_changelog() falls back to a plain string when the file is unreadable."""
+    import app
+    monkeypatch.setattr(app, "CHANGELOG_PATH", Path("Z:/definitely/does/not/exist/CHANGELOG.md"))
+    app.load_changelog.clear()
+    try:
+        content = app.load_changelog()
+        assert content == "_Release notes unavailable._", \
+            f"Expected fallback string, got: {content!r}"
+    finally:
+        app.load_changelog.clear()
+    print("  PASS: load_changelog() falls back gracefully on a missing file")
+
+
+def test_banner_exists_and_gates_on_release_notes_seen():
+    """main() shows the one-time banner gated on session_state.release_notes_seen."""
+    fn = extract_function(read_app_source(), "main")
+    assert 'st.session_state.get("release_notes_seen")' in fn, \
+        "main() does not check st.session_state.get('release_notes_seen')"
+    assert "st.session_state.release_notes_seen = True" in fn, \
+        "main() does not set release_notes_seen = True"
+    assert "st.info(" in fn and "Release Notes" in fn, \
+        "main() does not show the release-notes banner via st.info(...)"
+    print("  PASS: main() has the one-time release-notes banner gated on release_notes_seen")
+
+
+def test_banner_appears_before_render_sidebar_call():
+    """The banner check must run before render_sidebar() (ordering, like
+    test_review_writes_back_additional_context_before_generating)."""
+    fn = extract_function(read_app_source(), "main")
+    banner_pos = fn.find('st.session_state.get("release_notes_seen")')
+    sidebar_pos = fn.find("render_sidebar()")
+    assert banner_pos != -1, "banner gate not found in main()"
+    assert sidebar_pos != -1, "render_sidebar() call not found in main()"
+    assert banner_pos < sidebar_pos, \
+        "the release_notes_seen banner must run before render_sidebar() is called"
+    print("  PASS: banner check runs before render_sidebar() in main()")
+
+
 # ── LLM smoke test: both documents generated ─────────────────────────────────
 
 def test_both_documents_generated_and_stored(agent):
