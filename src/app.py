@@ -138,6 +138,23 @@ def load_agent():
         return None, f"❌ Unexpected error: {e}"
 
 
+# ── Changelog ──────────────────────────────────────────────────────────────────
+CHANGELOG_PATH = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
+
+
+@st.cache_data(show_spinner=False)
+def load_changelog() -> str:
+    """
+    Read CHANGELOG.md from the repo root once per session (cached — the file
+    doesn't change while a session is running). Returns a graceful fallback
+    string instead of crashing if the file is missing or unreadable.
+    """
+    try:
+        return CHANGELOG_PATH.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Could not read CHANGELOG.md: {e}")
+        return "_Release notes unavailable._"
+
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
@@ -145,6 +162,8 @@ def render_sidebar():
         st.markdown("## 🧪 QAI Consultant")
         st.markdown("AI-powered QA Architect")
         st.caption(f"v{__version__}")
+        with st.expander("📋 Release Notes"):
+            st.markdown(load_changelog())
         st.divider()
 
         st.markdown("### How it works")

@@ -303,6 +303,42 @@ def test_risk_analyzer_imported_at_module_level():
     print("  PASS: RiskAnalyzer imported at module level")
 
 
+# ── Release Notes (v2.5.0) ────────────────────────────────────────────────────
+
+def test_sidebar_has_release_notes_expander():
+    """render_sidebar() has a 'Release Notes' expander rendering load_changelog()'s output."""
+    fn = extract_function(read_app_source(), "render_sidebar")
+    assert 'st.expander("📋 Release Notes")' in fn, \
+        "render_sidebar() is missing the '📋 Release Notes' expander"
+    assert "st.markdown(load_changelog())" in fn, \
+        "render_sidebar() must render load_changelog()'s output via st.markdown(...)"
+    print("  PASS: sidebar has a 'Release Notes' expander rendering load_changelog()")
+
+
+def test_load_changelog_reads_real_file():
+    """load_changelog() actually reads the real CHANGELOG.md once it exists."""
+    import app
+    app.load_changelog.clear()
+    content = app.load_changelog()
+    assert content.strip(), "load_changelog() returned empty content"
+    assert "2.5.0" in content, "load_changelog() content does not mention 2.5.0"
+    print("  PASS: load_changelog() reads the real CHANGELOG.md")
+
+
+def test_load_changelog_fallback_on_missing_file(monkeypatch):
+    """load_changelog() falls back to a plain string when the file is unreadable."""
+    import app
+    monkeypatch.setattr(app, "CHANGELOG_PATH", Path("Z:/definitely/does/not/exist/CHANGELOG.md"))
+    app.load_changelog.clear()
+    try:
+        content = app.load_changelog()
+        assert content == "_Release notes unavailable._", \
+            f"Expected fallback string, got: {content!r}"
+    finally:
+        app.load_changelog.clear()
+    print("  PASS: load_changelog() falls back gracefully on a missing file")
+
+
 # ── LLM smoke test: both documents generated ─────────────────────────────────
 
 def test_both_documents_generated_and_stored(agent):
