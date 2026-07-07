@@ -910,6 +910,10 @@ def main():
     if st.session_state.get("agent") is None:
         st.session_state.agent = agent
 
+    if not st.session_state.get("release_notes_seen"):
+        st.session_state.release_notes_seen = True
+        st.info(f"✨ Updated to v{__version__} — see the sidebar's **Release Notes** for what's new.")
+
     render_sidebar()
 
     step = st.session_state.get("current_step", "intro")

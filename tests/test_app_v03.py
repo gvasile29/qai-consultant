@@ -339,6 +339,31 @@ def test_load_changelog_fallback_on_missing_file(monkeypatch):
     print("  PASS: load_changelog() falls back gracefully on a missing file")
 
 
+def test_banner_exists_and_gates_on_release_notes_seen():
+    """main() shows the one-time banner gated on session_state.release_notes_seen."""
+    fn = extract_function(read_app_source(), "main")
+    assert 'st.session_state.get("release_notes_seen")' in fn, \
+        "main() does not check st.session_state.get('release_notes_seen')"
+    assert "st.session_state.release_notes_seen = True" in fn, \
+        "main() does not set release_notes_seen = True"
+    assert "st.info(" in fn and "Release Notes" in fn, \
+        "main() does not show the release-notes banner via st.info(...)"
+    print("  PASS: main() has the one-time release-notes banner gated on release_notes_seen")
+
+
+def test_banner_appears_before_render_sidebar_call():
+    """The banner check must run before render_sidebar() (ordering, like
+    test_review_writes_back_additional_context_before_generating)."""
+    fn = extract_function(read_app_source(), "main")
+    banner_pos = fn.find('st.session_state.get("release_notes_seen")')
+    sidebar_pos = fn.find("render_sidebar()")
+    assert banner_pos != -1, "banner gate not found in main()"
+    assert sidebar_pos != -1, "render_sidebar() call not found in main()"
+    assert banner_pos < sidebar_pos, \
+        "the release_notes_seen banner must run before render_sidebar() is called"
+    print("  PASS: banner check runs before render_sidebar() in main()")
+
+
 # ── LLM smoke test: both documents generated ─────────────────────────────────
 
 def test_both_documents_generated_and_stored(agent):
