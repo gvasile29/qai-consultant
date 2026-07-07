@@ -255,6 +255,44 @@ def test_sidebar_start_over_clears_risk_keys():
     print(f"        {EXPECTED_KEYS}")
 
 
+def test_dialogue_has_additional_context_field():
+    """render_dialogue() defines the optional additional-context text area with the 2000-char cap."""
+    fn = extract_function(read_app_source(), "render_dialogue")
+    assert "input_additional_context" in fn, \
+        "render_dialogue() is missing the input_additional_context widget"
+    assert "max_chars=2000" in fn, \
+        "additional-context text area should cap input at 2000 chars"
+    print("  PASS: render_dialogue() has input_additional_context with max_chars=2000")
+
+
+def test_review_writes_back_additional_context_before_generating():
+    """render_review() must call set_additional_context BEFORE transitioning to the
+    strategy step, so review-stage edits reach the generation prompts."""
+    fn = extract_function(read_app_source(), "render_review")
+    assert "review_additional_context" in fn, \
+        "render_review() is missing the review_additional_context widget"
+    set_pos = fn.find("set_additional_context")
+    step_pos = fn.find('current_step = "strategy"')
+    assert set_pos != -1, "render_review() never calls set_additional_context"
+    assert step_pos != -1, "render_review() never transitions to the strategy step"
+    assert set_pos < step_pos, \
+        "set_additional_context must run before the transition to the strategy step"
+    print("  PASS: render_review() writes back additional context before current_step = 'strategy'")
+
+
+def test_cleanup_blocks_clear_additional_context_keys():
+    """Both cleanup blocks (sidebar 'Start Over' and 'Generate Another Strategy')
+    must clear input_additional_context and review_additional_context — the
+    `for q in QUESTIONS` pop-loop does not cover them."""
+    source = read_app_source()
+    for fn_name in ["render_sidebar", "render_strategy"]:
+        fn = extract_function(source, fn_name)
+        for key in ["input_additional_context", "review_additional_context"]:
+            assert f'"{key}"' in fn, \
+                f"{fn_name}() cleanup is missing '{key}'"
+    print("  PASS: both cleanup blocks clear input_additional_context + review_additional_context")
+
+
 def test_risk_analyzer_imported_at_module_level():
     """RiskAnalyzer is imported at module level in app.py (not lazily)."""
     source = read_app_source()
@@ -357,6 +395,12 @@ if __name__ == "__main__":
             test_generate_another_cleanup_logic),
         ("Sidebar 'Start Over' gap fixed — now clears all risk keys",
             test_sidebar_start_over_clears_risk_keys),
+        ("render_dialogue has additional-context field (max_chars=2000)",
+            test_dialogue_has_additional_context_field),
+        ("render_review writes back additional context before generating",
+            test_review_writes_back_additional_context_before_generating),
+        ("both cleanup blocks clear additional-context keys",
+            test_cleanup_blocks_clear_additional_context_keys),
         ("RiskAnalyzer imported at module level",
             test_risk_analyzer_imported_at_module_level),
     ]

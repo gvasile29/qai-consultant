@@ -497,6 +497,10 @@ class EffortEstimator:
         capacity_section = self._build_capacity_section(data)
 
         # Ask LLM for narrative sections only
+        additional_ctx_line = (
+            f"ADDITIONAL CONTEXT FROM THE USER: {context.additional_context}\n"
+            if context.additional_context else ""
+        )
         narrative_prompt = f"""
 You are QAI Consultant, a senior QA Architect. Based on the following effort estimation data,
 write concise professional narrative for these sections:
@@ -506,7 +510,7 @@ METHODOLOGY: {context.methodology}
 QA TEAM: {context.team_qa_size} QA engineers
 TIMELINE: {context.timeline}
 COMPLIANCE: {context.compliance_requirements}
-TOTAL MULTIPLIERS APPLIED: {data.total_multiplier}%
+{additional_ctx_line}TOTAL MULTIPLIERS APPLIED: {data.total_multiplier}%
 FINAL EFFORT RANGE: {data.final_effort_min}–{data.final_effort_max} person-days
 CONFIDENCE: {data.confidence_level}
 CAPACITY GAP: {"SURPLUS of " + str(data.capacity_gap) + " days" if data.capacity_gap >= 0 else "DEFICIT of " + str(abs(data.capacity_gap)) + " days"}

@@ -17,6 +17,7 @@ MIN_ANSWER_LENGTH = 2          # minimum characters for most fields
 MIN_DESCRIPTION_LENGTH = 10    # minimum for free-text description fields
 MAX_ANSWER_LENGTH = 500        # maximum characters for any field
 MAX_PROJECT_NAME_LENGTH = 50   # used in filenames
+MAX_ADDITIONAL_CONTEXT_LENGTH = 2000   # optional free-text additional context
 
 # Characters invalid in filenames (stripped from project_name)
 INVALID_FILENAME_CHARS = r'[/\\:*?"<>|]'
@@ -156,6 +157,29 @@ class InputValidator:
             )
         return ValidationResult(valid=True, cleaned=value)
 
+    def validate_additional_context(self, answer: str) -> ValidationResult:
+        """Validate the optional free-text additional context field.
+
+        Unlike validate(), an empty answer is valid (the field is optional)
+        and the length cap is MAX_ADDITIONAL_CONTEXT_LENGTH, not MAX_ANSWER_LENGTH.
+        """
+        cleaned = answer.strip()
+        if not cleaned:
+            return ValidationResult(valid=True, cleaned="")
+
+        original = cleaned
+        cleaned = re.sub(DANGEROUS_CHARS, "", cleaned)
+        if cleaned != original:
+            stripped = set(original) - set(cleaned)
+            logger.warning(f"Stripped dangerous chars from field 'additional_context': {stripped}")
+
+        if len(cleaned) > MAX_ADDITIONAL_CONTEXT_LENGTH:
+            return ValidationResult(
+                valid=False,
+                error=f"Additional context is too long (max {MAX_ADDITIONAL_CONTEXT_LENGTH} characters). Please be more concise."
+            )
+        return ValidationResult(valid=True, cleaned=cleaned)
+
 
 # ── Project Context ────────────────────────────────────────────────────────────
 
@@ -173,10 +197,11 @@ class ProjectContext:
     known_risks: str = ""
     existing_automation: str = ""
     compliance_requirements: str = ""
+    additional_context: str = ""   # optional free text; generation prompts only, never RAG queries
 
     def to_summary(self) -> str:
         """Returns a human-readable summary of the project context."""
-        return f"""
+        summary = f"""
 PROJECT CONTEXT SUMMARY
 ========================
 Project Name:          {self.project_name}
@@ -191,6 +216,13 @@ Known Risks:           {self.known_risks}
 Existing Automation:   {self.existing_automation}
 Compliance:            {self.compliance_requirements}
 """.strip()
+        if self.additional_context:
+            summary += (
+                "\n\nADDITIONAL CONTEXT FROM THE USER\n"
+                "================================\n"
+                f"{self.additional_context}"
+            )
+        return summary
 
     def to_rag_query(self) -> str:
         """Builds a rich query string for RAG retrieval based on project context."""
@@ -346,6 +378,22 @@ class DialogueManager:
     def get_context(self) -> ProjectContext:
         """Returns the collected ProjectContext."""
         return self.context
+
+    def set_additional_context(self, text: str) -> ValidationResult:
+        """
+        Validate and store the optional free-text additional context.
+        Invalid input leaves the previously stored value untouched.
+
+        Args:
+            text: The raw user input (empty string clears the field).
+
+        Returns:
+            ValidationResult — check .valid before proceeding.
+        """
+        result = self._validator.validate_additional_context(text)
+        if result.valid:
+            self.context.additional_context = result.cleaned
+        return result
 
     def reset(self):
         """Reset the dialogue for a new session."""

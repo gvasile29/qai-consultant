@@ -137,6 +137,26 @@ def make_dummy_estimator():
     return EffortEstimator(_DummyAgent())
 
 
+def make_capturing_estimator():
+    """Create an EffortEstimator whose agent records every prompt it receives.
+
+    Returns (estimator, captured_prompts) — captured_prompts is a list appended
+    to on each ask() call.
+    """
+    captured = []
+
+    class _CapturingAgent:
+        def ask(self, prompt, system_prompt=""):
+            captured.append(prompt)
+            return (
+                "EXECUTIVE_SUMMARY: Test estimate generated.\n"
+                "ASSUMPTIONS: - Standard working days.\n"
+                "RECOMMENDATIONS: - Prioritize risk-based testing.\n"
+            )
+
+    return EffortEstimator(_CapturingAgent()), captured
+
+
 # ── Non-LLM Structural Tests ─────────────────────────────────────────────────
 
 def test_parse_duration_2years():
@@ -248,6 +268,30 @@ def test_parse_narrative_no_duplication_end_to_end():
     assert "Scope Stability" not in recommendations, "Assumptions leaked into recommendations"
     assert "213.6-594.6" in exec_summary
     print("  PASS: exec_summary / assumptions / recommendations are distinct, no cross-contamination")
+
+
+def test_narrative_prompt_includes_additional_context_when_set():
+    """The narrative prompt contains the ADDITIONAL CONTEXT line when the field is set."""
+    est, captured = make_capturing_estimator()
+    from dataclasses import replace
+    context = replace(BMW_EFFORT_CONTEXT, additional_context="Legacy SOAP backend must be regression-tested.")
+    est.estimate(context, "")
+    assert captured, "No prompt captured — narrative LLM call never happened"
+    assert "ADDITIONAL CONTEXT FROM THE USER" in captured[0], \
+        "ADDITIONAL CONTEXT line missing from narrative prompt when field is set"
+    assert "Legacy SOAP backend must be regression-tested." in captured[0], \
+        "Additional context text missing from narrative prompt"
+    print("  PASS: narrative prompt includes the ADDITIONAL CONTEXT line when set")
+
+
+def test_narrative_prompt_omits_additional_context_when_empty():
+    """The narrative prompt omits the ADDITIONAL CONTEXT line when the field is empty."""
+    est, captured = make_capturing_estimator()
+    est.estimate(BMW_EFFORT_CONTEXT, "")
+    assert captured, "No prompt captured — narrative LLM call never happened"
+    assert "ADDITIONAL CONTEXT FROM THE USER" not in captured[0], \
+        "ADDITIONAL CONTEXT line must not appear when the field is empty"
+    print("  PASS: narrative prompt omits the ADDITIONAL CONTEXT line when empty")
 
 
 def test_detect_project_type_embedded():
@@ -648,6 +692,10 @@ if __name__ == "__main__":
             test_extract_section_recommendations_extracted_cleanly),
         ("_parse_narrative: no cross-section duplication end-to-end",
             test_parse_narrative_no_duplication_end_to_end),
+        ("narrative prompt includes ADDITIONAL CONTEXT when set",
+            test_narrative_prompt_includes_additional_context_when_set),
+        ("narrative prompt omits ADDITIONAL CONTEXT when empty",
+            test_narrative_prompt_omits_additional_context_when_empty),
         ("project type 'automotive embedded system' -> 'embedded'",
             test_detect_project_type_embedded),
         ("methodology 'V-model' -> 'v-model'",
