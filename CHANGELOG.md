@@ -8,6 +8,9 @@ end-user terms. The format is based on [Keep a Changelog](https://keepachangelog
 ### Added
 - Expanded the knowledge base with a new "audit & evaluation" collection: process/test maturity models, audit methodology, security and regulatory compliance audits, and real-world case studies of process failures — so generated strategies can better anticipate what an audit will actually check for.
 
+### Fixed
+- Fixed a knowledge-base loading bug on Windows where several documents either failed to load entirely or were loaded with corrupted text (garbled special characters) due to an incorrect text encoding. All knowledge-base content is now loaded and indexed correctly.
+
 ## [2.5.0] - 2026-07-07
 
 ### Added
