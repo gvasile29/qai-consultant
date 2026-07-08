@@ -4,3 +4,14 @@
 {"query": "Standard structure for a test plan and test documentation deliverables", "expects": ["IEEE_829"], "judge": true}
 {"query": "Software product quality characteristics: maintainability, reliability, security", "expects": ["ISO_IEC_25010"], "judge": true}
 {"query": "Whole-team quadrant approach to quality across iterative delivery", "expects": ["Agile_Testing"], "judge": true}
+{"query": "How do we assess and grade our organization's test process maturity level?", "expects": ["TMMi_Test_Maturity_Model"], "judge": true}
+{"query": "What are the five maturity levels for grading an organization's software process capability?", "expects": ["CMMI_Process_Maturity"], "judge": true}
+{"query": "What's the standard framework for assessing whether our process meets defined capability levels?", "expects": ["ISO_IEC_33002_Process_Assessment"], "judge": true}
+{"query": "What are the recognized principles and best practices for conducting a management system audit?", "expects": ["ISO_19011_Audit_Guidelines"], "judge": true}
+{"query": "What techniques can we use to identify gaps between our current process and the target standard?", "expects": ["Audit_Gap_Analysis_Techniques"], "judge": true}
+{"query": "How should a compliance audit report be organized so findings and recommendations are clear to stakeholders?", "expects": ["Compliance_Audit_Report_Structure"], "judge": true}
+{"query": "What checklist should we use to audit an application's security posture against ASVS requirements?", "expects": ["Security_Compliance_Audit_ASVS"], "judge": true}
+{"query": "Which regulatory frameworks (like GDPR, HIPAA, SOX) should our compliance audit cover?", "expects": ["Regulatory_Compliance_Frameworks"], "judge": true}
+{"query": "What testing and risk-control failures led to the Knight Capital trading loss in 2012?", "expects": ["Case_Study_Knight_Capital_2012"], "judge": true}
+{"query": "How did software and sensor design flaws in the 737 MAX MCAS system contribute to the crashes?", "expects": ["Case_Study_Boeing_737MAX_MCAS"], "judge": true}
+{"query": "What went wrong in the CrowdStrike update that caused the global outage in 2024?", "expects": ["Case_Study_CrowdStrike_2024_Outage"], "judge": true}

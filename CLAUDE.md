@@ -115,6 +115,7 @@ All agent outputs are grounded in documents from `knowledge_base/`. Re-run `inge
 | `methodologies/` | `"Methodology"` |
 | `articles/` | `"Article"` |
 | `expert_knowledge/` | `"Expert Knowledge"` |
+| `evaluation_audit/` | `"Audit/Evaluation"` |
 
 ### Contents
 
@@ -124,9 +125,10 @@ All agent outputs are grounded in documents from `knowledge_base/`. Re-run `inge
 - **`methodologies/`** — 5 guides (Agile, BDD/TDD, Exploratory, Risk-Based, Test Pyramid); each ends with a "QAI Consultant application" section
 - **`expert_knowledge/`** — Contribution framework with PROMPT files for AI-assisted knowledge extraction interviews; `Scenario_TeamAlignment.md` is the first real scenario
 - **`articles/`** — 10 real-world AI QA case studies with quantified outcomes
+- **`evaluation_audit/`** — 11 docs covering process/test maturity models (TMMi, CMMI, ISO/IEC 33002), audit methodology (ISO 19011, gap analysis, audit report structure), security/compliance audit (OWASP ASVS, ISO 27001, SOC 2), and 3 real public failure case studies (Knight Capital, Boeing 737 MAX MCAS, CrowdStrike 2024 outage) illustrating process/audit gaps
 
 ### RAG indexing priority
-Index OWASP Top 10 MD + methodology MDs first (structured), then ISTQB/OWASP PDFs, then expert knowledge and articles as supplementary.
+Index OWASP Top 10 MD + methodology MDs + evaluation_audit/ MDs first (structured), then ISTQB/OWASP PDFs, then expert knowledge and articles as supplementary.
 
 ## Testing
 
@@ -194,6 +196,7 @@ python -m evals.rag                  # tier 2 standalone
 - **v2.0.1** ✅ Stability — 27 bugs fixed across 8 files: PERT normalization, template no-op, PDF freeze, run_count bypass, session state cleanup, filename sanitization, RAG fallback, per-step exception isolation, None guards
 - **v2.0.2** ✅ Stability — release-gate evals added (`evals/` — estimate integrity + RAG metrics, judged via the app's own `LLMClient`); 5 estimation/validation defects fixed (duration bounds, team restatement, name fidelity, confidence magnitude sanity, fabricated versions in Test Plan); session-state `AttributeError` crash fix; narrative duplication + truncation fixes; `LLM_NUM_PREDICT` raised to 4000; per-step generation isolation from LLM outages
 - **v2.5.0** ✅ In-app Release Notes — sidebar "📋 Release Notes" panel renders CHANGELOG.md (cached via `load_changelog()`); one-time session banner on load pointing users to it
+- **v2.5.1** ✅ Knowledge base — new `evaluation_audit/` content pillar (11 docs): TMMi/CMMI/ISO-IEC-33002 process maturity, ISO 19011 audit methodology + gap analysis + audit report structure, OWASP ASVS/ISO 27001/SOC 2 security-compliance audit, and 3 real public failure case studies (Knight Capital, Boeing 737 MAX MCAS, CrowdStrike 2024 outage); `ingest.py` category mapping + RAG indexing priority updated; 11 new `evals/rag_golden.jsonl` cases (context_recall@k=1.00, context_precision_mrr=0.79)
 - **v2.1** ⏸️ HuggingFace KB — `download_knowledge_base.py` *(deprioritized — Pinecone migration reduced value; most users use the live app directly)*
 - **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
 - **v3.0** Hosted version — shared KB, quality gate, VPS deployment

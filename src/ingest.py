@@ -44,10 +44,16 @@ PINECONE_NAMESPACE = "knowledge-base"
 UPSERT_BATCH_SIZE = 100
 
 # ── Supported file types ───────────────────────────────────────────────────────
+# NOTE: TextLoader must always be constructed with encoding="utf-8" explicitly.
+# Without it, TextLoader falls back to the platform-default encoding (e.g. cp1252
+# on Windows), which silently mojibakes almost every non-ASCII .md/.txt file in
+# knowledge_base/ and hard-crashes on a handful that contain byte sequences
+# undefined in cp1252. PyPDFLoader does not take an encoding kwarg and is left
+# untouched.
 SUPPORTED_EXTENSIONS = {
-    ".pdf": PyPDFLoader,
-    ".md": TextLoader,
-    ".txt": TextLoader,
+    ".pdf": lambda p: PyPDFLoader(p),
+    ".md": lambda p: TextLoader(p, encoding="utf-8"),
+    ".txt": lambda p: TextLoader(p, encoding="utf-8"),
 }
 
 # ── Source metadata mapping ────────────────────────────────────────────────────
@@ -56,6 +62,7 @@ SOURCE_CATEGORIES = {
     "methodologies": "Methodology",
     "articles": "Article",
     "expert_knowledge": "Expert Knowledge",
+    "evaluation_audit": "Audit/Evaluation",
 }
 
 
