@@ -56,6 +56,7 @@ SOURCE_CATEGORIES = {
     "methodologies": "Methodology",
     "articles": "Article",
     "expert_knowledge": "Expert Knowledge",
+    "evaluation_audit": "Audit/Evaluation",
 }
 
 
