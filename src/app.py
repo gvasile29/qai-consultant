@@ -22,6 +22,7 @@ from version import __version__
 from templates import TEMPLATES, TEMPLATE_OPTIONS
 from pdf_export import markdown_to_pdf
 from test_plan_generator import TestPlanGenerator
+from kb_manifest import KB_MANIFEST
 
 setup_logging()
 logger = get_logger(__name__)
@@ -156,6 +157,29 @@ def load_changelog() -> str:
         return "_Release notes unavailable._"
 
 
+# ── Knowledge Base panel ──────────────────────────────────────────────────────
+KNOWLEDGE_BASE_DIR = Path(__file__).resolve().parent.parent / "knowledge_base"
+
+
+@st.cache_data(show_spinner=False)
+def load_kb_sidebar_bullets() -> list[str]:
+    """
+    Build the "### Knowledge Base" bullet lines from KB_MANIFEST, keeping only
+    entries whose declared paths actually exist on disk under knowledge_base/.
+    Cached — the on-disk knowledge_base/ layout doesn't change while a
+    session is running, and re-checking Path.exists() on every rerun would be
+    wasted work (same convention as load_changelog() above).
+    """
+    bullets = []
+    for entry in KB_MANIFEST:
+        paths_exist = any(
+            (KNOWLEDGE_BASE_DIR / rel_path).exists() for rel_path in entry["paths"]
+        )
+        if paths_exist:
+            bullets.append(f"- {entry['emoji']} {entry['label']}")
+    return bullets
+
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
@@ -176,16 +200,7 @@ def render_sidebar():
 
         st.divider()
         st.markdown("### Knowledge Base")
-        st.markdown("""
-- 📘 ISTQB Syllabuses
-- 🔒 OWASP Testing Guides
-- 🚗 ISO 26262 & A-SPICE
-- 📋 IEEE 829
-- ⚙️ ISO/IEC 25010
-- 🤖 AI SDLC Adoption (2024–2025)
-- 📝 AI Test Planning (2025)
-- 🧠 Expert Knowledge
-        """)
+        st.markdown("\n".join(load_kb_sidebar_bullets()))
 
         st.divider()
         if st.button("🔄 Start Over", use_container_width=True):
