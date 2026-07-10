@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import RerunException, StopException
 from agent import QAIAgent, clean_markdown_html
 from dialogue import DialogueManager, InputValidator, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
@@ -690,6 +691,16 @@ def render_strategy():
                     agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
                 ))
                 risk_path = risk_analyzer.save(risk_register, context)
+            except (StopException, RerunException):
+                # Streamlit's own control-flow signals (e.g. a session
+                # disconnect/reconnect mid-stream) — never swallow these.
+                # Letting them propagate is what makes the resume-skip
+                # guards above actually work on the next run; catching them
+                # here as a normal error previously masked a real rerun as
+                # a fake "generation failed" and let execution barrel into
+                # the remaining stages, which is what racked up all these
+                # empty-message failures in a single burst.
+                raise
             except Exception as exc:
                 logger.error("Risk Register generation failed: %s", exc)
                 st.error(f"❌ Risk Register generation failed: {exc}")
@@ -706,6 +717,8 @@ def render_strategy():
                 with st.spinner("📊 Generating Effort Estimation..."):
                     effort_report, effort_data = estimator.estimate(context, risk_register)
                     effort_path = estimator.save(effort_report, context)
+            except (StopException, RerunException):
+                raise
             except Exception as exc:
                 logger.error("Effort Estimation generation failed: %s", exc)
                 st.error(f"❌ Effort Estimation generation failed: {exc}")
@@ -724,6 +737,8 @@ def render_strategy():
                     agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
                 ))
                 output_path = generator.save(strategy, context)
+            except (StopException, RerunException):
+                raise
             except Exception as exc:
                 logger.error("Test Strategy generation failed: %s", exc)
                 st.error(f"❌ Test Strategy generation failed: {exc}")
@@ -745,6 +760,8 @@ def render_strategy():
                     agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
                 ))
                 test_plan_path = test_plan_generator.save(test_plan, context)
+            except (StopException, RerunException):
+                raise
             except Exception as exc:
                 logger.error("Test Plan generation failed: %s", exc)
                 st.error(f"❌ Test Plan generation failed: {exc}")
