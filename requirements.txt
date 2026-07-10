@@ -7,7 +7,7 @@ markdown==3.8.1
 xhtml2pdf>=0.2.11
 nltk==3.9.4
 rich==13.7.1
-streamlit==1.37.0
+streamlit==1.59.1
 mistralai>=1.2.0
 openai>=2.44.0
 pinecone>=3.0.0
