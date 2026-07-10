@@ -248,13 +248,35 @@ def test_fixed_ordering_propagates_rerun_exception():
 
 def test_buggy_ordering_reproduces_the_original_bug():
     """Sanity check: confirms the ORIGINAL single-except pattern really did
-    swallow StopException — proving the bug was real and the fix's
-    before/after behavior differs."""
-    result = _simulate_stage_with_buggy_ordering(StopException())
-    assert result.startswith("caught-and-swallowed:"), \
-        "Expected the buggy ordering to swallow StopException (reproducing the original bug)"
-    print("  PASS: confirmed the pre-fix except ordering swallows StopException "
-          "(reproduces the original bug)")
+    swallow StopException on Streamlit 1.37 (the version pinned when this bug
+    was found and fixed) — proving the bug was real and the fix's
+    before/after behavior differs.
+
+    Streamlit later moved `ScriptControlException` to inherit from
+    `BaseException` instead of `Exception` (confirmed fixed by the time of
+    requirements.txt's current pin) — a bare `except Exception:` can no
+    longer catch it at all, regardless of clause ordering. This test adapts
+    to whichever behavior the installed Streamlit version actually has,
+    so it stays meaningful across the upgrade instead of asserting a
+    version-specific implementation detail that's no longer true."""
+    if issubclass(StopException, Exception):
+        # Pre-fix Streamlit (e.g. 1.37): ScriptControlException < Exception,
+        # so the naive except swallows it — this is the bug this whole file
+        # guards against.
+        result = _simulate_stage_with_buggy_ordering(StopException())
+        assert result.startswith("caught-and-swallowed:"), \
+            "Expected the buggy ordering to swallow StopException (reproducing the original bug)"
+        print("  PASS: confirmed the pre-fix except ordering swallows StopException "
+              "(reproduces the original bug)")
+    else:
+        # Post-fix Streamlit: ScriptControlException < BaseException, so
+        # `except Exception:` can't catch it even without our explicit
+        # re-raise clause — the upstream fix now does this for us too.
+        with pytest.raises(StopException):
+            _simulate_stage_with_buggy_ordering(StopException())
+        print("  PASS: installed Streamlit version already makes StopException a "
+              "BaseException — confirms the upstream architectural fix is in place, "
+              "our explicit re-raise clause is now defense-in-depth")
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────
