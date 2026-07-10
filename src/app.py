@@ -210,6 +210,7 @@ def render_sidebar():
                         "test_plan", "test_plan_path", "test_plan_sources",
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
+                        "generation_started", "results_complete",
                         "run_count", "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -578,7 +579,18 @@ def _save_feedback(feedback_value: str, extra_note: str):
 def render_strategy():
     MAX_RUNS_PER_SESSION = 3
 
-    if st.session_state.get("run_count", 0) >= MAX_RUNS_PER_SESSION:
+    # Gated on an explicit completion flag, not on any single stage's output
+    # (e.g. "strategy") — the pipeline has 4 sequential stages plus a PDF-bytes
+    # precompute after that, so a rerun landing between "strategy" finishing
+    # and the LAST step (PDF bytes) finishing must still resume, not fall
+    # through as "already done".
+    needs_generation = not st.session_state.get("results_complete", False)
+    generation_started = st.session_state.get("generation_started", False)
+
+    # Only block a *new* generation attempt on the run cap. A rerun that
+    # re-enters mid-generation (generation_started already True) must be
+    # allowed to resume — it's the same logical run, not a new one.
+    if needs_generation and not generation_started and st.session_state.get("run_count", 0) >= MAX_RUNS_PER_SESSION:
         st.warning(
             f"⚠️ You've used all {MAX_RUNS_PER_SESSION} free runs for this session. "
             "Refresh the page to start a new session."
@@ -593,12 +605,20 @@ def render_strategy():
         st.error("❌ Agent not initialised — please refresh the page.")
         st.stop()
 
-    if st.session_state.get("strategy") is None:
+    if needs_generation:
         from concurrent.futures import ThreadPoolExecutor
         from agent import RAG_K_GENERATION
         from risk_analyzer import build_risk_prompt, RISK_SYSTEM_PROMPT
 
-        st.session_state.run_count += 1
+        # A Streamlit rerun during the multi-minute streamed pipeline below
+        # (e.g. a websocket reconnect) re-enters this branch before `strategy`
+        # is set. Charge exactly one run per logical "Generate" click — not
+        # once per rerun — and resume below rather than restart, so an
+        # interrupted attempt doesn't burn the user's quota or redo
+        # already-completed steps.
+        if not generation_started:
+            st.session_state.generation_started = True
+            st.session_state.run_count += 1
 
         context = st.session_state.dialogue.get_context()
         generator = StrategyGenerator(agent)
@@ -660,73 +680,92 @@ def render_strategy():
         # become non-negligible under concurrent load) must fail that one
         # step with a clear message, not crash the whole page with a raw
         # traceback and discard whatever already generated successfully.
-        st.markdown("#### ⚠️ Generating Risk Register...")
-        risk_prompt = build_risk_prompt(context, agent.format_knowledge_context(risk_chunks))
-        try:
-            risk_register = clean_markdown_html(st.write_stream(
-                agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
-            ))
-            risk_path = risk_analyzer.save(risk_register, context)
-        except Exception as exc:
-            logger.error("Risk Register generation failed: %s", exc)
-            st.error(f"❌ Risk Register generation failed: {exc}")
-            risk_register, risk_path = "", None
-        st.session_state.risk_register = risk_register
-        st.session_state.risk_sources = risk_sources
-        st.session_state.risk_path = risk_path
+        # Each step is also skipped if a prior (interrupted) rerun already
+        # produced it, so a resumed run doesn't redo completed work.
+        if st.session_state.get("risk_register") is None:
+            st.markdown("#### ⚠️ Generating Risk Register...")
+            risk_prompt = build_risk_prompt(context, agent.format_knowledge_context(risk_chunks))
+            try:
+                risk_register = clean_markdown_html(st.write_stream(
+                    agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
+                ))
+                risk_path = risk_analyzer.save(risk_register, context)
+            except Exception as exc:
+                logger.error("Risk Register generation failed: %s", exc)
+                st.error(f"❌ Risk Register generation failed: {exc}")
+                risk_register, risk_path = "", None
+            st.session_state.risk_register = risk_register
+            st.session_state.risk_sources = risk_sources
+            st.session_state.risk_path = risk_path
+        else:
+            risk_register = st.session_state.risk_register
 
         # Effort Estimation (deterministic + short LLM narrative)
-        try:
-            with st.spinner("📊 Generating Effort Estimation..."):
-                effort_report, effort_data = estimator.estimate(context, risk_register)
-                effort_path = estimator.save(effort_report, context)
-        except Exception as exc:
-            logger.error("Effort Estimation generation failed: %s", exc)
-            st.error(f"❌ Effort Estimation generation failed: {exc}")
-            effort_report, effort_path = "", None
-        st.session_state.effort_report = effort_report
-        st.session_state.effort_path = effort_path
+        if st.session_state.get("effort_report") is None:
+            try:
+                with st.spinner("📊 Generating Effort Estimation..."):
+                    effort_report, effort_data = estimator.estimate(context, risk_register)
+                    effort_path = estimator.save(effort_report, context)
+            except Exception as exc:
+                logger.error("Effort Estimation generation failed: %s", exc)
+                st.error(f"❌ Effort Estimation generation failed: {exc}")
+                effort_report, effort_path = "", None
+            st.session_state.effort_report = effort_report
+            st.session_state.effort_path = effort_path
+        else:
+            effort_report = st.session_state.effort_report
 
         # Test Strategy (streaming)
-        st.markdown("#### 📋 Generating Test Strategy...")
-        strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
-        try:
-            strategy = clean_markdown_html(st.write_stream(
-                agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
-            ))
-            output_path = generator.save(strategy, context)
-        except Exception as exc:
-            logger.error("Test Strategy generation failed: %s", exc)
-            st.error(f"❌ Test Strategy generation failed: {exc}")
-            strategy, output_path = "", None
-        st.markdown("---")
-        st.session_state.strategy = strategy
-        st.session_state.sources = sources
-        st.session_state.output_path = output_path
+        if st.session_state.get("strategy") is None:
+            st.markdown("#### 📋 Generating Test Strategy...")
+            strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
+            try:
+                strategy = clean_markdown_html(st.write_stream(
+                    agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
+                ))
+                output_path = generator.save(strategy, context)
+            except Exception as exc:
+                logger.error("Test Strategy generation failed: %s", exc)
+                st.error(f"❌ Test Strategy generation failed: {exc}")
+                strategy, output_path = "", None
+            st.markdown("---")
+            st.session_state.strategy = strategy
+            st.session_state.sources = sources
+            st.session_state.output_path = output_path
+        else:
+            strategy = st.session_state.strategy
 
         # Test Plan (streaming)
         from test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
-        st.markdown("#### 📝 Generating Test Plan...")
-        test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
-        try:
-            test_plan = clean_markdown_html(st.write_stream(
-                agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
-            ))
-            test_plan_path = test_plan_generator.save(test_plan, context)
-        except Exception as exc:
-            logger.error("Test Plan generation failed: %s", exc)
-            st.error(f"❌ Test Plan generation failed: {exc}")
-            test_plan, test_plan_path = "", None
-        st.markdown("---")
-        st.session_state.test_plan = test_plan
-        st.session_state.test_plan_path = test_plan_path
-        st.session_state.test_plan_sources = test_plan_sources
+        if st.session_state.get("test_plan") is None:
+            st.markdown("#### 📝 Generating Test Plan...")
+            test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
+            try:
+                test_plan = clean_markdown_html(st.write_stream(
+                    agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
+                ))
+                test_plan_path = test_plan_generator.save(test_plan, context)
+            except Exception as exc:
+                logger.error("Test Plan generation failed: %s", exc)
+                st.error(f"❌ Test Plan generation failed: {exc}")
+                test_plan, test_plan_path = "", None
+            st.markdown("---")
+            st.session_state.test_plan = test_plan
+            st.session_state.test_plan_path = test_plan_path
+            st.session_state.test_plan_sources = test_plan_sources
+        else:
+            test_plan = st.session_state.test_plan
 
         # Pre-compute PDF bytes once — avoids regenerating on every re-render
-        st.session_state.risk_pdf_bytes = markdown_to_pdf(risk_register, "Risk Register")
-        st.session_state.effort_pdf_bytes = markdown_to_pdf(effort_report, "Effort Estimation")
-        st.session_state.strategy_pdf_bytes = markdown_to_pdf(strategy, "Test Strategy")
-        st.session_state.test_plan_pdf_bytes = markdown_to_pdf(test_plan, "Test Plan")
+        if st.session_state.get("risk_pdf_bytes") is None:
+            st.session_state.risk_pdf_bytes = markdown_to_pdf(risk_register, "Risk Register")
+            st.session_state.effort_pdf_bytes = markdown_to_pdf(effort_report, "Effort Estimation")
+            st.session_state.strategy_pdf_bytes = markdown_to_pdf(strategy, "Test Strategy")
+            st.session_state.test_plan_pdf_bytes = markdown_to_pdf(test_plan, "Test Plan")
+
+        # All 4 stages (and the PDF-bytes precompute) finished this pass —
+        # only NOW is it safe to stop re-entering this block on a rerun.
+        st.session_state.results_complete = True
 
     # ── Three Tabs ────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
@@ -844,7 +883,8 @@ def render_strategy():
                     "effort_report", "effort_path",
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
-                    "feedback_submitted", "_feedback_partial"]:
+                    "feedback_submitted", "_feedback_partial",
+                    "generation_started", "results_complete"]:
             if key in st.session_state:
                 del st.session_state[key]
         for q in QUESTIONS:
