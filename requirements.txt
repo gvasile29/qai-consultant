@@ -1,5 +1,5 @@
-langchain==0.3.27
-langchain-community==0.3.27
+langchain==0.3.30
+langchain-community==0.3.30
 sentence-transformers==2.7.0
 pypdf==6.13.3
 python-dotenv==1.2.2
