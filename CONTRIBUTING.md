@@ -23,7 +23,8 @@ knowledge_base/
 ├── standards/          ← Official QA standards (ISTQB, OWASP, ISO, etc.)
 ├── methodologies/      ← Testing methodologies and approaches
 ├── articles/           ← QA articles, guides, case studies
-└── expert_knowledge/   ← Domain-specific expert knowledge (automotive, fintech, etc.)
+├── expert_knowledge/   ← Domain-specific expert knowledge (automotive, fintech, etc.)
+└── evaluation_audit/   ← Process/test maturity, audit methodology, security/compliance audit
 ```
 
 ### File Format
@@ -56,6 +57,7 @@ standards/    → STANDARD_NAME_Version.md       (e.g., ISTQB_CTFL_v4.md)
 methodologies/ → Methodology_Name.md           (e.g., Risk_Based_Testing.md)
 articles/     → Topic_Description.md           (e.g., API_Testing_Best_Practices.md)
 expert_knowledge/ → Domain_Topic.md            (e.g., Automotive_SOTIF_Testing.md)
+evaluation_audit/ → Topic_Description.md       (e.g., ISO_19011_Audit_Guidelines.md)
 ```
 
 ---
@@ -105,6 +107,23 @@ standard references. Great examples:
 - Energy: IEC 61850, grid stability testing
 
 Use the prompts in `knowledge_base/expert_knowledge/` as a guide.
+
+---
+
+## Adding Evaluation/Audit Content
+
+`knowledge_base/evaluation_audit/` covers process/test maturity models, audit
+methodology, and security/compliance audit — distinct from `standards/`, which
+is limited to testing standards (ISTQB, OWASP, IEEE, ISO). Great examples:
+
+- Process/test maturity: TMMi, CMMI, ISO/IEC 33002
+- Audit methodology: ISO 19011, gap analysis techniques, audit report structure
+- Security/compliance audit: OWASP ASVS, ISO 27001, SOC 2
+- Real public failure case studies illustrating process/audit gaps (e.g.
+  Knight Capital, Boeing 737 MAX MCAS, CrowdStrike 2024 outage)
+
+Follow the same naming convention and MD structure as methodologies (Overview,
+Key Concepts, Application to Testing, References).
 
 ---
 
