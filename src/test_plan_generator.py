@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 from agent import QAIAgent, RAG_K_GENERATION
+from ai_disclosure import with_ai_footer
 from dialogue import ProjectContext
 from logger import get_logger
 
@@ -210,7 +211,7 @@ document_type: Test Plan
 standard: IEEE 829
 ---
 
-{test_plan}
+{with_ai_footer(test_plan)}
 """
         output_path.write_text(full_content, encoding="utf-8")
         return output_path

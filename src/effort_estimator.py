@@ -28,6 +28,7 @@ logger = get_logger(__name__)
 from dataclasses import dataclass, field
 from typing import Optional
 from agent import QAIAgent
+from ai_disclosure import with_ai_footer
 from dialogue import ProjectContext
 
 MAX_PLAUSIBLE_DURATION_DAYS = 1825  # ~5 working-years; a parsed timeline beyond this is
@@ -741,7 +742,7 @@ project: {context.project_name}
 document_type: Effort Estimation Report
 ---
 
-{report}
+{with_ai_footer(report)}
 """
         output_path.write_text(full_content, encoding="utf-8")
         return output_path

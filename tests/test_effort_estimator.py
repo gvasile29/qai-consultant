@@ -159,6 +159,20 @@ def make_capturing_estimator():
 
 # ── Non-LLM Structural Tests ─────────────────────────────────────────────────
 
+def test_save_includes_ai_generated_footer(tmp_path):
+    """save() appends the visible AI-generated footer to the saved report body (v2.5.2)."""
+    estimator = make_dummy_estimator()
+    body = "## 1. Executive Summary\n\nSome generated report body."
+    output_path = estimator.save(body, BMW_EFFORT_CONTEXT, output_dir=tmp_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "AI-generated" in content, "AI-generated footer missing from saved Effort Report"
+    assert content.index(body) < content.index("AI-generated"), \
+        "Footer must come after the document body"
+
+    print("  PASS: save() includes visible AI-generated footer")
+
+
 def test_parse_duration_2years():
     """'2 years' parses to 460 working days (2 * 230)."""
     est = make_dummy_estimator()

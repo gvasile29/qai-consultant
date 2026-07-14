@@ -181,6 +181,20 @@ def test_save_creates_file_with_frontmatter(agent, risk_register: str):
     print(f"        Frontmatter: {content[:160].strip()}")
 
 
+def test_save_includes_ai_generated_footer(tmp_path):
+    """save() appends the visible AI-generated footer to the saved file body (v2.5.2)."""
+    analyzer = RiskAnalyzer(agent=None)
+    body = "# Risk Register — Sample\n\nSome generated body text."
+    output_path = analyzer.save(body, BMW_CONTEXT, output_dir=tmp_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "AI-generated" in content, "AI-generated footer missing from saved Risk Register"
+    assert content.index(body) < content.index("AI-generated"), \
+        "Footer must come after the document body"
+
+    print("  PASS: save() includes visible AI-generated footer")
+
+
 def test_sources_non_empty(sources: list):
     """analyze() returns at least one knowledge source."""
     assert sources, "Expected at least one source, got empty list"

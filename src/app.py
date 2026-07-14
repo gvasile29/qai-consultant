@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parent))
 import streamlit as st
 from streamlit.runtime.scriptrunner import RerunException, StopException
 from agent import QAIAgent, clean_markdown_html
+from ai_disclosure import AI_INTERACTION_NOTICE, with_ai_footer
 from dialogue import DialogueManager, InputValidator, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer
@@ -187,6 +188,7 @@ def render_sidebar():
         st.markdown("## 🧪 QAI Consultant")
         st.markdown("AI-powered QA Architect")
         st.caption(f"v{__version__}")
+        st.info(AI_INTERACTION_NOTICE)
         with st.expander("📋 Release Notes"):
             st.markdown(load_changelog())
         st.divider()
@@ -775,10 +777,10 @@ def render_strategy():
 
         # Pre-compute PDF bytes once — avoids regenerating on every re-render
         if st.session_state.get("risk_pdf_bytes") is None:
-            st.session_state.risk_pdf_bytes = markdown_to_pdf(risk_register, "Risk Register")
-            st.session_state.effort_pdf_bytes = markdown_to_pdf(effort_report, "Effort Estimation")
-            st.session_state.strategy_pdf_bytes = markdown_to_pdf(strategy, "Test Strategy")
-            st.session_state.test_plan_pdf_bytes = markdown_to_pdf(test_plan, "Test Plan")
+            st.session_state.risk_pdf_bytes = markdown_to_pdf(with_ai_footer(risk_register), "Risk Register")
+            st.session_state.effort_pdf_bytes = markdown_to_pdf(with_ai_footer(effort_report), "Effort Estimation")
+            st.session_state.strategy_pdf_bytes = markdown_to_pdf(with_ai_footer(strategy), "Test Strategy")
+            st.session_state.test_plan_pdf_bytes = markdown_to_pdf(with_ai_footer(test_plan), "Test Plan")
 
         # All 4 stages (and the PDF-bytes precompute) finished this pass —
         # only NOW is it safe to stop re-entering this block on a rerun.
@@ -799,7 +801,7 @@ def render_strategy():
         with dl_col1:
             st.download_button(
                 label="⬇️ Download (.md)",
-                data=st.session_state.risk_register,
+                data=with_ai_footer(st.session_state.risk_register),
                 file_name=f"risk_register_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
@@ -822,7 +824,7 @@ def render_strategy():
         with dl_col1:
             st.download_button(
                 label="⬇️ Download (.md)",
-                data=st.session_state.effort_report,
+                data=with_ai_footer(st.session_state.effort_report),
                 file_name=f"effort_estimation_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
@@ -848,7 +850,7 @@ def render_strategy():
         with dl_col1:
             st.download_button(
                 label="⬇️ Download (.md)",
-                data=st.session_state.strategy,
+                data=with_ai_footer(st.session_state.strategy),
                 file_name=f"test_strategy_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
@@ -875,7 +877,7 @@ def render_strategy():
         with dl_col1:
             st.download_button(
                 label="⬇️ Download (.md)",
-                data=st.session_state.test_plan,
+                data=with_ai_footer(st.session_state.test_plan),
                 file_name=f"test_plan_{project_name}.md",
                 mime="text/markdown",
                 use_container_width=True,
