@@ -3,6 +3,12 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.2] - 2026-07-14
+
+### Added
+- A clear "you are interacting with an AI system" notice now appears in the app sidebar, ahead of the EU AI Act's transparency requirements taking effect on 2026-08-02.
+- Every generated document (Risk Register, Effort Estimation, Test Strategy, Test Plan) now carries a visible "AI-generated content" label in its Markdown and PDF versions, noting that it hasn't been reviewed by a human and needs sign-off from a qualified QA professional before use.
+
 ## [2.5.1] - 2026-07-08
 
 ### Added

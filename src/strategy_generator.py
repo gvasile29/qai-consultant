@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
 from agent import QAIAgent, RAG_K_GENERATION
+from ai_disclosure import with_ai_footer
 from dialogue import ProjectContext
 from risk_analyzer import RiskAnalyzer
 from test_plan_generator import TestPlanGenerator
@@ -285,7 +286,7 @@ date: {datetime.now().strftime("%Y-%m-%d %H:%M")}
 project: {context.project_name}
 ---
 
-{strategy}
+{with_ai_footer(strategy)}
 """
         output_path.write_text(full_content, encoding="utf-8")
         return output_path

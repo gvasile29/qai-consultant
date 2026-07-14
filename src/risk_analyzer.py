@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 from agent import QAIAgent, RAG_K_GENERATION
+from ai_disclosure import with_ai_footer
 from dialogue import ProjectContext
 from logger import get_logger
 
@@ -181,7 +182,7 @@ project: {context.project_name}
 document_type: Risk Register
 ---
 
-{risk_register}
+{with_ai_footer(risk_register)}
 """
         output_path.write_text(full_content, encoding="utf-8")
         return output_path

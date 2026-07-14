@@ -160,6 +160,36 @@ def test_save_creates_file_with_correct_name(tmp_path):
     print(f"  PASS: save() created {output_path.name}")
 
 
+def test_save_includes_ai_generated_footer(tmp_path):
+    """save() appends the visible AI-generated footer to the saved Test Plan body (v2.5.2)."""
+    from test_plan_generator import TestPlanGenerator
+    from dialogue import ProjectContext
+
+    generator = TestPlanGenerator(MagicMock())
+    context = ProjectContext(
+        project_name="MyProject",
+        project_description="desc",
+        project_type="web app",
+        tech_stack="Django",
+        team_qa_size="1",
+        team_dev_size="2",
+        timeline="4 weeks",
+        methodology="Scrum",
+        known_risks="None",
+        existing_automation="None",
+        compliance_requirements="none",
+    )
+
+    body = "# Test Plan\n\nContent here."
+    output_path = generator.save(body, context, output_dir=tmp_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "AI-generated" in content, "AI-generated footer missing from saved Test Plan"
+    assert content.index(body) < content.index("AI-generated"), \
+        "Footer must come after the document body"
+    print("  PASS: save() includes visible AI-generated footer")
+
+
 def test_class_has_required_methods():
     """TestPlanGenerator exposes generate(), save(), _build_test_plan_query()."""
     from test_plan_generator import TestPlanGenerator
