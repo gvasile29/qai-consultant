@@ -15,3 +15,9 @@
 {"query": "What testing and risk-control failures led to the Knight Capital trading loss in 2012?", "expects": ["Case_Study_Knight_Capital_2012"], "judge": true}
 {"query": "How did software and sensor design flaws in the 737 MAX MCAS system contribute to the crashes?", "expects": ["Case_Study_Boeing_737MAX_MCAS"], "judge": true}
 {"query": "What went wrong in the CrowdStrike update that caused the global outage in 2024?", "expects": ["Case_Study_CrowdStrike_2024_Outage"], "judge": true}
+{"query": "How does the EU AI Act's risk-tiered framework decide whether an AI system is unacceptable, high-risk, or minimal risk?", "expects": ["EU_AI_Act_Overview"], "judge": true}
+{"query": "Under the EU AI Act, what obligations does a provider carry versus a deployer using a third-party AI system?", "expects": ["EU_AI_Act_Overview"], "judge": true}
+{"query": "What Article 50 disclosure duties apply to a chatbot or AI content-generation feature, independent of its risk tier?", "expects": ["EU_AI_Act_Overview"], "judge": true}
+{"query": "How do EU AI Act Articles 9 through 15 on risk management, data governance, and human oversight translate into concrete QA test activities for a high-risk AI system?", "expects": ["EU_AI_Act_Overview"], "judge": true}
+{"query": "When is self-assessment sufficient versus notified body involvement for EU AI Act conformity assessment of a high-risk AI system?", "expects": ["EU_AI_Act_Overview"], "judge": true}
+{"query": "What are the current EU AI Act compliance deadlines for high-risk systems after the Digital Omnibus amendments, including the Annex III and Article 50(2) grace periods?", "expects": ["EU_AI_Act_Overview"], "judge": true}
