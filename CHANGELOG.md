@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.6.0] - 2026-07-14
+
+### Added
+- Expanded the knowledge base with a new EU AI Act reference document covering risk tiers, provider and deployer obligations, transparency obligations, testing implications for high-risk systems, conformity assessment, and key deadlines — so generated strategies can now be grounded in the Act when relevant to a project.
+
 ## [2.5.2] - 2026-07-14
 
 ### Added
