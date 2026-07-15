@@ -3,6 +3,17 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.0] - 2026-07-15
+
+### Added
+- QAI Consultant is now also available as a local, keyless MCP server (`qai-consultant-mcp`) — call it directly from Claude Code, Claude Desktop, or claude.ai with `uvx qai-consultant-mcp`, no API keys required. It exposes standards-grounded knowledge retrieval and deterministic PERT-based QA effort estimation as tools, plus prompts for the project-intake interview and Risk Register / Test Strategy / Test Plan structures, so any MCP client can ground its own QA planning in the same knowledge base this app uses.
+- A "Use QAI in your AI tools (MCP)" panel in the app sidebar, with a one-time banner pointing to it.
+- Usage telemetry for the MCP server is available but off by default — it only activates if you explicitly opt in, and never includes your query text or project details.
+- Every generated document now also carries a machine-readable "AI-generated" marking (in addition to the existing visible label) — both in the Markdown file's metadata and in the PDF's document properties — ahead of the EU AI Act's Article 50(2) deadline for existing systems (2026-12-02).
+
+### Changed
+- Internal refactor: the knowledge-base configuration and the deterministic effort-estimation math now live in their own modules, shared between the web app and the new MCP server, so both stay in sync automatically. No user-facing behavior changed.
+
 ## [2.6.0] - 2026-07-14
 
 ### Added

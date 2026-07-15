@@ -116,6 +116,25 @@ streamlit run src/app.py
 ```
 Then open: http://localhost:8501
 
+### Option C — MCP Server (for Claude Code, Claude Desktop, claude.ai)
+
+Unlike Options A/B, this needs none of Steps 2-5 above — no clone, no API
+keys, no Pinecone. It's a separate package (`qai-consultant-mcp`) with its
+own local, keyless knowledge index:
+
+```bash
+uvx qai-consultant-mcp
+```
+
+Or register it with Claude Code directly:
+```bash
+claude mcp add qai-consultant -- uvx qai-consultant-mcp
+```
+
+See the [README's MCP Server section](README.md#mcp-server-for-claude-code-claude-desktop-claudeai)
+for the Claude Desktop config snippet, the full tool/prompt list, and the
+telemetry/privacy note.
+
 ---
 
 ## Verification Checklist
