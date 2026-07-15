@@ -29,6 +29,7 @@ def main(argv: list[str]) -> int:
         det_ok = False
 
     rag_ok = True
+    local_index_ok = True
     if not det_only:
         from . import rag
         try:
@@ -41,10 +42,21 @@ def main(argv: list[str]) -> int:
             print(f"\n[rag] tier errored (did not run): {type(exc).__name__}: {exc}")
             rag_ok = False
 
-    overall = det_ok and rag_ok
+        from . import local_index_parity
+        try:
+            local_index_metrics = local_index_parity.run_all()
+            print("\n══ local_index_parity (served LocalIndex vs. rag_golden.jsonl) ══")
+            print(local_index_parity.format_table(local_index_metrics))
+            local_index_ok = all(m.passed for m in local_index_metrics)
+        except Exception as exc:  # noqa: BLE001 — same rationale as the rag tier above
+            print(f"\n[local_index_parity] tier errored (did not run): {type(exc).__name__}: {exc}")
+            local_index_ok = False
+
+    overall = det_ok and rag_ok and local_index_ok
     print(f"\nRelease gate: {'PASS' if overall else 'FAIL'} "
           f"(deterministic {'pass' if det_ok else 'FAIL'}"
-          + ("" if det_only else f", rag {'pass' if rag_ok else 'FAIL'}") + ")")
+          + ("" if det_only else f", rag {'pass' if rag_ok else 'FAIL'}"
+                                  f", local_index_parity {'pass' if local_index_ok else 'FAIL'}") + ")")
     return 0 if overall else 1
 
 
