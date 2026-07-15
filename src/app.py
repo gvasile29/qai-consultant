@@ -379,17 +379,20 @@ def render_intro():
 
     with st.expander("📊 How is this different from just prompting Claude or Gemini?"):
         st.markdown("""
-|  | **QAI Consultant** | **General AI (Claude / Gemini)** |
-|---|---|---|
-| Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, 17 AI SDLC case studies | General training data |
-| Structured output | Risk Register + Effort Estimation + Test Strategy | Varies by prompt quality |
-| Project discovery | Guided 11-question dialogue | You write the full prompt |
-| RAG grounding | 7,100+ vectors: ISTQB, OWASP, IEEE 829, AI Test Planning | None |
-| Best for | Early-stage / kick-off, no codebase yet | When you already have project context |
+|  | **QAI Consultant** (this app) | **Generic AI** (no tools) | **Claude + `qai-consultant-mcp`** |
+|---|---|---|---|
+| Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, EU AI Act, 17 AI SDLC case studies | General training data only | Same curated knowledge base, retrieved live via `retrieve_qa_knowledge` |
+| Structured output | 4 full documents auto-generated (Risk, Effort, Strategy, Plan) | Varies by prompt quality, ungrounded | Claude writes the narrative — grounded in real retrieved sources, with `[Source N]` citations |
+| Project discovery | Guided 11-question dialogue in the browser | You write the full prompt yourself | Same 11-question interview, served as an MCP prompt inside Claude |
+| Effort estimation | Deterministic PERT + multipliers + confidence score | None — numbers are guessed, not computed | Same deterministic PERT core via `estimate_qa_effort` — no LLM guesswork |
+| Setup | None — open the browser | None | One-time install (`uvx qai-consultant-mcp` / `claude mcp add`) |
+| Best for | Fastest kick-off, no IDE, shareable documents | Quick unstructured chat, accept generic output | Already working in Claude Code/Desktop/claude.ai, want grounded answers + real numbers without leaving it |
+
+The MCP server (v3.0+) is built from the same knowledge base and the same deterministic estimation core as this app — it's not a lesser copy, it's the same grounding and math, just consumed as tools inside Claude instead of as generated documents. It deliberately never generates documents itself: Claude's own reasoning writes the narrative, this server only supplies retrieval and numbers. See the [MCP server on PyPI](https://pypi.org/project/qai-consultant-mcp/).
 
 **Recommended workflow:**
 1. **Use QAI Consultant at kick-off** → generates your baseline documents in minutes
-2. **Feed those docs into Claude Code** (or Copilot / Cursor) as project context
+2. **Feed those docs into Claude Code** (or Copilot / Cursor) as project context — or, if you're already there, **install `qai-consultant-mcp`** and skip straight to grounded retrieval + estimation as tools
 3. **Ask your AI assistant to refine** the strategy against your specific codebase, tickets, and architecture
         """)
 
