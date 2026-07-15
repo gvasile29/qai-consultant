@@ -48,6 +48,20 @@ async def _list_tools() -> list:
         return result.tools
 
 
+async def _list_prompts() -> list:
+    async with create_connected_server_and_client_session(mcp_server.mcp._mcp_server) as client:
+        await client.initialize()
+        result = await client.list_prompts()
+        return result.prompts
+
+
+async def _get_prompt(name: str) -> str:
+    async with create_connected_server_and_client_session(mcp_server.mcp._mcp_server) as client:
+        await client.initialize()
+        result = await client.get_prompt(name)
+        return result.messages[0].content.text
+
+
 # ── Tool registration ────────────────────────────────────────────────────────────
 
 def test_all_three_tools_registered():
@@ -186,6 +200,56 @@ def test_estimate_qa_effort_invalid_additional_context_reported():
     result = _run(_call_tool("estimate_qa_effort", bad_args))
     assert result["error"] == "validation"
     assert "additional_context" in result["fields"]
+
+
+# ── Prompts ───────────────────────────────────────────────────────────────────────
+
+def test_all_four_prompts_registered():
+    prompts = _run(_list_prompts())
+    names = {p.name for p in prompts}
+    assert names == {
+        "qa_project_interview", "risk_register_structure",
+        "test_strategy_structure", "test_plan_structure",
+    }
+
+
+def test_qa_project_interview_lists_all_eleven_questions():
+    from dialogue import QUESTIONS
+    text = _run(_get_prompt("qa_project_interview"))
+    for q in QUESTIONS:
+        assert q["key"] in text
+        assert q["question"] in text
+
+
+def test_risk_register_structure_content_matches_app_convention():
+    text = _run(_get_prompt("risk_register_structure"))
+    for heading in ("Executive Summary", "Risk Matrix Overview", "Detailed Risk Analysis",
+                    "Risk-Based Testing Priorities", "Recommendations for QA Strategy"):
+        assert heading in text
+    assert "retrieve_qa_knowledge" in text
+    assert "[Source N]" in text
+    assert "AI-generated" in text
+
+
+def test_test_strategy_structure_content_matches_app_convention():
+    text = _run(_get_prompt("test_strategy_structure"))
+    for heading in ("Project Overview", "Risk Assessment", "Test Types Recommended",
+                    "Entry & Exit Criteria", "Resources & Man Power Estimation", "References"):
+        assert heading in text
+    assert "estimate_qa_effort" in text
+    assert "retrieve_qa_knowledge" in text
+    assert "AI-generated" in text
+
+
+def test_test_plan_structure_content_matches_app_convention():
+    text = _run(_get_prompt("test_plan_structure"))
+    for heading in ("Introduction", "Test Items", "Features to be Tested",
+                    "Entry and Exit Criteria", "Testing Schedule", "Environmental Needs"):
+        assert heading in text
+    assert "IEEE 829" in text
+    assert "version not specified" in text
+    assert "retrieve_qa_knowledge" in text
+    assert "AI-generated" in text
 
 
 # ── Fail-fast startup ─────────────────────────────────────────────────────────────

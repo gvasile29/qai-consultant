@@ -7,8 +7,9 @@ client LLM (Claude Code, Claude Desktop, claude.ai) is stronger than this
 project's internal mistral-small, so this server never generates text —
 it exposes what the client cannot do alone: standards-grounded knowledge
 retrieval (retrieve_qa_knowledge, list_kb_sources) and deterministic QA
-effort estimation (estimate_qa_effort). MCP prompts (the 11-question
-interview + document structures) are added in step 7.
+effort estimation (estimate_qa_effort), plus MCP prompts (the 11-question
+interview + document structures, src/prompts.py) that instruct the client
+to ground its own generation in those tools rather than call a second LLM.
 
 Run directly: `python src/mcp_server.py`
 Packaged entry point (step 8): `qai-consultant-mcp`
@@ -37,6 +38,12 @@ import telemetry
 from dialogue import InputValidator, ProjectContext
 from effort_core import compute_estimation
 from local_index import LocalIndex
+from prompts import (
+    qa_project_interview as _qa_project_interview,
+    risk_register_structure as _risk_register_structure,
+    test_plan_structure as _test_plan_structure,
+    test_strategy_structure as _test_strategy_structure,
+)
 
 INSTRUCTIONS = (
     "QAI Consultant — standards-grounded QA knowledge retrieval (ISTQB, OWASP, "
@@ -179,6 +186,36 @@ def estimate_qa_effort(
     duration_ms = (time.monotonic() - start) * 1000
     telemetry.track_tool_called("estimate_qa_effort", success=True, duration_ms=duration_ms)
     return result
+
+
+# ── Prompts ───────────────────────────────────────────────────────────────────────
+# Structural templates extracted from the app's own document generators (src/prompts.py)
+# — see MCP_PLAN.md section 1: this server never generates documents itself, so these
+# are guidance for the CLIENT to follow, grounded via retrieve_qa_knowledge/
+# estimate_qa_effort rather than a second internal LLM call.
+
+@mcp.prompt()
+def qa_project_interview() -> str:
+    """The 11-question project-intake interview to run before any QA deliverable."""
+    return _qa_project_interview()
+
+
+@mcp.prompt()
+def risk_register_structure() -> str:
+    """The Risk Register document structure and grounding instructions."""
+    return _risk_register_structure()
+
+
+@mcp.prompt()
+def test_strategy_structure() -> str:
+    """The Test Strategy document structure and grounding instructions."""
+    return _test_strategy_structure()
+
+
+@mcp.prompt()
+def test_plan_structure() -> str:
+    """The IEEE-829-aligned Test Plan document structure and grounding instructions."""
+    return _test_plan_structure()
 
 
 def main() -> None:
