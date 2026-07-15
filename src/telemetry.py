@@ -37,12 +37,12 @@ from pathlib import Path
 from typing import Optional
 from urllib import request as _urllib_request
 
-_POSTHOG_HOST = "https://us.i.posthog.com"
-# Placeholder — replace with a real PostHog project key before first PyPI
-# publish (MCP_PLAN.md section 7). An invalid/placeholder key just fails the
-# network call silently (see _send()'s swallowed exception); it never breaks
-# a tool call either way.
-_POSTHOG_PROJECT_API_KEY_DEFAULT = "phc_REPLACE_BEFORE_PUBLISH"
+_POSTHOG_HOST = "https://eu.i.posthog.com"  # this project's PostHog org is on EU Cloud
+# Public write-only PostHog Project API Key (not a secret — see module
+# docstring). If this ever needs rotating, generate a new one from PostHog's
+# Project Settings (NOT "Personal API Keys", which is a different, sensitive
+# credential type — phx_... prefix, must never end up here).
+_POSTHOG_PROJECT_API_KEY_DEFAULT = "phc_pgVvXQx4idPNe7JNcX6uQHhTUryPfVEYKDxRVWcYNWVP"
 _TIMEOUT_SECONDS = 2.0
 _INSTALL_ID_FILENAME = "install_id.txt"
 
