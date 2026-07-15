@@ -1,0 +1,8 @@
+# Both requirements.txt's indexes (PyPI + PyTorch's official CPU wheel index)
+# are equally trusted, so uv should consider every version from both rather
+# than locking onto whichever index lists a package first. Without this,
+# uv can pin `requests` to an old version mirrored on the PyTorch index,
+# conflicting with langchain-community's newer requirement and making the
+# whole dependency set unsolvable on a from-scratch resolve (e.g. an app
+# reboot on Streamlit Cloud, which wipes and reinstalls the environment).
+index-strategy = "unsafe-best-match"
