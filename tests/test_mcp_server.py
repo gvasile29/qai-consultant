@@ -265,12 +265,55 @@ def test_main_exits_nonzero_if_index_build_fails(monkeypatch):
     assert exc_info.value.code == 1
 
 
+class _FakeIndex:
+    """Records search() calls — `main()` must warm up the embedding model
+    with one real search() call, on the main thread, before mcp.run()."""
+
+    def __init__(self):
+        self.search_calls = []
+
+    def search(self, query, k=1):
+        self.search_calls.append((query, k))
+        return {"chunks": [], "kb_version": "fake"}
+
+
 def test_main_starts_server_and_fires_telemetry_when_index_builds(monkeypatch):
     calls = []
-    monkeypatch.setattr(mcp_server, "_get_index", lambda: object())
+    fake_index = _FakeIndex()
+    monkeypatch.setattr(mcp_server, "_get_index", lambda: fake_index)
     monkeypatch.setattr(mcp_server.telemetry, "track_server_start", lambda: calls.append("server_start"))
     monkeypatch.setattr(mcp_server.mcp, "run", lambda: calls.append("run"))
 
     mcp_server.main()
 
     assert calls == ["server_start", "run"]
+
+
+def test_main_warms_up_embedding_model_before_run(monkeypatch):
+    """Regression test: main() must call index.search() (forcing the real
+    embedding model to initialize on the main thread) BEFORE mcp.run()
+    starts stdio_server()'s concurrent stdin-reader task — deferring this to
+    the first client-triggered retrieve_qa_knowledge call deadlocks on
+    Windows (confirmed via a real `uvx qai-consultant-mcp` stdio subprocess
+    hanging indefinitely on the second tool call)."""
+    order = []
+    fake_index = _FakeIndex()
+    monkeypatch.setattr(mcp_server, "_get_index", lambda: fake_index)
+    monkeypatch.setattr(mcp_server.telemetry, "track_server_start", lambda: None)
+    monkeypatch.setattr(mcp_server.mcp, "run", lambda: order.append("run"))
+
+    mcp_server.main()
+
+    assert fake_index.search_calls == [("warmup", 1)]
+
+
+def test_main_exits_nonzero_if_warmup_search_fails(monkeypatch):
+    class _BrokenIndex:
+        def search(self, query, k=1):
+            raise RuntimeError("simulated embedding model init failure")
+
+    monkeypatch.setattr(mcp_server, "_get_index", lambda: _BrokenIndex())
+    monkeypatch.setattr(mcp_server.telemetry, "track_server_start", lambda: None)
+    with pytest.raises(SystemExit) as exc_info:
+        mcp_server.main()
+    assert exc_info.value.code == 1
