@@ -9,8 +9,8 @@ Receives the Risk Register to inform test priorities and resource allocation.
 import re
 from pathlib import Path
 from datetime import datetime
-from agent import QAIAgent, RAG_K_GENERATION
-from ai_disclosure import with_ai_footer
+from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
+from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 from logger import get_logger
 
@@ -203,13 +203,10 @@ class TestPlanGenerator:
         safe_name = re.sub(r'[^\w\-.]', '_', context.project_name.replace(' ', '_'))
         filename = f"test_plan_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
-        full_content = f"""---
-generated_by: QAI Consultant
-date: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-project: {context.project_name}
-document_type: Test Plan
-standard: IEEE 829
----
+        front_matter = build_front_matter(
+            "Test Plan", context.project_name, MISTRAL_MODEL, extra={"standard": "IEEE 829"}
+        )
+        full_content = f"""{front_matter}
 
 {with_ai_footer(test_plan)}
 """

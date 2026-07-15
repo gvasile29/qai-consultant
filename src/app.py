@@ -12,8 +12,8 @@ sys.path.append(str(Path(__file__).resolve().parent))
 
 import streamlit as st
 from streamlit.runtime.scriptrunner import RerunException, StopException
-from agent import QAIAgent, clean_markdown_html
-from ai_disclosure import AI_INTERACTION_NOTICE, with_ai_footer
+from agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
+from ai_disclosure import AI_INTERACTION_NOTICE, pdf_meta_html, with_ai_footer
 from dialogue import DialogueManager, InputValidator, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer
@@ -182,6 +182,27 @@ def load_kb_sidebar_bullets() -> list[str]:
     return bullets
 
 
+# ── MCP announcement (v3.0) ──────────────────────────────────────────────────
+MCP_ANNOUNCEMENT_BODY = """
+QAI Consultant is also available as a local MCP server — call it directly from
+Claude Code, Claude Desktop, or claude.ai, no API keys required:
+
+```
+uvx qai-consultant-mcp
+```
+
+It exposes standards-grounded knowledge retrieval (`retrieve_qa_knowledge`,
+`list_kb_sources`) and deterministic PERT-based effort estimation
+(`estimate_qa_effort`) as MCP tools, plus prompts for the project-intake
+interview and Risk Register / Test Strategy / Test Plan structures — so your
+own AI coding assistant can ground its QA planning in the same knowledge base
+this app uses, fully offline and keyless.
+
+See the [GitHub repo](https://github.com/gvasile29/qai-consultant) for setup
+and client configuration.
+"""
+
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
@@ -191,6 +212,8 @@ def render_sidebar():
         st.info(AI_INTERACTION_NOTICE)
         with st.expander("📋 Release Notes"):
             st.markdown(load_changelog())
+        with st.expander("🔌 Use QAI in your AI tools (MCP)"):
+            st.markdown(MCP_ANNOUNCEMENT_BODY)
         st.divider()
 
         st.markdown("### How it works")
@@ -777,10 +800,11 @@ def render_strategy():
 
         # Pre-compute PDF bytes once — avoids regenerating on every re-render
         if st.session_state.get("risk_pdf_bytes") is None:
-            st.session_state.risk_pdf_bytes = markdown_to_pdf(with_ai_footer(risk_register), "Risk Register")
-            st.session_state.effort_pdf_bytes = markdown_to_pdf(with_ai_footer(effort_report), "Effort Estimation")
-            st.session_state.strategy_pdf_bytes = markdown_to_pdf(with_ai_footer(strategy), "Test Strategy")
-            st.session_state.test_plan_pdf_bytes = markdown_to_pdf(with_ai_footer(test_plan), "Test Plan")
+            _ai_pdf_meta = pdf_meta_html(MISTRAL_MODEL)
+            st.session_state.risk_pdf_bytes = markdown_to_pdf(with_ai_footer(risk_register), "Risk Register", _ai_pdf_meta)
+            st.session_state.effort_pdf_bytes = markdown_to_pdf(with_ai_footer(effort_report), "Effort Estimation", _ai_pdf_meta)
+            st.session_state.strategy_pdf_bytes = markdown_to_pdf(with_ai_footer(strategy), "Test Strategy", _ai_pdf_meta)
+            st.session_state.test_plan_pdf_bytes = markdown_to_pdf(with_ai_footer(test_plan), "Test Plan", _ai_pdf_meta)
 
         # All 4 stages (and the PDF-bytes precompute) finished this pass —
         # only NOW is it safe to stop re-entering this block on a rerun.
@@ -987,6 +1011,14 @@ def main():
     if not st.session_state.get("release_notes_seen"):
         st.session_state.release_notes_seen = True
         st.info(f"✨ Updated to v{__version__} — see the sidebar's **Release Notes** for what's new.")
+
+    if not st.session_state.get("mcp_announcement_seen"):
+        st.session_state.mcp_announcement_seen = True
+        st.info(
+            "🔌 QAI Consultant is now also available as an MCP server for Claude Code, "
+            "Claude Desktop, and claude.ai — see the sidebar's **Use QAI in your AI tools "
+            "(MCP)** panel."
+        )
 
     render_sidebar()
 

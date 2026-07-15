@@ -25,8 +25,8 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 from typing import Optional
-from agent import QAIAgent
-from ai_disclosure import with_ai_footer
+from agent import MISTRAL_MODEL, QAIAgent
+from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 
 import effort_core
@@ -292,12 +292,8 @@ Write the following sections (keep each concise — 3-5 sentences max):
         filename = f"effort_estimation_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
 
-        full_content = f"""---
-generated_by: QAI Consultant
-date: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-project: {context.project_name}
-document_type: Effort Estimation Report
----
+        front_matter = build_front_matter("Effort Estimation Report", context.project_name, MISTRAL_MODEL)
+        full_content = f"""{front_matter}
 
 {with_ai_footer(report)}
 """
