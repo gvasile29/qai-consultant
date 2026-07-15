@@ -8,3 +8,5 @@ pytest-mock==3.14.0
 # requirements.txt: the MCP server is a separate package (pyproject.toml, step 8),
 # not something the Streamlit Cloud deploy needs.
 mcp>=1.8.0
+build>=1.0.0
+setuptools>=67.0

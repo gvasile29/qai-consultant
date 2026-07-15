@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=67.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qai-consultant-mcp"
+version = "3.0.0"
+description = "Local, keyless MCP server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act) and deterministic QA effort estimation."
+readme = "README.md"
+requires-python = ">=3.10"
+# Table form (not the newer SPDX string) for compatibility with setuptools < ~77,
+# which raises a hard ValueError on the string form rather than just a deprecation
+# warning — this needs to build cleanly on whatever setuptools version a consumer's
+# environment happens to have, not just the newest one.
+license = { text = "Apache-2.0" }
+authors = [{ name = "QAI Consultant Contributors" }]
+keywords = ["mcp", "model-context-protocol", "qa", "testing", "quality-assurance"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp>=1.8.0",
+    "langchain-community>=0.3.30",
+    "sentence-transformers==2.7.0",
+    "platformdirs>=4.0.0",
+    "torch==2.13.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/gvasile29/qai-consultant"
+Repository = "https://github.com/gvasile29/qai-consultant"
+
+[project.scripts]
+qai-consultant-mcp = "mcp_server:main"
+
+# ── uv: pin torch to the CPU wheel index, scoped ONLY to torch ──────────────────
+# (see MCP_PLAN.md section 6's "Decided 2026-07-15" note.) Unlike requirements.txt's
+# uv.toml (index-strategy = "unsafe-best-match", applied globally because plain
+# requirements.txt has no per-package index syntax), this pyproject.toml CAN scope
+# the extra index to exactly the one package that needs it — so `uv` never queries
+# download.pytorch.org for anything else, and can't repeat the "requests pinned to
+# an old version mirrored there" resolution deadlock that bit requirements.txt.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+# ── setuptools: flat modules from src/, no nested package ───────────────────────
+# Matches these modules' existing bare `from x import y` style (no package prefix) —
+# see mcp_server.py's own note on why `from __future__ import annotations` is absent;
+# this flat layout is the same "don't fight the existing import style" choice.
+[tool.setuptools]
+py-modules = [
+    "mcp_server", "dialogue", "effort_core", "local_index",
+    "telemetry", "prompts", "kb_config", "logger", "version",
+]
+
+[tool.setuptools.package-dir]
+"knowledge_base" = "knowledge_base"
+"" = "src"
+
+# ── knowledge_base/: self-authored .md content only (licensing gate, section 5) ──
+# Whitelisted per-folder, not a blanket include of standards/ or a **/*.md glob:
+# standards/istqb/ and standards/owasp/ hold third-party PDFs (and one HTML dupe)
+# whose redistribution rights are unclear, and this whitelist is what keeps them
+# out — an explicit list forces a deliberate decision on every future addition,
+# per MCP_PLAN.md section 5 ("review every shipped .md for third-party text lifted
+# verbatim" before first publish). tests/test_packaging.py asserts zero .pdf files
+# make it into the built wheel regardless, as the actual enforced gate.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["knowledge_base*"]
+namespaces = true
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pdf", "*.html", "generated_strategies/*"]
+
+[tool.setuptools.package-data]
+"knowledge_base" = ["*.md"]
+"knowledge_base.methodologies" = ["*.md"]
+"knowledge_base.evaluation_audit" = ["*.md"]
+"knowledge_base.expert_knowledge" = ["*.md"]
+"knowledge_base.articles" = ["*.md"]
+"knowledge_base.articles.ai_sdlc" = ["*.md"]
+"knowledge_base.standards" = ["*.md"]
+"knowledge_base.standards.eu_ai_act" = ["*.md"]
+"knowledge_base.standards.owasp" = ["*.md"]

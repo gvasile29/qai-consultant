@@ -32,8 +32,22 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from kb_config import CHUNK_OVERLAP, CHUNK_SIZE, EMBEDDING_MODEL, get_source_category
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_KB_DIR = _REPO_ROOT / "knowledge_base"
 _CACHE_FORMAT_VERSION = 1  # bump if the cache file's schema changes
+
+
+def _resolve_default_kb_dir() -> Path:
+    """knowledge_base/ lives two different places depending on how this module
+    got here: a sibling of src/ in the git repo (dev), or a sibling of this
+    module itself once packaged (site-packages/knowledge_base/ — see
+    pyproject.toml's wheel force-include, step 8). Repo layout is checked
+    first since it's the more common case during development/testing."""
+    repo_layout = _REPO_ROOT / "knowledge_base"
+    if repo_layout.is_dir():
+        return repo_layout
+    return Path(__file__).resolve().parent / "knowledge_base"
+
+
+_DEFAULT_KB_DIR = _resolve_default_kb_dir()
 
 
 def _default_cache_dir() -> Path:
