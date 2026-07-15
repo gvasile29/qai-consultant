@@ -36,3 +36,11 @@ ANSWER_RELEVANCE_MIN = 0.7  # the answer must substantively address the query, n
 SOURCE_ATTRIBUTION_MIN = 0.9  # >=90% of [Source N] citations must point at a retrieved chunk (no invented provenance)
 JUDGED_QUORUM_MIN = 0.5       # >=half of judged cases must grade successfully, else the judged metrics SKIP (not pass on thin data)
 JUDGE_MAX_WORKERS = 3         # concurrent judged cases — capped low to stay under the paid API's rate limit
+
+# ── local_index_parity (v3.0 — the MCP server's served LocalIndex vs the eval index) ──
+# Same rag_golden.jsonl, same retrieval depth, but against the real chunked (1000/200)
+# index the MCP server serves, not evals/rag.py's coarser doc-level (4000-char) index.
+# The bar matches RECALL_AT_K_MIN/MRR_MIN above: what users get must be at least as
+# good as what the eval measures, not a lower, separately-tuned floor.
+LOCAL_INDEX_RECALL_AT_K_MIN = RECALL_AT_K_MIN
+LOCAL_INDEX_MRR_MIN = MRR_MIN

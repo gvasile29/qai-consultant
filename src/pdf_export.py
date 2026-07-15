@@ -29,7 +29,7 @@ blockquote { border-left: 3px solid #00b4d8; margin-left: 0; padding-left: 10pt;
 """
 
 
-def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report") -> bytes | None:
+def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report", extra_meta_html: str = "") -> bytes | None:
     """Convert a markdown string to a styled PDF and return the raw bytes.
 
     Parameters
@@ -37,7 +37,13 @@ def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report") -> bytes
     md_text:
         The markdown source text to render.
     title:
-        Document title injected as an <h1> at the top of the PDF.
+        Document title injected as an <h1> at the top of the PDF, and mapped by
+        xhtml2pdf onto the PDF's /Title metadata field via the HTML <title> tag.
+    extra_meta_html:
+        Additional raw HTML <meta> tag(s) to inject into <head> — e.g.
+        ai_disclosure.pdf_meta_html() for the EU AI Act Article 50(2)
+        machine-readable marking (mapped onto /Author, /Subject, /Keywords).
+        Empty string (default) injects nothing.
 
     Returns
     -------
@@ -62,12 +68,14 @@ def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report") -> bytes
         )
 
         safe_title = escape(title)
+        meta_block = f"  {extra_meta_html}\n" if extra_meta_html else ""
         html = (
             f'<!DOCTYPE html>\n'
             f'<html>\n'
             f'<head>\n'
             f'  <meta charset="UTF-8" />\n'
             f'  <title>{safe_title}</title>\n'
+            f'{meta_block}'
             f'  <style>{_CSS}</style>\n'
             f'</head>\n'
             f'<body>\n'

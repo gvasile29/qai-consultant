@@ -27,7 +27,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest pytest-mock
+        run: pip install -r requirements-dev.txt
 
       - name: Run tests
         env:

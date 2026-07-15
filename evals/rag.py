@@ -38,20 +38,17 @@ from . import thresholds as T
 
 _DIR = Path(__file__).resolve().parent
 _KB = _DIR.parent / "knowledge_base"
-_EMBEDDING_MODEL_DEFAULT = "sentence-transformers/all-MiniLM-L6-v2"  # vendored fallback
 _DOC_CHARS = 4000   # per-file text embedded; enough to characterise a topic doc
 
 
 def _embedding_model() -> str:
-    """The app's embedding model, imported from agent.py so the eval can't drift from
-    it; vendored default when src deps aren't installed. A rename raises ImportError
-    (not ModuleNotFoundError), left uncaught so real drift surfaces."""
-    try:
-        ensure_src_on_path()
-        from agent import EMBEDDING_MODEL  # noqa: PLC0415
-        return EMBEDDING_MODEL
-    except ModuleNotFoundError:
-        return _EMBEDDING_MODEL_DEFAULT
+    """The app's embedding model, imported from kb_config so the eval can't drift
+    from it. kb_config is dependency-free (stdlib only), so unlike the old
+    agent.py import this never needs a vendored fallback — if it's missing,
+    that's a real repo problem, not an expected "deps not installed" case."""
+    ensure_src_on_path()
+    from kb_config import EMBEDDING_MODEL  # noqa: PLC0415
+    return EMBEDDING_MODEL
 
 
 _SRC_CHARS = 1500   # per-source text shown to the model AND the faithfulness judge

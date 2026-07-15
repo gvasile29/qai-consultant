@@ -100,6 +100,7 @@ The package ships only `.md` files we authored (standards summaries, methodologi
 - Target install experience: `uvx qai-consultant-mcp` or one `claude mcp add` line; zero API keys, zero config.
 - Client config snippets in README/INSTALL.md for Claude Desktop (`claude_desktop_config.json`), Claude Code (`claude mcp add`), and claude.ai (v3.2, once remote).
 - **Known risk:** `sentence-transformers` pulls torch (heavy download, slow cold start under `uvx`). v3.0 accepts this for embedding parity with the app. If install friction proves real, evaluate `fastembed` (ONNX `all-MiniLM-L6-v2`) as a v3.0.x optimization; requires an embedding-parity eval before switching.
+- **Decided 2026-07-15:** apply the same CPU-only-torch pattern from `requirements.txt` (`--extra-index-url https://download.pytorch.org/whl/cpu` + a root `uv.toml` with `index-strategy = "unsafe-best-match"`) directly in `pyproject.toml`/the packaging config at step 8, rather than rediscovering the same "No solution found when resolving dependencies" `uv` deadlock (PyTorch's CPU index mirrors an older `requests`, conflicting with `langchain-community`'s floor). Verify locally with `uv pip install --dry-run` against the built package before first publish, same as the app-side fix.
 
 ## 7. Usage monitoring
 
@@ -176,9 +177,11 @@ Acceptance: connectable from claude.ai without local install; listed in at least
 - **Shared-code risk is front-loaded:** only steps 1-2 touch existing behavior, and both are gated by the full existing suite passing unchanged.
 - **Regulatory flux:** the Article 50 Code of Practice and the AI Omnibus grace period (2026-12-02) are near-final but still moving; the marking implementation in step 9 must track the final label format, and section 12 must be re-reviewed when the final Commission guidelines land.
 
-## 12. EU AI Act compliance (self-assessment, 2026-07-14)
+## 12. EU AI Act compliance (self-assessment, 2026-07-14; Omnibus status updated 2026-07-15)
 
 Not legal advice; based on the implementation timeline and the Article 50 practical guide at artificialintelligenceact.eu (May 2026). Re-review when the final Commission guidelines and the Code of Practice on AI-generated content are published.
+
+**Omnibus status update (2026-07-15):** the "provisional agreement, May 2026" framing below is superseded. Independent fact-check research done for the v2.6 KB pillar (`knowledge_base/standards/eu_ai_act/EU_AI_Act_Overview.md`) confirmed the Digital Omnibus on AI was formally **adopted** — European Parliament vote 16 June 2026 (423-57, 174 abstentions), Council final adoption 29 June 2026 — pending only Official Journal publication (expected before 2026-08-02) to enter into force. It is no longer an unresolved proposal. Confirmed changes relevant here: the **2026-12-02** Article 50(2) machine-readable-marking grace period (for systems already on the market before 2026-08-02) is corroborated by the adopted text, not merely this project's working assumption. Full detail and sourcing in the KB doc itself; still re-review this section once Official Journal publication lands and the final Code of Practice on AI-generated content is published.
 
 **Classification.** QAI Consultant (Streamlit/CLI and MCP server) is not an Annex III high-risk system and performs no prohibited practice: minimal-risk AI system with Article 50 transparency obligations. Free public availability in the EU counts as placing on the market, so the provider obligations are ours. The open-source carve-out (Art 2(12)) explicitly does NOT exempt from Article 50.
 

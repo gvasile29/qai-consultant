@@ -18,6 +18,11 @@ streamlit_logs/
 .pytest_cache/
 .ruff_cache/
 
+# qai-consultant-mcp packaging artifacts (pyproject.toml, v3.0 step 8)
+build/
+dist/
+*.egg-info/
+
 # Large binary installers
 *.exe
 

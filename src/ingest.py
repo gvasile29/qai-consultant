@@ -28,6 +28,13 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from pinecone import Pinecone
 
+from kb_config import (
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    EMBEDDING_MODEL,
+    get_source_category,
+)
+
 # Download required NLTK data silently
 nltk.download("punkt", quiet=True)
 nltk.download("punkt_tab", quiet=True)
@@ -39,7 +46,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 KNOWLEDGE_BASE_DIR = BASE_DIR / "knowledge_base"
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# EMBEDDING_MODEL, CHUNK_SIZE, CHUNK_OVERLAP, get_source_category imported from
+# kb_config (shared with agent.py, evals/rag.py, and the MCP server).
 PINECONE_NAMESPACE = "knowledge-base"
 UPSERT_BATCH_SIZE = 100
 
@@ -55,23 +63,6 @@ SUPPORTED_EXTENSIONS = {
     ".md": lambda p: TextLoader(p, encoding="utf-8"),
     ".txt": lambda p: TextLoader(p, encoding="utf-8"),
 }
-
-# ── Source metadata mapping ────────────────────────────────────────────────────
-SOURCE_CATEGORIES = {
-    "standards": "Standard",
-    "methodologies": "Methodology",
-    "articles": "Article",
-    "expert_knowledge": "Expert Knowledge",
-    "evaluation_audit": "Audit/Evaluation",
-}
-
-
-def get_source_category(file_path: Path) -> str:
-    for part in file_path.parts:
-        if part in SOURCE_CATEGORIES:
-            return SOURCE_CATEGORIES[part]
-    return "General"
-
 
 def load_documents(knowledge_base_dir: Path) -> tuple:
     documents = []
@@ -102,8 +93,8 @@ def load_documents(knowledge_base_dir: Path) -> tuple:
 
 def split_documents(documents: list) -> list:
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
         separators=["\n## ", "\n### ", "\n---", "\n\n", "\n", " "],
     )
     return splitter.split_documents(documents)

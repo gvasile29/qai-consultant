@@ -3,3 +3,10 @@
 ruff==0.4.4
 pytest==9.0.3
 pytest-mock==3.14.0
+
+# MCP server (v3.0) — needed to run/test src/mcp_server.py locally. Not part of
+# requirements.txt: the MCP server is a separate package (pyproject.toml, step 8),
+# not something the Streamlit Cloud deploy needs.
+mcp>=1.8.0
+build>=1.0.0
+setuptools>=67.0

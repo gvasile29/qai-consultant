@@ -14,8 +14,8 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
-from agent import QAIAgent, RAG_K_GENERATION
-from ai_disclosure import with_ai_footer
+from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
+from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 from risk_analyzer import RiskAnalyzer
 from test_plan_generator import TestPlanGenerator
@@ -279,12 +279,8 @@ class StrategyGenerator:
         filename = f"test_strategy_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
 
-        # Add metadata header
-        full_content = f"""---
-generated_by: QAI Consultant
-date: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-project: {context.project_name}
----
+        front_matter = build_front_matter("Test Strategy", context.project_name, MISTRAL_MODEL)
+        full_content = f"""{front_matter}
 
 {with_ai_footer(strategy)}
 """

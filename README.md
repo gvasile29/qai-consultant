@@ -9,7 +9,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-2.0.2-green.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-green.svg)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
 ---
@@ -167,6 +167,49 @@ Or use the **live hosted version**: [appi-consultant-esodgczvwpmozzybuhdhek.stre
 python src/cli.py
 ```
 
+### MCP Server (for Claude Code, Claude Desktop, claude.ai)
+
+QAI Consultant is also available as a local, fully keyless MCP server —
+`qai-consultant-mcp`. No Pinecone, no Mistral/OpenRouter API keys: it runs a
+local embedding index over the same knowledge base and exposes deterministic
+QA effort estimation, so your own AI coding assistant can ground its QA
+planning directly, no separate LLM call needed.
+
+```bash
+uvx qai-consultant-mcp
+```
+
+**Claude Code:**
+
+```bash
+claude mcp add qai-consultant -- uvx qai-consultant-mcp
+```
+
+**Claude Desktop** (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "qai-consultant": {
+      "command": "uvx",
+      "args": ["qai-consultant-mcp"]
+    }
+  }
+}
+```
+
+**Tools:**
+
+| Tool | What it does |
+|---|---|
+| `retrieve_qa_knowledge` | Grounding chunks from the KB (ISTQB, OWASP, IEEE, ISO, EU AI Act), filterable by category |
+| `list_kb_sources` | Every document in the KB, grouped by category |
+| `estimate_qa_effort` | Deterministic PERT-based effort estimate (no LLM narrative — you write your own from the numbers) |
+
+**Prompts:** `qa_project_interview` (the same 11-question intake this app uses), `risk_register_structure`, `test_strategy_structure`, `test_plan_structure` — each grounds the client's generation in `retrieve_qa_knowledge` with `[Source N]` citations.
+
+**Privacy:** usage telemetry is off by default. Set `QAI_TELEMETRY=1` to opt in; even then, only tool name/success/duration/category and an anonymous install ID are sent — never your query text or project details.
+
 ---
 
 ## Feedback Loop
@@ -193,10 +236,13 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v2.0** ✅ Cloud migration — Ollama → Mistral API + OpenRouter fallback; ChromaDB → Pinecone; deployed to Streamlit Cloud
 - **v2.0.1** ✅ Stability — 27 bugs fixed: PERT normalization, template application, PDF caching, session state, filename sanitization, RAG fallback, per-step exception isolation
 - **v2.0.2** ✅ Stability — release-gate evals (estimate integrity + RAG metrics), 5 estimation/validation defects fixed, session-state crash fix, narrative duplication/truncation fixes, per-step generation isolation from LLM outages
-- **v2.1** ⏸️ HuggingFace KB — `download_knowledge_base.py` *(deprioritized — Pinecone migration reduced value; most users use the live app directly)*
-- **v2.2** Community knowledge — LinkedIn Poll Series + expert knowledge extraction sessions
-- **v3.0** Hosted version — shared KB, quality gate, VPS deployment
-- **v4.0** Multi-LLM support (OpenAI, Claude API, Gemini, and more)
+- **v2.5.0** ✅ In-app Release Notes — sidebar panel + one-time "what's new" banner
+- **v2.5.1** ✅ Knowledge base — new `evaluation_audit/` pillar: process/test maturity models, audit methodology, security/compliance audit, real public failure case studies
+- **v2.5.2** ✅ EU AI Act Article 50 transparency patch — sidebar AI-interaction notice + visible "AI-generated content" label on every generated document
+- **v2.6.0** ✅ EU AI Act knowledge base pillar — risk tiers, provider/deployer obligations, Article 50 transparency, Articles 9-15 testing implications, conformity assessment, timeline
+- **v3.0.0** ✅ MCP server MVP — local, keyless `qai-consultant-mcp` (standards-grounded retrieval + deterministic effort estimation), in-app announcement, and machine-readable AI-generated marking (EU AI Act Article 50(2))
+- **v3.1** QA maturity audit tool — `assess_qa_maturity`, deterministic TMMi-inspired scoring
+- **v3.2** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---
 

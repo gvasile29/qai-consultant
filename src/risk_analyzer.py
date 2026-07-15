@@ -11,8 +11,8 @@ import os
 import re
 from pathlib import Path
 from datetime import datetime
-from agent import QAIAgent, RAG_K_GENERATION
-from ai_disclosure import with_ai_footer
+from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
+from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 from logger import get_logger
 
@@ -175,12 +175,8 @@ class RiskAnalyzer:
         filename = f"risk_register_{safe_name}_{timestamp}.md"
         output_path = output_dir / filename
 
-        full_content = f"""---
-generated_by: QAI Consultant
-date: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-project: {context.project_name}
-document_type: Risk Register
----
+        front_matter = build_front_matter("Risk Register", context.project_name, MISTRAL_MODEL)
+        full_content = f"""{front_matter}
 
 {with_ai_footer(risk_register)}
 """

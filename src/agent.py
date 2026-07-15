@@ -10,6 +10,7 @@ from pathlib import Path
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.schema import Document
 from pinecone import Pinecone
+from kb_config import EMBEDDING_MODEL
 from logger import get_logger, setup_logging
 from mistralai.client import Mistral
 from openai import OpenAI
@@ -151,7 +152,10 @@ class LLMClient:
 # ── Config ─────────────────────────────────────────────────────────────────────
 MISTRAL_MODEL    = "mistral-small-latest"
 OPENROUTER_MODEL = "mistralai/mistral-small-3.2-24b-instruct"
-EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
+# EMBEDDING_MODEL imported from kb_config (shared with ingest.py, evals/rag.py,
+# and the MCP server's local_index.py) — kept as a module attribute here too
+# since existing callers (evals/rag.py's fallback import, tests) reference
+# agent.EMBEDDING_MODEL directly.
 TOP_K_RESULTS    = 5
 RAG_K_GENERATION = 5        # chunks for Risk Register + Test Strategy prompts
 PINECONE_NAMESPACE = "knowledge-base"   # must match PINECONE_NAMESPACE in ingest.py

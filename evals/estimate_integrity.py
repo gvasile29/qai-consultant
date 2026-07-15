@@ -41,6 +41,10 @@ def _load_target():
             return ""
 
     stub.QAIAgent = QAIAgent
+    # effort_estimator.py imports MISTRAL_MODEL (v3.0 step 9, for the AI Act
+    # front-matter marking) alongside QAIAgent — the stub needs both names or
+    # the import itself fails before any deterministic check runs.
+    stub.MISTRAL_MODEL = "mistral-small-latest"
     sys.modules["agent"] = stub
 
     from dialogue import InputValidator, ProjectContext  # noqa: PLC0415
