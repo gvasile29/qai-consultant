@@ -2,7 +2,7 @@
 
 Concept: un Q construit din pixeli pe grid, in care un singur pixel, cel din coada Q-ului, este in culoarea de accent. Povestea: QA gaseste pixelul care nu e la locul lui. Constructia pe grid si estetica pixel sunt aliniate cu trendurile 2026 (neo-minimalism, monograme bold, grid ultra-crisp) si evita cliseele AI (hexagoane, spirale, gradiente) si cliseul QA (bifa).
 
-Wordmark: "QAI" geometric monoline bold; Q-ul citeste si ca o lupa de inspectie.
+Wordmark: "QAI" geometric monoline bold; Q-ul citeste si ca o lupa de inspectie. Sub el, "CONSULTANT" in majuscule monoline tracked, slate estompat (#475569 / #94A3B8 pe dark), pentru ierarhie.
 
 ## Paleta "Ocean"
 
@@ -46,5 +46,5 @@ st.logo(
 - Pixelul defect este intotdeauna unul singur si intotdeauna in coltul din dreapta-jos. Nu-i schimba pozitia sau culoarea.
 - Pe fundal deschis: variantele standard. Pe fundal inchis (`#0F172A` sau mai inchis): variantele `_dark`.
 - Spatiu liber minim in jurul logo-ului: dimensiunea unui pixel din grid.
-- Sub 48px foloseste doar simbolul (`qai_icon`) sau favicon-ul, nu lockup-ul cu text.
+- Sub 48px foloseste doar simbolul (`qai_icon`) sau favicon-ul, nu lockup-ul cu text. Randul "CONSULTANT" apare doar in lockup-urile mari (orizontal si stacked); nu il adauga separat si nu il mari fata de proportia din SVG.
 - Nu modifica proportiile gridului (celula 12, spatiu 3).
