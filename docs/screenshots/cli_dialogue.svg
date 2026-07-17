@@ -1,0 +1,249 @@
+<svg class="rich-terminal" viewBox="0 0 1238 1196.8" xmlns="http://www.w3.org/2000/svg">
+    <!-- Generated with Rich https://www.textualize.io -->
+    <style>
+
+    @font-face {
+        font-family: "Fira Code";
+        src: local("FiraCode-Regular"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Regular.woff2") format("woff2"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Regular.woff") format("woff");
+        font-style: normal;
+        font-weight: 400;
+    }
+    @font-face {
+        font-family: "Fira Code";
+        src: local("FiraCode-Bold"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Bold.woff2") format("woff2"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Bold.woff") format("woff");
+        font-style: bold;
+        font-weight: 700;
+    }
+
+    .terminal-3693411237-matrix {
+        font-family: Fira Code, monospace;
+        font-size: 20px;
+        line-height: 24.4px;
+        font-variant-east-asian: full-width;
+    }
+
+    .terminal-3693411237-title {
+        font-size: 18px;
+        font-weight: bold;
+        font-family: arial;
+    }
+
+    .terminal-3693411237-r1 { fill: #68a0b3;font-weight: bold }
+.terminal-3693411237-r2 { fill: #c5c8c6 }
+.terminal-3693411237-r3 { fill: #c5c8c6;font-weight: bold }
+.terminal-3693411237-r4 { fill: #868887 }
+.terminal-3693411237-r5 { fill: #68a0b3 }
+.terminal-3693411237-r6 { fill: #868887;font-weight: bold }
+.terminal-3693411237-r7 { fill: #4e707b;font-weight: bold }
+.terminal-3693411237-r8 { fill: #6b753d }
+    </style>
+
+    <defs>
+    <clipPath id="terminal-3693411237-clip-terminal">
+      <rect x="0" y="0" width="1219.0" height="1145.8" />
+    </clipPath>
+    <clipPath id="terminal-3693411237-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-23">
+    <rect x="0" y="562.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-24">
+    <rect x="0" y="587.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-25">
+    <rect x="0" y="611.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-26">
+    <rect x="0" y="635.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-27">
+    <rect x="0" y="660.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-28">
+    <rect x="0" y="684.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-29">
+    <rect x="0" y="709.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-30">
+    <rect x="0" y="733.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-31">
+    <rect x="0" y="757.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-32">
+    <rect x="0" y="782.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-33">
+    <rect x="0" y="806.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-34">
+    <rect x="0" y="831.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-35">
+    <rect x="0" y="855.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-36">
+    <rect x="0" y="879.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-37">
+    <rect x="0" y="904.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-38">
+    <rect x="0" y="928.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-39">
+    <rect x="0" y="953.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-40">
+    <rect x="0" y="977.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-41">
+    <rect x="0" y="1001.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-42">
+    <rect x="0" y="1026.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-43">
+    <rect x="0" y="1050.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-44">
+    <rect x="0" y="1075.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3693411237-line-45">
+    <rect x="0" y="1099.5" width="1220" height="24.65"/>
+            </clipPath>
+    </defs>
+
+    <rect fill="#292929" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1236" height="1194.8" rx="8"/><text class="terminal-3693411237-title" fill="#c5c8c6" text-anchor="middle" x="618" y="27">QAI&#160;Consultant&#160;—&#160;Project&#160;Discovery</text>
+            <g transform="translate(26,22)">
+            <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
+            <circle cx="22" cy="0" r="7" fill="#febc2e"/>
+            <circle cx="44" cy="0" r="7" fill="#28c840"/>
+            </g>
+        
+    <g transform="translate(9, 41)" clip-path="url(#terminal-3693411237-clip-terminal)">
+    
+    <g class="terminal-3693411237-matrix">
+    <text class="terminal-3693411237-r1" x="0" y="20" textLength="12.2" clip-path="url(#terminal-3693411237-line-0)">[</text><text class="terminal-3693411237-r1" x="12.2" y="20" textLength="12.2" clip-path="url(#terminal-3693411237-line-0)">1</text><text class="terminal-3693411237-r1" x="24.4" y="20" textLength="12.2" clip-path="url(#terminal-3693411237-line-0)">/</text><text class="terminal-3693411237-r1" x="36.6" y="20" textLength="24.4" clip-path="url(#terminal-3693411237-line-0)">11</text><text class="terminal-3693411237-r1" x="61" y="20" textLength="12.2" clip-path="url(#terminal-3693411237-line-0)">]</text><text class="terminal-3693411237-r3" x="85.4" y="20" textLength="402.6" clip-path="url(#terminal-3693411237-line-0)">What&#160;is&#160;the&#160;name&#160;of&#160;your&#160;project?</text><text class="terminal-3693411237-r2" x="1220" y="20" textLength="12.2" clip-path="url(#terminal-3693411237-line-0)">
+</text><text class="terminal-3693411237-r4" x="0" y="44.4" textLength="597.8" clip-path="url(#terminal-3693411237-line-1)">&#160;&#160;→&#160;e.g.,&#160;MyApp,&#160;E-commerce&#160;Platform,&#160;Banking&#160;API</text><text class="terminal-3693411237-r2" x="1220" y="44.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-1)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="68.8" textLength="134.2" clip-path="url(#terminal-3693411237-line-2)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="68.8" textLength="268.4" clip-path="url(#terminal-3693411237-line-2)">:&#160;SaaS&#160;Web&#160;Application</text><text class="terminal-3693411237-r2" x="1220" y="68.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-2)">
+</text><text class="terminal-3693411237-r2" x="1220" y="93.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-3)">
+</text><text class="terminal-3693411237-r1" x="0" y="117.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-4)">[</text><text class="terminal-3693411237-r1" x="12.2" y="117.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-4)">2</text><text class="terminal-3693411237-r1" x="24.4" y="117.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-4)">/</text><text class="terminal-3693411237-r1" x="36.6" y="117.6" textLength="24.4" clip-path="url(#terminal-3693411237-line-4)">11</text><text class="terminal-3693411237-r1" x="61" y="117.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-4)">]</text><text class="terminal-3693411237-r3" x="85.4" y="117.6" textLength="1085.8" clip-path="url(#terminal-3693411237-line-4)">Briefly&#160;describe&#160;what&#160;the&#160;product&#160;does.&#160;What&#160;problem&#160;does&#160;it&#160;solve&#160;and&#160;who&#160;are&#160;the&#160;users?</text><text class="terminal-3693411237-r2" x="1220" y="117.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-4)">
+</text><text class="terminal-3693411237-r4" x="0" y="142" textLength="1012.6" clip-path="url(#terminal-3693411237-line-5)">&#160;&#160;→&#160;e.g.,&#160;A&#160;mobile&#160;app&#160;for&#160;tracking&#160;personal&#160;finances,&#160;used&#160;by&#160;individual&#160;consumers</text><text class="terminal-3693411237-r2" x="1220" y="142" textLength="12.2" clip-path="url(#terminal-3693411237-line-5)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="166.4" textLength="134.2" clip-path="url(#terminal-3693411237-line-6)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="166.4" textLength="1061.4" clip-path="url(#terminal-3693411237-line-6)">:&#160;B2C&#160;SaaS&#160;platform&#160;with&#160;user&#160;authentication,&#160;subscription&#160;billing,&#160;and&#160;a&#160;feature-rich&#160;</text><text class="terminal-3693411237-r2" x="1220" y="166.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-6)">
+</text><text class="terminal-3693411237-r2" x="0" y="190.8" textLength="561.2" clip-path="url(#terminal-3693411237-line-7)">dashboard&#160;served&#160;to&#160;end&#160;consumers&#160;via&#160;browser.</text><text class="terminal-3693411237-r2" x="1220" y="190.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-7)">
+</text><text class="terminal-3693411237-r2" x="1220" y="215.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-8)">
+</text><text class="terminal-3693411237-r1" x="0" y="239.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-9)">[</text><text class="terminal-3693411237-r1" x="12.2" y="239.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-9)">3</text><text class="terminal-3693411237-r1" x="24.4" y="239.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-9)">/</text><text class="terminal-3693411237-r1" x="36.6" y="239.6" textLength="24.4" clip-path="url(#terminal-3693411237-line-9)">11</text><text class="terminal-3693411237-r1" x="61" y="239.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-9)">]</text><text class="terminal-3693411237-r3" x="85.4" y="239.6" textLength="439.2" clip-path="url(#terminal-3693411237-line-9)">What&#160;type&#160;of&#160;product&#160;are&#160;we&#160;testing?</text><text class="terminal-3693411237-r2" x="1220" y="239.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-9)">
+</text><text class="terminal-3693411237-r4" x="0" y="264" textLength="366" clip-path="url(#terminal-3693411237-line-10)">&#160;&#160;→&#160;e.g.,&#160;web&#160;app,&#160;mobile&#160;app&#160;</text><text class="terminal-3693411237-r6" x="366" y="264" textLength="12.2" clip-path="url(#terminal-3693411237-line-10)">(</text><text class="terminal-3693411237-r4" x="378.2" y="264" textLength="134.2" clip-path="url(#terminal-3693411237-line-10)">iOS/Android</text><text class="terminal-3693411237-r6" x="512.4" y="264" textLength="12.2" clip-path="url(#terminal-3693411237-line-10)">)</text><text class="terminal-3693411237-r4" x="524.6" y="264" textLength="671" clip-path="url(#terminal-3693411237-line-10)">,&#160;REST&#160;API,&#160;microservices,&#160;embedded&#160;system,&#160;desktop&#160;app</text><text class="terminal-3693411237-r2" x="1220" y="264" textLength="12.2" clip-path="url(#terminal-3693411237-line-10)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="288.4" textLength="134.2" clip-path="url(#terminal-3693411237-line-11)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="288.4" textLength="207.4" clip-path="url(#terminal-3693411237-line-11)">:&#160;Web&#160;Application</text><text class="terminal-3693411237-r2" x="1220" y="288.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-11)">
+</text><text class="terminal-3693411237-r2" x="1220" y="312.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-12)">
+</text><text class="terminal-3693411237-r1" x="0" y="337.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-13)">[</text><text class="terminal-3693411237-r1" x="12.2" y="337.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-13)">4</text><text class="terminal-3693411237-r1" x="24.4" y="337.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-13)">/</text><text class="terminal-3693411237-r1" x="36.6" y="337.2" textLength="24.4" clip-path="url(#terminal-3693411237-line-13)">11</text><text class="terminal-3693411237-r1" x="61" y="337.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-13)">]</text><text class="terminal-3693411237-r3" x="85.4" y="337.2" textLength="414.8" clip-path="url(#terminal-3693411237-line-13)">What&#160;is&#160;the&#160;main&#160;technology&#160;stack?</text><text class="terminal-3693411237-r2" x="1220" y="337.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-13)">
+</text><text class="terminal-3693411237-r4" x="0" y="361.6" textLength="890.6" clip-path="url(#terminal-3693411237-line-14)">&#160;&#160;→&#160;e.g.,&#160;React&#160;+&#160;Node.js,&#160;Java&#160;Spring&#160;Boot,&#160;Python&#160;Django,&#160;Flutter,&#160;.NET</text><text class="terminal-3693411237-r2" x="1220" y="361.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-14)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="386" textLength="134.2" clip-path="url(#terminal-3693411237-line-15)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="386" textLength="512.4" clip-path="url(#terminal-3693411237-line-15)">:&#160;React,&#160;Node.js/Express,&#160;PostgreSQL,&#160;AWS&#160;</text><text class="terminal-3693411237-r3" x="671" y="386" textLength="12.2" clip-path="url(#terminal-3693411237-line-15)">(</text><text class="terminal-3693411237-r2" x="683.2" y="386" textLength="146.4" clip-path="url(#terminal-3693411237-line-15)">EC2,&#160;S3,&#160;RDS</text><text class="terminal-3693411237-r3" x="829.6" y="386" textLength="12.2" clip-path="url(#terminal-3693411237-line-15)">)</text><text class="terminal-3693411237-r2" x="1220" y="386" textLength="12.2" clip-path="url(#terminal-3693411237-line-15)">
+</text><text class="terminal-3693411237-r2" x="1220" y="410.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-16)">
+</text><text class="terminal-3693411237-r1" x="0" y="434.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-17)">[</text><text class="terminal-3693411237-r1" x="12.2" y="434.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-17)">5</text><text class="terminal-3693411237-r1" x="24.4" y="434.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-17)">/</text><text class="terminal-3693411237-r1" x="36.6" y="434.8" textLength="24.4" clip-path="url(#terminal-3693411237-line-17)">11</text><text class="terminal-3693411237-r1" x="61" y="434.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-17)">]</text><text class="terminal-3693411237-r3" x="85.4" y="434.8" textLength="427" clip-path="url(#terminal-3693411237-line-17)">How&#160;many&#160;people&#160;are&#160;on&#160;the&#160;QA&#160;team?</text><text class="terminal-3693411237-r2" x="1220" y="434.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-17)">
+</text><text class="terminal-3693411237-r4" x="0" y="459.2" textLength="122" clip-path="url(#terminal-3693411237-line-18)">&#160;&#160;→&#160;e.g.,&#160;</text><text class="terminal-3693411237-r7" x="122" y="459.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-18)">1</text><text class="terminal-3693411237-r4" x="134.2" y="459.2" textLength="24.4" clip-path="url(#terminal-3693411237-line-18)">,&#160;</text><text class="terminal-3693411237-r7" x="158.6" y="459.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-18)">2</text><text class="terminal-3693411237-r4" x="170.8" y="459.2" textLength="61" clip-path="url(#terminal-3693411237-line-18)">,&#160;or&#160;</text><text class="terminal-3693411237-r8" x="231.8" y="459.2" textLength="610" clip-path="url(#terminal-3693411237-line-18)">&#x27;no&#160;dedicated&#160;QA&#160;—&#160;developers&#160;test&#160;their&#160;own&#160;code&#x27;</text><text class="terminal-3693411237-r2" x="1220" y="459.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-18)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="483.6" textLength="134.2" clip-path="url(#terminal-3693411237-line-19)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="483.6" textLength="24.4" clip-path="url(#terminal-3693411237-line-19)">:&#160;</text><text class="terminal-3693411237-r1" x="183" y="483.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-19)">2</text><text class="terminal-3693411237-r2" x="1220" y="483.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-19)">
+</text><text class="terminal-3693411237-r2" x="1220" y="508" textLength="12.2" clip-path="url(#terminal-3693411237-line-20)">
+</text><text class="terminal-3693411237-r1" x="0" y="532.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-21)">[</text><text class="terminal-3693411237-r1" x="12.2" y="532.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-21)">6</text><text class="terminal-3693411237-r1" x="24.4" y="532.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-21)">/</text><text class="terminal-3693411237-r1" x="36.6" y="532.4" textLength="24.4" clip-path="url(#terminal-3693411237-line-21)">11</text><text class="terminal-3693411237-r1" x="61" y="532.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-21)">]</text><text class="terminal-3693411237-r3" x="85.4" y="532.4" textLength="439.2" clip-path="url(#terminal-3693411237-line-21)">How&#160;many&#160;developers&#160;are&#160;on&#160;the&#160;team?</text><text class="terminal-3693411237-r2" x="1220" y="532.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-21)">
+</text><text class="terminal-3693411237-r4" x="0" y="556.8" textLength="122" clip-path="url(#terminal-3693411237-line-22)">&#160;&#160;→&#160;e.g.,&#160;</text><text class="terminal-3693411237-r7" x="122" y="556.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-22)">3</text><text class="terminal-3693411237-r4" x="134.2" y="556.8" textLength="146.4" clip-path="url(#terminal-3693411237-line-22)">&#160;frontend&#160;+&#160;</text><text class="terminal-3693411237-r7" x="280.6" y="556.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-22)">2</text><text class="terminal-3693411237-r4" x="292.8" y="556.8" textLength="158.6" clip-path="url(#terminal-3693411237-line-22)">&#160;backend,&#160;or&#160;</text><text class="terminal-3693411237-r7" x="451.4" y="556.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-22)">5</text><text class="terminal-3693411237-r4" x="463.6" y="556.8" textLength="268.4" clip-path="url(#terminal-3693411237-line-22)">&#160;full-stack&#160;developers</text><text class="terminal-3693411237-r2" x="1220" y="556.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-22)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="581.2" textLength="134.2" clip-path="url(#terminal-3693411237-line-23)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="581.2" textLength="24.4" clip-path="url(#terminal-3693411237-line-23)">:&#160;</text><text class="terminal-3693411237-r1" x="183" y="581.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-23)">6</text><text class="terminal-3693411237-r2" x="1220" y="581.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-23)">
+</text><text class="terminal-3693411237-r2" x="1220" y="605.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-24)">
+</text><text class="terminal-3693411237-r1" x="0" y="630" textLength="12.2" clip-path="url(#terminal-3693411237-line-25)">[</text><text class="terminal-3693411237-r1" x="12.2" y="630" textLength="12.2" clip-path="url(#terminal-3693411237-line-25)">7</text><text class="terminal-3693411237-r1" x="24.4" y="630" textLength="12.2" clip-path="url(#terminal-3693411237-line-25)">/</text><text class="terminal-3693411237-r1" x="36.6" y="630" textLength="24.4" clip-path="url(#terminal-3693411237-line-25)">11</text><text class="terminal-3693411237-r1" x="61" y="630" textLength="12.2" clip-path="url(#terminal-3693411237-line-25)">]</text><text class="terminal-3693411237-r3" x="85.4" y="630" textLength="597.8" clip-path="url(#terminal-3693411237-line-25)">What&#160;is&#160;the&#160;project&#160;timeline&#160;or&#160;release&#160;deadline?</text><text class="terminal-3693411237-r2" x="1220" y="630" textLength="12.2" clip-path="url(#terminal-3693411237-line-25)">
+</text><text class="terminal-3693411237-r4" x="0" y="654.4" textLength="122" clip-path="url(#terminal-3693411237-line-26)">&#160;&#160;→&#160;e.g.,&#160;</text><text class="terminal-3693411237-r7" x="122" y="654.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-26)">3</text><text class="terminal-3693411237-r4" x="134.2" y="654.4" textLength="305" clip-path="url(#terminal-3693411237-line-26)">&#160;months,&#160;release&#160;in&#160;June&#160;</text><text class="terminal-3693411237-r7" x="439.2" y="654.4" textLength="48.8" clip-path="url(#terminal-3693411237-line-26)">2026</text><text class="terminal-3693411237-r4" x="488" y="654.4" textLength="463.6" clip-path="url(#terminal-3693411237-line-26)">,&#160;ongoing&#160;product&#160;with&#160;monthly&#160;sprints</text><text class="terminal-3693411237-r2" x="1220" y="654.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-26)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="678.8" textLength="134.2" clip-path="url(#terminal-3693411237-line-27)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="678.8" textLength="24.4" clip-path="url(#terminal-3693411237-line-27)">:&#160;</text><text class="terminal-3693411237-r1" x="183" y="678.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-27)">6</text><text class="terminal-3693411237-r2" x="195.2" y="678.8" textLength="85.4" clip-path="url(#terminal-3693411237-line-27)">&#160;months</text><text class="terminal-3693411237-r2" x="1220" y="678.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-27)">
+</text><text class="terminal-3693411237-r2" x="1220" y="703.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-28)">
+</text><text class="terminal-3693411237-r1" x="0" y="727.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-29)">[</text><text class="terminal-3693411237-r1" x="12.2" y="727.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-29)">8</text><text class="terminal-3693411237-r1" x="24.4" y="727.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-29)">/</text><text class="terminal-3693411237-r1" x="36.6" y="727.6" textLength="24.4" clip-path="url(#terminal-3693411237-line-29)">11</text><text class="terminal-3693411237-r1" x="61" y="727.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-29)">]</text><text class="terminal-3693411237-r3" x="85.4" y="727.6" textLength="756.4" clip-path="url(#terminal-3693411237-line-29)">Does&#160;the&#160;team&#160;follow&#160;Agile,&#160;Waterfall,&#160;or&#160;another&#160;methodology?</text><text class="terminal-3693411237-r2" x="1220" y="727.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-29)">
+</text><text class="terminal-3693411237-r4" x="0" y="752" textLength="256.2" clip-path="url(#terminal-3693411237-line-30)">&#160;&#160;→&#160;e.g.,&#160;Scrum&#160;with&#160;</text><text class="terminal-3693411237-r7" x="256.2" y="752" textLength="12.2" clip-path="url(#terminal-3693411237-line-30)">2</text><text class="terminal-3693411237-r4" x="268.4" y="752" textLength="463.6" clip-path="url(#terminal-3693411237-line-30)">-week&#160;sprints,&#160;Kanban,&#160;Waterfall,&#160;SAFe</text><text class="terminal-3693411237-r2" x="1220" y="752" textLength="12.2" clip-path="url(#terminal-3693411237-line-30)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="776.4" textLength="134.2" clip-path="url(#terminal-3693411237-line-31)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="776.4" textLength="231.8" clip-path="url(#terminal-3693411237-line-31)">:&#160;Agile/Scrum&#160;with&#160;</text><text class="terminal-3693411237-r1" x="390.4" y="776.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-31)">2</text><text class="terminal-3693411237-r2" x="402.6" y="776.4" textLength="158.6" clip-path="url(#terminal-3693411237-line-31)">-week&#160;sprints</text><text class="terminal-3693411237-r2" x="1220" y="776.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-31)">
+</text><text class="terminal-3693411237-r2" x="1220" y="800.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-32)">
+</text><text class="terminal-3693411237-r1" x="0" y="825.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-33)">[</text><text class="terminal-3693411237-r1" x="12.2" y="825.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-33)">9</text><text class="terminal-3693411237-r1" x="24.4" y="825.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-33)">/</text><text class="terminal-3693411237-r1" x="36.6" y="825.2" textLength="24.4" clip-path="url(#terminal-3693411237-line-33)">11</text><text class="terminal-3693411237-r1" x="61" y="825.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-33)">]</text><text class="terminal-3693411237-r3" x="85.4" y="825.2" textLength="695.4" clip-path="url(#terminal-3693411237-line-33)">Are&#160;there&#160;any&#160;known&#160;high-risk&#160;areas&#160;or&#160;critical&#160;features?</text><text class="terminal-3693411237-r2" x="1220" y="825.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-33)">
+</text><text class="terminal-3693411237-r4" x="0" y="849.6" textLength="1134.6" clip-path="url(#terminal-3693411237-line-34)">&#160;&#160;→&#160;e.g.,&#160;payment&#160;processing,&#160;user&#160;authentication,&#160;data&#160;migration,&#160;third-party&#160;integrations,&#160;</text><text class="terminal-3693411237-r2" x="1220" y="849.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-34)">
+</text><text class="terminal-3693411237-r4" x="0" y="874" textLength="329.4" clip-path="url(#terminal-3693411237-line-35)">performance&#160;under&#160;high&#160;load</text><text class="terminal-3693411237-r2" x="1220" y="874" textLength="12.2" clip-path="url(#terminal-3693411237-line-35)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="898.4" textLength="134.2" clip-path="url(#terminal-3693411237-line-36)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="898.4" textLength="1024.8" clip-path="url(#terminal-3693411237-line-36)">:&#160;Third-party&#160;payment&#160;and&#160;OAuth&#160;integrations,&#160;authentication/session&#160;security,&#160;GDPR&#160;</text><text class="terminal-3693411237-r2" x="1220" y="898.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-36)">
+</text><text class="terminal-3693411237-r2" x="0" y="922.8" textLength="500.2" clip-path="url(#terminal-3693411237-line-37)">data&#160;handling&#160;and&#160;right-to-erasure&#160;flows.</text><text class="terminal-3693411237-r2" x="1220" y="922.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-37)">
+</text><text class="terminal-3693411237-r2" x="1220" y="947.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-38)">
+</text><text class="terminal-3693411237-r1" x="0" y="971.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-39)">[</text><text class="terminal-3693411237-r1" x="12.2" y="971.6" textLength="24.4" clip-path="url(#terminal-3693411237-line-39)">10</text><text class="terminal-3693411237-r1" x="36.6" y="971.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-39)">/</text><text class="terminal-3693411237-r1" x="48.8" y="971.6" textLength="24.4" clip-path="url(#terminal-3693411237-line-39)">11</text><text class="terminal-3693411237-r1" x="73.2" y="971.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-39)">]</text><text class="terminal-3693411237-r3" x="97.6" y="971.6" textLength="622.2" clip-path="url(#terminal-3693411237-line-39)">Does&#160;the&#160;project&#160;have&#160;any&#160;existing&#160;automated&#160;tests?</text><text class="terminal-3693411237-r2" x="1220" y="971.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-39)">
+</text><text class="terminal-3693411237-r4" x="0" y="996" textLength="1012.6" clip-path="url(#terminal-3693411237-line-40)">&#160;&#160;→&#160;e.g.,&#160;no&#160;automation&#160;yet,&#160;unit&#160;tests&#160;only,&#160;Selenium&#160;E2E&#160;suite,&#160;Postman&#160;API&#160;tests</text><text class="terminal-3693411237-r2" x="1220" y="996" textLength="12.2" clip-path="url(#terminal-3693411237-line-40)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="1020.4" textLength="134.2" clip-path="url(#terminal-3693411237-line-41)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="1020.4" textLength="732" clip-path="url(#terminal-3693411237-line-41)">:&#160;Playwright&#160;E2E&#160;test&#160;suite,&#160;Jest&#160;unit&#160;and&#160;integration&#160;tests</text><text class="terminal-3693411237-r2" x="1220" y="1020.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-41)">
+</text><text class="terminal-3693411237-r2" x="1220" y="1044.8" textLength="12.2" clip-path="url(#terminal-3693411237-line-42)">
+</text><text class="terminal-3693411237-r1" x="0" y="1069.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-43)">[</text><text class="terminal-3693411237-r1" x="12.2" y="1069.2" textLength="24.4" clip-path="url(#terminal-3693411237-line-43)">11</text><text class="terminal-3693411237-r1" x="36.6" y="1069.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-43)">/</text><text class="terminal-3693411237-r1" x="48.8" y="1069.2" textLength="24.4" clip-path="url(#terminal-3693411237-line-43)">11</text><text class="terminal-3693411237-r1" x="73.2" y="1069.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-43)">]</text><text class="terminal-3693411237-r3" x="97.6" y="1069.2" textLength="634.4" clip-path="url(#terminal-3693411237-line-43)">Are&#160;there&#160;any&#160;compliance&#160;or&#160;regulatory&#160;requirements?</text><text class="terminal-3693411237-r2" x="1220" y="1069.2" textLength="12.2" clip-path="url(#terminal-3693411237-line-43)">
+</text><text class="terminal-3693411237-r4" x="0" y="1093.6" textLength="439.2" clip-path="url(#terminal-3693411237-line-44)">&#160;&#160;→&#160;e.g.,&#160;GDPR,&#160;PCI-DSS,&#160;HIPAA,&#160;ISO&#160;</text><text class="terminal-3693411237-r7" x="439.2" y="1093.6" textLength="61" clip-path="url(#terminal-3693411237-line-44)">27001</text><text class="terminal-3693411237-r4" x="500.2" y="1093.6" textLength="73.2" clip-path="url(#terminal-3693411237-line-44)">,&#160;none</text><text class="terminal-3693411237-r2" x="1220" y="1093.6" textLength="12.2" clip-path="url(#terminal-3693411237-line-44)">
+</text><text class="terminal-3693411237-r5" x="24.4" y="1118" textLength="134.2" clip-path="url(#terminal-3693411237-line-45)">Your&#160;answer</text><text class="terminal-3693411237-r2" x="158.6" y="1118" textLength="219.6" clip-path="url(#terminal-3693411237-line-45)">:&#160;GDPR,&#160;OWASP&#160;Top&#160;</text><text class="terminal-3693411237-r1" x="378.2" y="1118" textLength="24.4" clip-path="url(#terminal-3693411237-line-45)">10</text><text class="terminal-3693411237-r2" x="1220" y="1118" textLength="12.2" clip-path="url(#terminal-3693411237-line-45)">
+</text><text class="terminal-3693411237-r2" x="1220" y="1142.4" textLength="12.2" clip-path="url(#terminal-3693411237-line-46)">
+</text>
+    </g>
+    </g>
+</svg>

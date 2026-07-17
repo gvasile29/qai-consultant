@@ -7,9 +7,11 @@
 
 # QAI Consultant
 
-An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, and **Effort Estimation Report** from a simple project description.
+An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, **Effort Estimation Report**, and **Test Plan** from a simple project description. Also available as an **MCP server** so Claude Code, Claude Desktop, and claude.ai can ground their own QA work in the same standards and numbers.
 
 > 🌐 **Live demo:** [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
+
+> 🔌 **New:** QAI Consultant is now also an MCP server — `uvx qai-consultant-mcp`. No API keys, no Pinecone. See [MCP Server](#mcp-server-for-claude-code-claude-desktop-claudeai) below or the [package on PyPI](https://pypi.org/project/qai-consultant-mcp/).
 
 > 🤖 Built with [Claude Code](https://claude.ai/code) by Anthropic.
 
@@ -17,21 +19,25 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Version](https://img.shields.io/badge/version-3.0.0-green.svg)
+![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
 ---
 
 ## Screenshots
 
-### CLI
-![CLI Banner](docs/screenshots/cli_banner.png)
-![CLI Dialogue](docs/screenshots/cli_dialogue.png)
-
 ### Web UI (Streamlit)
 ![Streamlit Intro](docs/screenshots/streamlit_intro.png)
-![Streamlit Strategy](docs/screenshots/streamlit_strategy.png)
+![Streamlit MCP announcement in sidebar](docs/screenshots/streamlit_mcp_sidebar.png)
+![Streamlit Project Discovery dialogue](docs/screenshots/streamlit_dialogue.png)
 ![Streamlit Risk Register](docs/screenshots/streamlit_risk_register.png)
-![Streamlit Effort](docs/screenshots/streamlit_effort.png)
+![Streamlit Effort Estimation](docs/screenshots/streamlit_effort.png)
+![Streamlit Test Strategy](docs/screenshots/streamlit_strategy.png)
+![Streamlit Test Plan](docs/screenshots/streamlit_test_plan.png)
+
+### CLI
+![CLI Banner](docs/screenshots/cli_banner.svg)
+![CLI Project Discovery dialogue](docs/screenshots/cli_dialogue.svg)
 
 ---
 
