@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">
+  <title>QAI Consultant icon, dark backgrounds — the defect pixel</title>
+  <g fill="#F1F5F9">
+    <rect x="15" y="0" width="12" height="12" rx="3"/><rect x="30" y="0" width="12" height="12" rx="3"/><rect x="45" y="0" width="12" height="12" rx="3"/>
+    <rect x="0" y="15" width="12" height="12" rx="3"/><rect x="60" y="15" width="12" height="12" rx="3"/>
+    <rect x="0" y="30" width="12" height="12" rx="3"/><rect x="60" y="30" width="12" height="12" rx="3"/>
+    <rect x="0" y="45" width="12" height="12" rx="3"/><rect x="60" y="45" width="12" height="12" rx="3"/>
+    <rect x="15" y="60" width="12" height="12" rx="3"/><rect x="30" y="60" width="12" height="12" rx="3"/><rect x="45" y="60" width="12" height="12" rx="3"/>
+  </g>
+  <rect x="60" y="60" width="12" height="12" rx="3" fill="#2DD4BF"/>
+</svg>

@@ -29,13 +29,20 @@ from kb_manifest import KB_MANIFEST
 setup_logging()
 logger = get_logger(__name__)
 
+BRAND_DIR = Path(__file__).resolve().parent.parent / "assets" / "brand"
 
 # ── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="QAI Consultant",
-    page_icon="🧪",
+    page_icon=str(BRAND_DIR / "qai_favicon_32.png"),
     layout="wide",
     initial_sidebar_state="expanded",
+)
+
+# Sidebar logo (Streamlit >= 1.35): full lockup expanded, symbol-only collapsed.
+st.logo(
+    str(BRAND_DIR / "qai_logo.svg"),
+    icon_image=str(BRAND_DIR / "qai_icon.svg"),
 )
 
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
@@ -323,7 +330,7 @@ EXAMPLE_TEST_PLAN = """
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
-    st.markdown('<p class="main-header">🧪 QAI Consultant</p>', unsafe_allow_html=True)
+    st.image(str(BRAND_DIR / "qai_logo_horizontal_1680.png"), width=280)
     st.markdown('<p class="sub-header">Your AI-powered QA Architect — Test Strategy Generator</p>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
