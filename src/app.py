@@ -78,6 +78,11 @@ st.markdown("""
         font-size: 0.85rem;
         color: #aaa;
     }
+    /* Centers the top-of-page logo (the only st.image in this app) within its column */
+    [data-testid="stImage"] {
+        display: flex;
+        justify-content: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -330,7 +335,6 @@ EXAMPLE_TEST_PLAN = """
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
-    st.image(str(BRAND_DIR / "qai_logo_horizontal_1680.png"), width=280)
     st.markdown('<p class="sub-header">Your AI-powered QA Architect — Test Strategy Generator</p>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
@@ -995,6 +999,10 @@ def render_strategy():
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     init_session_state()
+
+    _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
+    with _logo_col2:
+        st.image(str(BRAND_DIR / "qai_logo_horizontal_1680.png"), width=280)
 
     # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()
