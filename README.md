@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/qai_logo_horizontal_dark_1680.png">
+    <img alt="QAI Consultant" src="assets/brand/qai_logo_horizontal_1680.png" width="360">
+  </picture>
+</p>
+
 # QAI Consultant
 
 An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, and **Effort Estimation Report** from a simple project description.

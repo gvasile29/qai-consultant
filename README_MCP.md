@@ -1,3 +1,5 @@
+![QAI Consultant](https://raw.githubusercontent.com/gvasile29/qai-consultant/master/assets/brand/qai_logo_horizontal_1680.png)
+
 # qai-consultant-mcp
 
 A local, fully keyless [MCP](https://modelcontextprotocol.io) server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act) and deterministic QA effort estimation — callable directly from Claude Code, Claude Desktop, or claude.ai.

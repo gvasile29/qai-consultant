@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 88">
+  <title>QAI Consultant logo, dark backgrounds - the defect pixel</title>
+  <g transform="translate(8,8)">
+    <g fill="#F1F5F9">
+      <rect x="15" y="0" width="12" height="12" rx="3"/><rect x="30" y="0" width="12" height="12" rx="3"/><rect x="45" y="0" width="12" height="12" rx="3"/>
+      <rect x="0" y="15" width="12" height="12" rx="3"/><rect x="60" y="15" width="12" height="12" rx="3"/>
+      <rect x="0" y="30" width="12" height="12" rx="3"/><rect x="60" y="30" width="12" height="12" rx="3"/>
+      <rect x="0" y="45" width="12" height="12" rx="3"/><rect x="60" y="45" width="12" height="12" rx="3"/>
+      <rect x="15" y="60" width="12" height="12" rx="3"/><rect x="30" y="60" width="12" height="12" rx="3"/><rect x="45" y="60" width="12" height="12" rx="3"/>
+    </g>
+    <rect x="60" y="60" width="12" height="12" rx="3" fill="#2DD4BF"/>
+  </g>
+  <g fill="none" stroke="#F1F5F9" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="118" cy="44" r="15"/>
+    <path d="M129 55 L138 64"/>
+    <path d="M148 60 L159 28 L170 60"/>
+    <path d="M152.5 50 L165.5 50"/>
+    <path d="M186 28 L186 60"/>
+  </g>
+</svg>
