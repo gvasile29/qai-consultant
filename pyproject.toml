@@ -59,6 +59,7 @@ explicit = true
 py-modules = [
     "mcp_server", "dialogue", "effort_core", "local_index",
     "telemetry", "prompts", "kb_config", "logger", "version",
+    "review_core", "results_core",
 ]
 
 [tool.setuptools.package-dir]
