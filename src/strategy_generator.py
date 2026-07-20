@@ -14,6 +14,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
@@ -116,12 +117,15 @@ class StrategyGenerator:
         """
         self.agent = agent
 
-    def generate_all(self, context: ProjectContext) -> dict:
+    def generate_all(self, context: ProjectContext, results_summary: Optional[str] = None) -> dict:
         """
         Run the full generation pipeline: Risk Register → Effort Estimation → Test Strategy.
 
         Args:
             context: Collected ProjectContext from DialogueManager.
+            results_summary: Optional deterministic test-execution-data summary
+                    (results_core.summarize_for_prompt()) passed through to the
+                    Risk Register step. Absence changes nothing (v3.0 behavior).
 
         Returns:
             Dict with keys: strategy, strategy_path, sources, risk_register,
@@ -168,7 +172,9 @@ class StrategyGenerator:
 
         logger.info("Step 1/4 — Analyzing project risks...")
         try:
-            risk_register, risk_sources = risk_analyzer.analyze(context, chunks=risk_chunks)
+            risk_register, risk_sources = risk_analyzer.analyze(
+                context, chunks=risk_chunks, results_summary=results_summary,
+            )
             risk_path = risk_analyzer.save(risk_register, context)
             logger.info(f"Risk Register saved: {risk_path.name}")
         except Exception as exc:

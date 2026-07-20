@@ -16,7 +16,7 @@ from agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
 from ai_disclosure import AI_INTERACTION_NOTICE, pdf_meta_html, with_ai_footer
 from dialogue import DialogueManager, InputValidator, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
-from risk_analyzer import RiskAnalyzer
+from risk_analyzer import RiskAnalyzer, append_execution_data_appendix
 from effort_estimator import EffortEstimator
 from agent import QAIConnectionError, QAIKnowledgeBaseError
 from logger import setup_logging, get_logger
@@ -31,6 +31,12 @@ from review_generator import (
     build_review_prompt,
     build_review_report_markdown,
     save_review_report,
+)
+from results_core import (
+    analyze as compute_results_analysis,
+    parse_junit_xml,
+    parse_results_csv,
+    summarize_for_prompt,
 )
 
 setup_logging()
@@ -150,6 +156,8 @@ def init_session_state():
         st.session_state.review_output_path = None
     if "review_pdf_bytes" not in st.session_state:
         st.session_state.review_pdf_bytes = None
+    if "results_analysis" not in st.session_state:
+        st.session_state.results_analysis = None
 
 
 # Session-state keys owned by the "Review an existing document" (F1) mode —
@@ -290,6 +298,7 @@ def render_sidebar():
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
                         "generation_started", "results_complete",
+                        "results_analysis",
                         "run_count", "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -298,6 +307,7 @@ def render_sidebar():
                 st.session_state.pop(f"input_{q['key']}", None)
             st.session_state.pop("input_additional_context", None)
             st.session_state.pop("review_additional_context", None)
+            st.session_state.pop("results_uploader", None)
             st.rerun()
 
         st.markdown("[⭐ Star on GitHub](https://github.com/gvasile29/qai-consultant)", unsafe_allow_html=True)
@@ -608,6 +618,44 @@ def render_review():
         height=120,
     )
 
+    with st.expander("📊 Attach test execution results (optional)"):
+        st.caption(
+            "Upload JUnit XML and/or CSV test execution reports to ground the "
+            "Risk Register in real pass/fail data — each XML file counts as one run."
+        )
+        uploaded_results = st.file_uploader(
+            "Upload JUnit XML or CSV files",
+            type=["xml", "csv"],
+            accept_multiple_files=True,
+            key="results_uploader",
+        )
+        if uploaded_results:
+            records = []
+            for uploaded_file in uploaded_results:
+                content = uploaded_file.read().decode("utf-8", errors="ignore")
+                if uploaded_file.name.lower().endswith(".csv"):
+                    records.extend(parse_results_csv(content))
+                else:
+                    records.extend(parse_junit_xml(content, run_id=Path(uploaded_file.name).stem))
+            st.session_state.results_analysis = compute_results_analysis(records)
+
+        analysis = st.session_state.get("results_analysis")
+        if analysis is not None:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Runs", analysis.runs)
+            m2.metric("Pass Rate", f"{analysis.overall_pass_rate:.0%}")
+            m3.metric("Flaky Tests", len(analysis.flaky))
+            m4.metric("Ever-Failing", len(analysis.ever_failing))
+            if analysis.failure_clusters:
+                top_clusters = "; ".join(
+                    f"{c['signature']} (x{c['count']})" for c in analysis.failure_clusters[:3]
+                )
+                st.caption(f"Top failure clusters: {top_clusters}")
+            if st.button("🗑️ Remove attached results"):
+                st.session_state.results_analysis = None
+                st.session_state.pop("results_uploader", None)
+                st.rerun()
+
     st.markdown("---")
     col1, col2 = st.columns(2)
     with col1:
@@ -769,11 +817,16 @@ def render_strategy():
         # produced it, so a resumed run doesn't redo completed work.
         if st.session_state.get("risk_register") is None:
             st.markdown("#### ⚠️ Generating Risk Register...")
-            risk_prompt = build_risk_prompt(context, agent.format_knowledge_context(risk_chunks))
+            results_analysis = st.session_state.get("results_analysis")
+            results_summary = summarize_for_prompt(results_analysis) if results_analysis else None
+            risk_prompt = build_risk_prompt(
+                context, agent.format_knowledge_context(risk_chunks), results_summary=results_summary,
+            )
             try:
                 risk_register = clean_markdown_html(st.write_stream(
                     agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
                 ))
+                risk_register = append_execution_data_appendix(risk_register, results_summary)
                 risk_path = risk_analyzer.save(risk_register, context)
             except (StopException, RerunException):
                 # Streamlit's own control-flow signals (e.g. a session
@@ -986,7 +1039,8 @@ def render_strategy():
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
-                    "generation_started", "results_complete"]:
+                    "generation_started", "results_complete",
+                    "results_analysis"]:
             if key in st.session_state:
                 del st.session_state[key]
         _reset_review_mode_state()
@@ -994,6 +1048,7 @@ def render_strategy():
             st.session_state.pop(f"input_{q['key']}", None)
         st.session_state.pop("input_additional_context", None)
         st.session_state.pop("review_additional_context", None)
+        st.session_state.pop("results_uploader", None)
         st.session_state.current_step = "intro"
         st.rerun()
 

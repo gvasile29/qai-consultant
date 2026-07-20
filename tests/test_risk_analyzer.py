@@ -27,7 +27,7 @@ sys.path.insert(0, str(SRC_DIR))
 
 from dialogue import ProjectContext
 from agent import QAIAgent
-from risk_analyzer import RiskAnalyzer, build_risk_prompt
+from risk_analyzer import RiskAnalyzer, append_execution_data_appendix, build_risk_prompt
 
 # ── BMW Infotainment sample context ──────────────────────────────────────────
 
@@ -108,6 +108,58 @@ def test_build_risk_prompt_structure():
         assert section in prompt, f"Required section '{section}' missing from prompt template"
 
     print("  PASS: All required sections present in risk prompt template")
+
+
+def test_build_risk_prompt_without_results_summary_unchanged():
+    """Absence of results_summary must not change the prompt at all — the
+    parameter is purely additive (v3.1 F2 requirement)."""
+    prompt_without_param = build_risk_prompt(BMW_CONTEXT, knowledge_context="[no knowledge]")
+    prompt_with_none = build_risk_prompt(BMW_CONTEXT, knowledge_context="[no knowledge]", results_summary=None)
+    assert prompt_without_param == prompt_with_none
+
+    print("  PASS: build_risk_prompt() is byte-identical with/without results_summary=None")
+
+
+def test_build_risk_prompt_includes_execution_data_block_when_given():
+    """When results_summary is given, the prompt gains a MEASURED EXECUTION
+    DATA block instructing the model to cite [Execution Data]."""
+    summary = "Runs: 3, distinct tests: 10, executions: 30, overall pass rate: 90.0%"
+    prompt = build_risk_prompt(BMW_CONTEXT, knowledge_context="[no knowledge]", results_summary=summary)
+
+    assert "MEASURED EXECUTION DATA" in prompt
+    assert summary in prompt
+    assert "[Execution Data]" in prompt
+    assert "[Source N]" in prompt  # still instructs NOT to cite it as [Source N]
+
+    print("  PASS: MEASURED EXECUTION DATA block present with [Execution Data] citation instruction")
+
+
+def test_build_risk_prompt_omits_execution_data_block_when_empty_string():
+    """An empty-string results_summary is falsy and must not inject an empty block."""
+    prompt = build_risk_prompt(BMW_CONTEXT, knowledge_context="[no knowledge]", results_summary="")
+    assert "MEASURED EXECUTION DATA" not in prompt
+
+    print("  PASS: empty results_summary does not inject the execution-data block")
+
+
+def test_append_execution_data_appendix_adds_section():
+    body = "# Risk Register — Sample\n\nSome body text."
+    summary = "Runs: 2, distinct tests: 5, executions: 10, overall pass rate: 80.0%"
+    result = append_execution_data_appendix(body, summary)
+
+    assert result.startswith(body)
+    assert "## Appendix: Measured Execution Data" in result
+    assert summary in result
+
+    print("  PASS: append_execution_data_appendix() adds a self-contained appendix section")
+
+
+def test_append_execution_data_appendix_noop_when_falsy():
+    body = "# Risk Register — Sample\n\nSome body text."
+    assert append_execution_data_appendix(body, None) == body
+    assert append_execution_data_appendix(body, "") == body
+
+    print("  PASS: append_execution_data_appendix() is a no-op for None/empty summary")
 
 
 def test_build_risk_query_includes_compliance_and_risks():
@@ -208,6 +260,11 @@ def test_sources_non_empty(sources: list):
 if __name__ == "__main__":
     tests_no_llm = [
         ("build_risk_prompt() has all required sections",  test_build_risk_prompt_structure),
+        ("build_risk_prompt() unchanged without results_summary", test_build_risk_prompt_without_results_summary_unchanged),
+        ("build_risk_prompt() includes execution data block", test_build_risk_prompt_includes_execution_data_block_when_given),
+        ("build_risk_prompt() omits block for empty summary", test_build_risk_prompt_omits_execution_data_block_when_empty_string),
+        ("append_execution_data_appendix() adds appendix",   test_append_execution_data_appendix_adds_section),
+        ("append_execution_data_appendix() no-op when falsy", test_append_execution_data_appendix_noop_when_falsy),
         ("_build_risk_query() includes compliance + risks", test_build_risk_query_includes_compliance_and_risks),
     ]
 
