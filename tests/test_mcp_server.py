@@ -64,10 +64,13 @@ async def _get_prompt(name: str) -> str:
 
 # ── Tool registration ────────────────────────────────────────────────────────────
 
-def test_all_three_tools_registered():
+def test_all_five_tools_registered():
     tools = _run(_list_tools())
     names = {t.name for t in tools}
-    assert names == {"retrieve_qa_knowledge", "list_kb_sources", "estimate_qa_effort"}
+    assert names == {
+        "retrieve_qa_knowledge", "list_kb_sources", "estimate_qa_effort",
+        "review_qa_document", "analyze_test_results",
+    }
 
 
 def test_retrieve_qa_knowledge_schema_has_expected_params():
@@ -83,6 +86,22 @@ def test_estimate_qa_effort_schema_has_expected_params():
     props = tool.inputSchema["properties"]
     expected = set(mcp_server._REQUIRED_FIELDS) | {"additional_context"}
     assert set(props.keys()) == expected
+
+
+def test_review_qa_document_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "review_qa_document")
+    props = tool.inputSchema["properties"]
+    assert set(props.keys()) == {"document_text", "doc_type"}
+
+
+def test_analyze_test_results_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "analyze_test_results")
+    props = tool.inputSchema["properties"]
+    assert set(props.keys()) == {
+        "junit_xml", "csv_text", "reference_tests", "flaky_min", "flaky_max",
+    }
 
 
 # ── retrieve_qa_knowledge ────────────────────────────────────────────────────────
@@ -200,6 +219,217 @@ def test_estimate_qa_effort_invalid_additional_context_reported():
     result = _run(_call_tool("estimate_qa_effort", bad_args))
     assert result["error"] == "validation"
     assert "additional_context" in result["fields"]
+
+
+# ── review_qa_document ───────────────────────────────────────────────────────────
+
+_STRONG_TEST_PLAN_TEXT = """
+# Test Plan — Acme Checkout
+
+## Scope
+This document defines the scope of testing for the checkout service.
+
+## Test Items
+The checkout API and payment gateway integration are the items to be tested.
+
+## Features to be Tested
+The following will be tested: cart totals, tax calculation, discount codes.
+
+## Features Not to be Tested
+Out of scope: third-party fraud detection internals are excluded from this plan.
+
+## Objectives
+The objective of this test plan is to validate checkout correctness end-to-end.
+
+## Test Levels
+Testing includes unit test, integration test, system test, and regression test levels.
+
+## Approach
+A risk-based testing approach is used, with risk-based prioritization of test cases.
+
+## Pass/Fail Criteria
+A test case passes when the expected result matches the observed output exactly.
+
+## Entry Criteria
+Entry criteria: all REQ-101 and REQ-102 requirements are code-complete and deployed to QA.
+
+## Exit Criteria
+Exit criteria: 95% of test cases pass and code coverage of 80% is achieved.
+
+## Suspension Criteria
+Testing will be suspended if the build fails smoke tests; resumption criteria apply after a fix.
+
+## Deliverables
+Test deliverables include the traceability matrix and the final test summary report.
+
+## Schedule
+The testing schedule spans two weeks per the project milestones.
+
+## Risks
+### R01 — Payment gateway instability
+- **Severity:** Critical
+- **Likelihood:** High priority risk requiring mitigation.
+- **Mitigation:** A contingency plan and mitigation strategy are documented for R01.
+
+Quality metrics tracked include defect density, coverage %, and pass rate (KPI).
+
+Expected result: the total is calculated to the exact cent per REQ-101.
+Expected result: the discount code REQ-102 reduces the total by exactly 10%.
+
+## Approvals
+Sign-off is required from the QA Lead and Project Manager before release.
+"""
+
+
+def test_review_qa_document_happy_path_shape():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "test_plan",
+    }))
+    assert "error" not in result
+    assert result["doc_type"] == "test_plan"
+    assert 0 <= result["overall_score"] <= 100
+    assert set(result["dimension_scores"].keys()) == {
+        "structure_completeness", "objectives_scope_clarity", "entry_exit_criteria",
+        "traceability", "measurability", "risk_coverage",
+    }
+    assert isinstance(result["findings"], list)
+    assert "kb_version" in result
+    assert "stats" in result
+
+
+def test_review_qa_document_findings_carry_kb_citations_list():
+    weak_doc = "Just a short note. " * 20  # long enough, no structure/keywords
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": weak_doc, "doc_type": "test_plan",
+    }))
+    assert result["findings"], "expected findings on a weak document"
+    for finding in result["findings"]:
+        assert set(finding.keys()) == {"dimension", "severity", "message", "evidence", "kb_citations"}
+        assert isinstance(finding["kb_citations"], list)
+        for citation in finding["kb_citations"]:
+            assert set(citation.keys()) == {"source", "category", "score"}
+
+
+def test_review_qa_document_invalid_doc_type_returns_structured_error():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "not_a_real_type",
+    }))
+    assert result["error"] == "invalid_argument"
+    assert "valid_doc_types" in result
+
+
+def test_review_qa_document_insufficient_content_is_not_an_error():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": "Too short.", "doc_type": "auto",
+    }))
+    assert "error" not in result
+    assert result["doc_type"] == "insufficient_content"
+    assert result["overall_score"] == 0
+    assert result["findings"] == []
+
+
+def test_review_qa_document_auto_detects_doc_type():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "auto",
+    }))
+    assert result["doc_type"] == "test_plan"
+
+
+# ── analyze_test_results ─────────────────────────────────────────────────────────
+
+_SINGLE_RUN_XML = """<testsuites>
+    <testsuite name="suite">
+        <testcase classname="pkg.A" name="test_pass" time="0.5"/>
+        <testcase classname="pkg.A" name="test_fail" time="0.1">
+            <failure message="boom">Traceback...</failure>
+        </testcase>
+    </testsuite>
+</testsuites>"""
+
+_MULTI_RUN_XML_ARRAY = json.dumps([
+    {"run_id": "run1", "xml": '<testsuite><testcase classname="pkg.B" name="test_flaky" time="0.1"/></testsuite>'},
+    {"run_id": "run2", "xml": '<testsuite><testcase classname="pkg.B" name="test_flaky" time="0.1"><failure message="x">x</failure></testcase></testsuite>'},
+    {"run_id": "run3", "xml": '<testsuite><testcase classname="pkg.B" name="test_flaky" time="0.1"/></testsuite>'},
+])
+
+_SIMPLE_CSV = "name,classname,status,duration_s\ntest_one,pkg.C,passed,1.0\ntest_two,pkg.C,failed,2.0\n"
+
+
+def test_analyze_test_results_junit_xml_happy_path():
+    result = _run(_call_tool("analyze_test_results", {"junit_xml": _SINGLE_RUN_XML}))
+    assert "error" not in result
+    assert result["runs"] == 1
+    assert result["total_tests"] == 2
+    assert result["executions"] == 2
+    assert result["overall_pass_rate"] == 0.5
+
+
+def test_analyze_test_results_csv_happy_path():
+    result = _run(_call_tool("analyze_test_results", {"csv_text": _SIMPLE_CSV}))
+    assert "error" not in result
+    assert result["total_tests"] == 2
+    assert result["executions"] == 2
+
+
+def test_analyze_test_results_multi_run_json_array():
+    result = _run(_call_tool("analyze_test_results", {
+        "junit_xml": _MULTI_RUN_XML_ARRAY, "flaky_min": 0.2, "flaky_max": 0.8,
+    }))
+    assert "error" not in result
+    assert result["runs"] == 3
+    assert result["executions"] == 3
+    assert len(result["flaky"]) == 1
+    assert result["flaky"][0]["test"] == "pkg.B::test_flaky"
+
+
+def test_analyze_test_results_requires_exactly_one_input():
+    both = _run(_call_tool("analyze_test_results", {"junit_xml": _SINGLE_RUN_XML, "csv_text": _SIMPLE_CSV}))
+    assert both["error"] == "invalid_argument"
+
+    neither = _run(_call_tool("analyze_test_results", {}))
+    assert neither["error"] == "invalid_argument"
+
+
+def test_analyze_test_results_malformed_xml_never_crashes():
+    result = _run(_call_tool("analyze_test_results", {"junit_xml": "<not valid xml"}))
+    assert "error" not in result
+    assert result["runs"] == 0
+    assert result["executions"] == 0
+
+
+def test_analyze_test_results_reference_tests_reports_never_run():
+    result = _run(_call_tool("analyze_test_results", {
+        "junit_xml": _SINGLE_RUN_XML,
+        "reference_tests": ["pkg.A::test_pass", "pkg.A::test_never_ran"],
+    }))
+    assert "error" not in result
+    assert result["never_run"] == [{"test": "pkg.A::test_never_ran"}]
+
+
+# ── Telemetry silence when disabled ─────────────────────────────────────────────
+
+def test_telemetry_disabled_by_default_does_not_raise_on_new_tools(monkeypatch):
+    monkeypatch.delenv("QAI_TELEMETRY", raising=False)
+    assert mcp_server.telemetry.is_enabled() is False
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "test_plan",
+    }))
+    assert "error" not in result
+
+
+def test_track_tool_called_merges_extra_properties(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(mcp_server.telemetry, "is_enabled", lambda: True)
+    monkeypatch.setattr(mcp_server.telemetry, "_send", lambda name, props: captured.update(props))
+    mcp_server.telemetry.track_tool_called(
+        "review_qa_document", success=True, duration_ms=1.0,
+        extra={"doc_type": "test_plan", "score_bucket": "80-100", "finding_count": 0},
+    )
+    import time as _time
+    _time.sleep(0.2)  # fire-and-forget thread — give it a moment to run
+    assert captured.get("doc_type") == "test_plan"
+    assert captured.get("score_bucket") == "80-100"
+    assert captured.get("finding_count") == 0
 
 
 # ── Prompts ───────────────────────────────────────────────────────────────────────

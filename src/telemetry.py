@@ -144,13 +144,18 @@ def track_tool_called(
     duration_ms: float,
     k: Optional[int] = None,
     category: Optional[str] = None,
+    extra: Optional[dict] = None,
 ) -> None:
-    """tool_name is one of the 3 fixed MCP tool names; category (retrieval
-    calls only) is one of kb_config.SOURCE_CATEGORIES' values or None — both
-    fixed small enums, never free-text."""
+    """tool_name is one of the 5 fixed MCP tool names; category (retrieval
+    calls only) is one of kb_config.SOURCE_CATEGORIES' values or None; extra
+    (review_qa_document/analyze_test_results only) carries a few fixed
+    small-enum/numeric fields (e.g. doc_type, score bucket, finding/run
+    counts) — never free-text, per the module-level telemetry contract."""
     properties = {"tool": tool_name, "success": success, "duration_ms": round(duration_ms, 1)}
     if k is not None:
         properties["k"] = k
     if category is not None:
         properties["category"] = category
+    if extra:
+        properties.update(extra)
     _fire("tool_called", properties)
