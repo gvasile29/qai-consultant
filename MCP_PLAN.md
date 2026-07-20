@@ -159,8 +159,12 @@ Acceptance:
 - Streamlit announcement live in the same release.
 - Machine-readable AI-generated marking shipped in all Streamlit/CLI outputs, released before 2026-12-02 (Article 50(2) deadline for pre-August-2026 systems; section 12).
 
-### v3.1: QA maturity audit tool
-`assess_qa_maturity(project_description, focus_areas=None)`: retrieval over `evaluation_audit/` and `standards/eu_ai_act/` (v2.6 KB pillar) + a deterministic TMMi-inspired scoring rubric; returns gap summary JSON with cited sources. This is the differentiator (standards-grounded QA audit as a tool); kept out of v3.0 to keep the MVP scope tight.
+### v3.1: Evaluation Package — QA Document Quality Review + Test Results Analysis (shipped)
+Two `assess_qa_maturity`-adjacent evaluation capabilities, built as a single release: **F1** `review_qa_document` — a deterministic ISTQB/IEEE-829-grounded rubric (six weighted dimensions) scoring an existing Test Plan/Strategy/test case list 0-100, with findings + resolved KB citations; and **F2** `analyze_test_results` — deterministic health metrics (flaky / ever-failing / slowest / failure clustering) from JUnit XML/CSV test execution data, which also grounds the Streamlit/CLI Risk Register generation in real execution data (cited as `[Execution Data]`) when attached. Both tools are keyless, deterministic, and never generate text (the MCP lens, section 1) — same as every v3.0 tool. Full spec, build order, and acceptance criteria: `V3.1_PLAN.md`.
+Acceptance (met): both tools keyless/deterministic/never-raising; a strong document fixture scores >=20 points above a deliberately weak one; hand-computed results metrics match exactly; full test suite + `evals.run --det` (including the two new `review_integrity`/`results_integrity` tiers) green.
+
+### Deferred: QA maturity audit tool
+`assess_qa_maturity(project_description, focus_areas=None)`: retrieval over `evaluation_audit/` and `standards/eu_ai_act/` (v2.6 KB pillar) + a deterministic TMMi-inspired scoring rubric; returns gap summary JSON with cited sources. `V3.1_PLAN.md` scoped only F1/F2 in detail and left this tool's rubric undefined beyond the one-line spec above, so it was deliberately deferred rather than building an under-specified rubric from a single sentence — not dropped, just unscheduled. When it lands, it should share the rubric/citation-format infrastructure F1/F2 already established (dimension-weight normalization, `citation_queries` resolved via the caller's index, never-raising error contract) rather than inventing a second pattern.
 Acceptance: rubric fully deterministic (same input, same score); every gap cites a KB source.
 
 ### v3.2: Remote MCP + distribution push

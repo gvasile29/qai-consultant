@@ -2,7 +2,7 @@
 
 # qai-consultant-mcp
 
-A local, fully keyless [MCP](https://modelcontextprotocol.io) server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act) and deterministic QA effort estimation — callable directly from Claude Code, Claude Desktop, or claude.ai.
+A local, fully keyless [MCP](https://modelcontextprotocol.io) server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, and test-results health analysis — callable directly from Claude Code, Claude Desktop, or claude.ai.
 
 No API keys, no Pinecone, no cloud LLM calls. It runs a local embedding index over a self-authored QA knowledge base and does the estimation math itself; **the client LLM writes the narrative**, this server just supplies grounding and numbers.
 
@@ -40,6 +40,8 @@ First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2
 | `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (ISTQB, OWASP, IEEE, ISO standards; testing methodologies; audit/evaluation frameworks; the EU AI Act), filterable by category |
 | `list_kb_sources` | Every document in the knowledge base, grouped by category |
 | `estimate_qa_effort` | Deterministic PERT-based effort estimate (baseline + complexity multipliers + team capacity + confidence score) — no LLM narrative, you write your own from the numbers |
+| `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829-grounded dimensions, with findings and resolved KB citations — no LLM scoring, you write the narrative from the findings |
+| `analyze_test_results` | Deterministic health metrics from JUnit XML or CSV test execution data — flaky tests, ever-failing tests, slowest tests, and failure clustering — no LLM anywhere in this tool |
 
 ## Prompts
 

@@ -1,0 +1,4 @@
+{"id": "flaky_ever_failing_boundaries", "kind": "multi_run", "files": ["results/run1.xml", "results/run2.xml", "results/run3.xml"], "expect_flaky": ["suite.Example::test_flaky"], "expect_ever_failing": ["suite.Example::test_ever_failing"], "expect_not_flagged": ["suite.Example::test_stable", "suite.Example::test_insufficient_data"]}
+{"id": "three_failure_families", "kind": "clusters", "file": "results/clusters.xml", "expect_cluster_count": 3}
+{"id": "unterminated_tag", "kind": "malformed", "file": "results/malformed.xml"}
+{"id": "single_run_two_tests", "kind": "parity", "xml_file": "results/parity.xml", "csv_file": "results/parity.csv"}

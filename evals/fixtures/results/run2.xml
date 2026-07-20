@@ -1,0 +1,9 @@
+<testsuite name="example">
+    <testcase classname="suite.Example" name="test_stable" time="0.11"/>
+    <testcase classname="suite.Example" name="test_flaky" time="0.22">
+        <failure message="TimeoutError waiting for response">stack trace</failure>
+    </testcase>
+    <testcase classname="suite.Example" name="test_ever_failing" time="0.14">
+        <failure message="AssertionError: expected true got false">stack trace</failure>
+    </testcase>
+</testsuite>

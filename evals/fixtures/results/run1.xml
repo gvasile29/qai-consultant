@@ -1,0 +1,10 @@
+<testsuite name="example">
+    <testcase classname="suite.Example" name="test_stable" time="0.10"/>
+    <testcase classname="suite.Example" name="test_flaky" time="0.20"/>
+    <testcase classname="suite.Example" name="test_ever_failing" time="0.15">
+        <failure message="AssertionError: expected true got false">stack trace</failure>
+    </testcase>
+    <testcase classname="suite.Example" name="test_insufficient_data" time="0.05">
+        <failure message="AssertionError: index out of range">stack trace</failure>
+    </testcase>
+</testsuite>

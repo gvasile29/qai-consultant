@@ -1,0 +1,4 @@
+{"id": "strong_test_plan", "kind": "document", "file": "review/strong_test_plan.md", "doc_type": "test_plan"}
+{"id": "weak_test_plan", "kind": "document", "file": "review/weak_test_plan.md", "doc_type": "test_plan"}
+{"id": "vague_measurability", "kind": "document", "file": "review/vague_measurability.md", "doc_type": "test_plan", "expect_lowest_dimension": "measurability"}
+{"id": "insufficient_short_text", "kind": "document", "text": "Too short.", "doc_type": "auto", "expect_doc_type": "insufficient_content"}

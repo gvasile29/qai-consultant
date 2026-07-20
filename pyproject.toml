@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qai-consultant-mcp"
-version = "3.0.2"
-description = "Local, keyless MCP server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act) and deterministic QA effort estimation."
+version = "3.1.0"
+description = "Local, keyless MCP server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, and test-results health analysis."
 readme = "README_MCP.md"
 requires-python = ">=3.10"
 # Table form (not the newer SPDX string) for compatibility with setuptools < ~77,
@@ -59,6 +59,7 @@ explicit = true
 py-modules = [
     "mcp_server", "dialogue", "effort_core", "local_index",
     "telemetry", "prompts", "kb_config", "logger", "version",
+    "review_core", "results_core",
 ]
 
 [tool.setuptools.package-dir]

@@ -3,6 +3,12 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.0] - 2026-07-20
+
+### Added
+- QA Document Quality Review: paste or upload an existing Test Plan, Test Strategy, or test case list to get an instant, deterministic 0–100 quality score across six ISTQB/IEEE-grounded dimensions (structure, objectives & scope, entry/exit criteria, traceability, measurability, risk coverage), plus a findings list explaining exactly what's missing or weak — with an optional AI-written narrative review grounded in the knowledge base on top. Available in the web app ("Review an existing QA document"), the CLI (`--review path/to/doc.md`), and the MCP server (`review_qa_document` tool) for use directly inside Claude Code, Claude Desktop, or claude.ai.
+- Test Results Analysis: attach your own JUnit XML or CSV test execution reports and QAI Consultant will surface flaky tests, always-failing tests, the slowest tests, and clustered failure patterns — all computed deterministically, no AI guesswork. When attached before generating a Test Strategy, the Risk Register is now grounded in this real execution data (clearly cited as `[Execution Data]`) instead of only the project-intake interview. Available in the web app (an "Attach test execution results" option before generating), the CLI (`--results run1.xml run2.xml`), and the MCP server (`analyze_test_results` tool).
+
 ## [3.0.0] - 2026-07-15
 
 ### Added

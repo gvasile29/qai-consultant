@@ -11,6 +11,7 @@ import os
 import re
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
@@ -36,7 +37,17 @@ Your risk analysis is:
 
 # ── Risk Prompt Builder ────────────────────────────────────────────────────────
 
-def build_risk_prompt(context: ProjectContext, knowledge_context: str) -> str:
+def build_risk_prompt(context: ProjectContext, knowledge_context: str, results_summary: Optional[str] = None) -> str:
+    execution_data_block = ""
+    if results_summary:
+        execution_data_block = f"""
+MEASURED EXECUTION DATA (deterministic, from the user's own attached test results —
+not from the knowledge base): treat this as direct evidence for specific risks (e.g.
+a flaky test suite is evidence of an "unreliable regression signal" risk; ever-failing
+tests are evidence of an untested/broken area; a failure cluster is evidence of a
+systemic root cause). Cite this evidence as [Execution Data], never as [Source N].
+{results_summary}
+"""
     return f"""
 Analyze the following project and generate a comprehensive Risk Register for QA testing.
 
@@ -45,7 +56,7 @@ PROJECT CONTEXT:
 
 RELEVANT QA KNOWLEDGE BASE:
 {knowledge_context}
-
+{execution_data_block}
 Generate a Risk Register using EXACTLY this structure:
 
 # Risk Register — {context.project_name}
@@ -97,6 +108,15 @@ Reference relevant standards (ISO 26262, OWASP, ISTQB) where applicable.
 """
 
 
+def append_execution_data_appendix(risk_register: str, results_summary: Optional[str]) -> str:
+    """Deterministically append the raw execution-data summary as an
+    appendix, so the saved Risk Register is self-contained regardless of
+    whether/how the LLM chose to reference it in the body."""
+    if not results_summary:
+        return risk_register
+    return f"{risk_register.rstrip()}\n\n## Appendix: Measured Execution Data\n\n{results_summary}\n"
+
+
 # ── Risk Analyzer ──────────────────────────────────────────────────────────────
 
 class RiskAnalyzer:
@@ -117,7 +137,7 @@ class RiskAnalyzer:
         """
         self.agent = agent
 
-    def analyze(self, context: ProjectContext, chunks: list = None) -> tuple:
+    def analyze(self, context: ProjectContext, chunks: list = None, results_summary: Optional[str] = None) -> tuple:
         """
         Analyze project risks using RAG + LLM and generate a Risk Register.
 
@@ -126,6 +146,11 @@ class RiskAnalyzer:
             chunks: Optional pre-fetched knowledge chunks. If None, retrieves
                     from Pinecone using the risk-focused query. Pass pre-fetched
                     chunks to enable parallel RAG retrieval in the pipeline.
+            results_summary: Optional deterministic test-execution-data summary
+                    (results_core.summarize_for_prompt()) — when given, grounds
+                    the LLM's risk analysis in real pass/fail data and is
+                    appended verbatim as an appendix so the saved document is
+                    self-contained. Absence changes nothing (v3.0 behavior).
 
         Returns:
             Tuple of (risk_register_markdown: str, sources: list[str]).
@@ -137,9 +162,10 @@ class RiskAnalyzer:
         knowledge_context = self.agent.format_knowledge_context(chunks)
         logger.info(f"Retrieved {len(chunks)} risk-relevant chunks")
 
-        prompt = build_risk_prompt(context, knowledge_context)
+        prompt = build_risk_prompt(context, knowledge_context, results_summary=results_summary)
         risk_register = self.agent.ask(prompt, system_prompt=RISK_SYSTEM_PROMPT)
         risk_register = risk_register or ""
+        risk_register = append_execution_data_appendix(risk_register, results_summary)
         logger.info(f"Risk Register generated ({len(risk_register)} chars)")
 
         sources = list({
