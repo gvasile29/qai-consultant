@@ -3,9 +3,11 @@ QAI Consultant — CLI Interface
 Beautiful terminal experience using the rich library.
 """
 
+import argparse
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 
 from rich.console import Console
@@ -118,11 +120,16 @@ def show_context_summary(dialogue: DialogueManager):
     console.print()
 
 
-def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
-    """Generate Risk Register, Effort Estimation, and Test Strategy with streaming output."""
+def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summary: Optional[str] = None) -> dict:
+    """Generate Risk Register, Effort Estimation, and Test Strategy with streaming output.
+
+    results_summary: optional deterministic test-execution-data summary
+    (results_core.summarize_for_prompt(), from --results) — grounds the Risk
+    Register in real pass/fail data. Absence changes nothing.
+    """
     from concurrent.futures import ThreadPoolExecutor
     from agent import RAG_K_GENERATION
-    from risk_analyzer import RiskAnalyzer, build_risk_prompt, RISK_SYSTEM_PROMPT
+    from risk_analyzer import RiskAnalyzer, append_execution_data_appendix, build_risk_prompt, RISK_SYSTEM_PROMPT
     from effort_estimator import EffortEstimator
     from strategy_generator import build_strategy_prompt, SYSTEM_PROMPT
     from test_plan_generator import TestPlanGenerator, build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
@@ -180,13 +187,14 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager) -> dict:
 
     # === Step 1/4: Risk Register (streaming) ===
     console.print(Panel("[bold yellow]⚠️  Generating Risk Register...[/bold yellow]", border_style="yellow"))
-    risk_prompt = build_risk_prompt(context, risk_knowledge)
+    risk_prompt = build_risk_prompt(context, risk_knowledge, results_summary=results_summary)
     risk_buffer = []
     with Live(console=console, refresh_per_second=8) as live:
         for chunk in agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT):
             risk_buffer.append(chunk)
             live.update(Text("".join(risk_buffer)))
     risk_register = clean_markdown_html("".join(risk_buffer))
+    risk_register = append_execution_data_appendix(risk_register, results_summary)
     risk_path = risk_analyzer.save(risk_register, context)
     console.print(f"\n[bold green]✅ Risk Register generated[/bold green] ({len(risk_register)} chars)\n")
 
@@ -242,14 +250,26 @@ def show_sources(sources: list):
         console.print(f"  [dim]• {source}[/dim]")
 
 
-def main():
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")  # emoji/markdown output; don't crash on cp1252/ascii
+def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="QAI Consultant — AI-powered QA Architect")
+    parser.add_argument(
+        "--review", metavar="PATH",
+        help="Review an existing QA document (deterministic score + optional narrative), then exit.",
+    )
+    parser.add_argument(
+        "--doc-type", choices=["auto", "test_plan", "test_strategy", "test_cases"], default="auto",
+        help="Document type for --review (default: auto-detect).",
+    )
+    parser.add_argument(
+        "--results", metavar="PATH", nargs="+",
+        help="Attach JUnit XML/CSV test execution results to ground the Risk Register "
+             "in the normal generation flow.",
+    )
+    return parser.parse_args(argv)
 
-    print_banner()
-    print_intro()
 
-    # Load agent
+def _load_agent() -> QAIAgent:
+    """Load QAIAgent with the same spinner + error handling used at every entry point."""
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -257,7 +277,7 @@ def main():
     ) as progress:
         progress.add_task("Loading QAI Consultant knowledge base...", total=None)
         try:
-            agent = QAIAgent()
+            return QAIAgent()
         except QAIKnowledgeBaseError as e:
             console.print(f"\n[bold red]{e}[/bold red]")
             logger.error(f"Startup failed - KB error: {e}")
@@ -275,13 +295,168 @@ def main():
             logger.exception(f"Unexpected startup error: {e}")
             sys.exit(1)
 
+
+def run_review_mode(agent: QAIAgent, path: str, doc_type: str) -> None:
+    """`--review PATH [--doc-type ...]`: deterministic score + findings via a
+    rich table (review_core.review_document(), no LLM), then an optional
+    narrative review streamed and saved via review_generator.py's
+    conventions — the same save path the interactive flow uses."""
+    from review_core import review_document, MIN_CONTENT_CHARS
+    from review_generator import (
+        REVIEW_SYSTEM_PROMPT, build_review_prompt,
+        build_review_report_markdown, save_review_report,
+    )
+
+    doc_path = Path(path)
+    if not doc_path.exists():
+        console.print(f"[bold red]❌ File not found:[/bold red] {path}")
+        sys.exit(1)
+
+    text = doc_path.read_text(encoding="utf-8", errors="ignore")
+    result = review_document(text, doc_type=doc_type)
+
+    if result.doc_type == "insufficient_content":
+        console.print(
+            f"[yellow]⚠️  Document is too short to review "
+            f"({result.stats.get('char_count', 0)} characters after cleanup — "
+            f"need at least {MIN_CONTENT_CHARS}).[/yellow]"
+        )
+        return
+
+    console.print(Panel(
+        f"[bold]QA Document Quality Review[/bold]\n[dim]{doc_path.name} — detected type: {result.doc_type}[/dim]",
+        border_style="cyan",
+    ))
+
+    score_table = Table(title=f"Overall Score: {result.overall_score}/100", border_style="cyan", show_header=True)
+    score_table.add_column("Dimension", style="bold cyan")
+    score_table.add_column("Score", style="white")
+    for dim, score in result.dimension_scores.items():
+        score_table.add_row(dim.replace("_", " ").title(), f"{score}/100")
+    console.print(score_table)
+
+    if result.findings:
+        severity_style = {"critical": "bold red", "major": "yellow", "minor": "dim"}
+        findings_table = Table(title="Findings", border_style="yellow", show_header=True)
+        findings_table.add_column("Severity", style="bold")
+        findings_table.add_column("Dimension")
+        findings_table.add_column("Message")
+        for finding in result.findings:
+            style = severity_style.get(finding.severity, "white")
+            findings_table.add_row(
+                f"[{style}]{finding.severity}[/{style}]",
+                finding.dimension.replace("_", " ").title(),
+                finding.message,
+            )
+        console.print(findings_table)
+    else:
+        console.print("[bold green]✅ No findings — every mechanical check in the rubric passed.[/bold green]")
+
+    narrative = ""
+    generate_narrative = Prompt.ask(
+        "\n[bold]Generate a narrative review grounded in the QA knowledge base?[/bold]",
+        choices=["yes", "no"], default="yes",
+    )
+    if generate_narrative == "yes":
+        queries, seen = [], set()
+        for finding in result.findings:
+            for q in finding.citation_queries:
+                if q not in seen:
+                    seen.add(q)
+                    queries.append(q)
+
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+            progress.add_task("⚡ Retrieving grounding sources...", total=None)
+            chunks = []
+            for q in queries[:5]:
+                chunks.extend(agent.retrieve_knowledge(q, k=1))
+            if not chunks:
+                chunks = agent.retrieve_knowledge(f"{result.doc_type.replace('_', ' ')} quality review", k=5)
+        knowledge_context = agent.format_knowledge_context(chunks)
+        prompt = build_review_prompt(result, knowledge_context)
+
+        console.print(Panel("[bold cyan]🤖 Generating Narrative Review...[/bold cyan]", border_style="cyan"))
+        buffer = []
+        with Live(console=console, refresh_per_second=8) as live:
+            for chunk in agent.ask_streaming(prompt, system_prompt=REVIEW_SYSTEM_PROMPT):
+                buffer.append(chunk)
+                live.update(Text("".join(buffer)))
+        narrative = clean_markdown_html("".join(buffer))
+
+    report_md = build_review_report_markdown(result, narrative)
+    output_path = save_review_report(report_md, doc_path.stem)
+    console.print(f"\n[bold green]💾 Quality Review saved to:[/bold green] [cyan]{output_path}[/cyan]")
+
+
+def load_results_summary(paths: list):
+    """`--results PATH [PATH ...]`: parse JUnit XML (run_id = filename stem)
+    / CSV files into a results_core.ResultsAnalysis + its deterministic
+    prompt summary. Returns (analysis, summary), or (None, None) if no file
+    yielded any records — never raises on a missing/malformed file."""
+    from results_core import analyze as compute_results_analysis, parse_junit_xml, parse_results_csv, summarize_for_prompt
+
+    records = []
+    for raw_path in paths:
+        file_path = Path(raw_path)
+        if not file_path.exists():
+            console.print(f"[yellow]⚠️  Results file not found, skipping: {raw_path}[/yellow]")
+            continue
+        content = file_path.read_text(encoding="utf-8", errors="ignore")
+        if file_path.suffix.lower() == ".csv":
+            records.extend(parse_results_csv(content))
+        else:
+            records.extend(parse_junit_xml(content, run_id=file_path.stem))
+
+    if not records:
+        return None, None
+
+    analysis = compute_results_analysis(records)
+    return analysis, summarize_for_prompt(analysis)
+
+
+def show_results_metrics(analysis) -> None:
+    """Compact rich table for an attached ResultsAnalysis (--results)."""
+    table = Table(title="Test Execution Results", border_style="cyan", show_header=True)
+    table.add_column("Metric", style="bold cyan")
+    table.add_column("Value", style="white")
+    table.add_row("Runs", str(analysis.runs))
+    table.add_row("Distinct Tests", str(analysis.total_tests))
+    table.add_row("Overall Pass Rate", f"{analysis.overall_pass_rate:.0%}")
+    table.add_row("Flaky Tests", str(len(analysis.flaky)))
+    table.add_row("Ever-Failing Tests", str(len(analysis.ever_failing)))
+    table.add_row("Failure Clusters", str(len(analysis.failure_clusters)))
+    console.print(table)
+    console.print()
+
+
+def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # emoji/markdown output; don't crash on cp1252/ascii
+
+    args = parse_args()
+    print_banner()
+
+    if args.review:
+        agent = _load_agent()
+        console.print("[bold green]✅ Knowledge base ready![/bold green]\n")
+        run_review_mode(agent, args.review, args.doc_type)
+        return
+
+    print_intro()
+    agent = _load_agent()
     console.print("[bold green]✅ Knowledge base ready![/bold green]\n")
 
-    _run_main_loop(agent)
+    _run_main_loop(agent, results_paths=args.results)
 
 
-def _run_main_loop(agent: QAIAgent):
+def _run_main_loop(agent: QAIAgent, results_paths: Optional[list] = None):
     """Main interaction loop — separated so watcher can be cleanly stopped."""
+    results_summary = None
+    if results_paths:
+        results_analysis, results_summary = load_results_summary(results_paths)
+        if results_analysis is not None:
+            show_results_metrics(results_analysis)
+
     while True:
         # Run dialogue
         dialogue = DialogueManager()
@@ -323,7 +498,7 @@ def _run_main_loop(agent: QAIAgent):
         else:
             # Generate strategy + risk register
             console.print()
-            result = generate_strategy(agent, dialogue)
+            result = generate_strategy(agent, dialogue, results_summary=results_summary)
 
             # Display Risk Register
             console.print(Panel(
