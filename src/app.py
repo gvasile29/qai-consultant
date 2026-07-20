@@ -25,6 +25,13 @@ from templates import TEMPLATES, TEMPLATE_OPTIONS
 from pdf_export import markdown_to_pdf
 from test_plan_generator import TestPlanGenerator
 from kb_manifest import KB_MANIFEST
+from review_core import MIN_CONTENT_CHARS as REVIEW_MIN_CONTENT_CHARS, review_document
+from review_generator import (
+    REVIEW_SYSTEM_PROMPT,
+    build_review_prompt,
+    build_review_report_markdown,
+    save_review_report,
+)
 
 setup_logging()
 logger = get_logger(__name__)
@@ -126,9 +133,43 @@ def init_session_state():
     if "test_plan_pdf_bytes" not in st.session_state:
         st.session_state.test_plan_pdf_bytes = None
     if "current_step" not in st.session_state:
-        st.session_state.current_step = "intro"  # intro | dialogue | review | strategy
+        st.session_state.current_step = "intro"  # intro | dialogue | review | strategy | doc_review
     if "run_count" not in st.session_state:
         st.session_state.run_count = 0
+    if "review_input_text" not in st.session_state:
+        st.session_state.review_input_text = None
+    if "review_source_label" not in st.session_state:
+        st.session_state.review_source_label = None
+    if "review_result" not in st.session_state:
+        st.session_state.review_result = None
+    if "review_narrative" not in st.session_state:
+        st.session_state.review_narrative = None
+    if "review_narrative_sources" not in st.session_state:
+        st.session_state.review_narrative_sources = []
+    if "review_output_path" not in st.session_state:
+        st.session_state.review_output_path = None
+    if "review_pdf_bytes" not in st.session_state:
+        st.session_state.review_pdf_bytes = None
+
+
+# Session-state keys owned by the "Review an existing document" (F1) mode —
+# a single shared list so the two "clear everything" handlers (sidebar Start
+# Over, "Generate Another Strategy") and the mode's own reset button can't
+# silently drift apart (see CLAUDE.md's session-state cleanup gotcha).
+REVIEW_MODE_STATE_KEYS = [
+    "review_input_text", "review_source_label", "review_result",
+    "review_narrative", "review_narrative_sources", "review_output_path",
+    "review_pdf_bytes",
+]
+
+
+def _reset_review_mode_state():
+    for key in REVIEW_MODE_STATE_KEYS:
+        if key in st.session_state:
+            del st.session_state[key]
+    st.session_state.pop("review_doc_uploader", None)
+    st.session_state.pop("review_doc_pasted_text", None)
+    st.session_state.pop("review_doc_type_select", None)
 
 
 # ── Load Agent ─────────────────────────────────────────────────────────────────
@@ -252,6 +293,7 @@ def render_sidebar():
                         "run_count", "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
+            _reset_review_mode_state()
             for q in QUESTIONS:
                 st.session_state.pop(f"input_{q['key']}", None)
             st.session_state.pop("input_additional_context", None)
@@ -421,6 +463,9 @@ The MCP server (v3.0+) is built from the same knowledge base and the same determ
     st.markdown("###")
     if st.button("🚀 Start — Generate a Test Strategy", use_container_width=True, type="primary"):
         st.session_state.current_step = "dialogue"
+        st.rerun()
+    if st.button("📝 Review an existing QA document instead", use_container_width=True):
+        st.session_state.current_step = "doc_review"
         st.rerun()
 
 
@@ -944,6 +989,7 @@ def render_strategy():
                     "generation_started", "results_complete"]:
             if key in st.session_state:
                 del st.session_state[key]
+        _reset_review_mode_state()
         for q in QUESTIONS:
             st.session_state.pop(f"input_{q['key']}", None)
         st.session_state.pop("input_additional_context", None)
@@ -994,6 +1040,206 @@ def render_strategy():
 
     else:
         st.success("✅ Feedback submitted — thank you for helping QAI Consultant improve!")
+
+
+_REVIEW_DOC_TYPE_OPTIONS = [
+    ("Auto-detect", "auto"),
+    ("Test Plan", "test_plan"),
+    ("Test Strategy", "test_strategy"),
+    ("Test Case List", "test_cases"),
+]
+_REVIEW_SEVERITY_ICON = {"critical": "🔴", "major": "🟠", "minor": "🟡"}
+
+
+def render_doc_review():
+    """F1: QA Document Quality Review. Step 1 (deterministic, instant) scores
+    an uploaded/pasted document via review_core.review_document() — no LLM
+    call. Step 2 (button) writes an LLM narrative around those already-
+    computed findings and saves an Article-50(2)-marked report, mirroring
+    render_strategy()'s save/PDF conventions."""
+    MAX_RUNS_PER_SESSION = 3  # mirrors render_strategy()'s per-session cap — narrative is an LLM call
+
+    st.markdown("## 📝 Review an Existing QA Document")
+    st.markdown(
+        "Upload or paste a Test Plan, Test Strategy, or test case list for a "
+        "deterministic, ISTQB/IEEE-grounded quality review."
+    )
+    st.markdown("---")
+
+    if st.session_state.get("review_result") is None:
+        label = st.selectbox(
+            "Document type",
+            options=[label for label, _ in _REVIEW_DOC_TYPE_OPTIONS],
+            index=0,
+            key="review_doc_type_select",
+        )
+        doc_type = dict(_REVIEW_DOC_TYPE_OPTIONS)[label]
+
+        uploaded = st.file_uploader(
+            "Upload a document (.md, .txt)", type=["md", "txt"], key="review_doc_uploader",
+        )
+        st.caption("...or paste the document text below")
+        pasted = st.text_area(
+            "Document text", key="review_doc_pasted_text", height=300, label_visibility="collapsed",
+        )
+
+        document_text = ""
+        source_label = "Document"
+        if uploaded is not None:
+            document_text = uploaded.read().decode("utf-8", errors="ignore")
+            source_label = Path(uploaded.name).stem
+        elif pasted.strip():
+            document_text = pasted
+
+        if st.button(
+            "🔍 Review Document", use_container_width=True, type="primary",
+            disabled=not document_text.strip(),
+        ):
+            st.session_state.review_input_text = document_text
+            st.session_state.review_source_label = source_label
+            st.session_state.review_result = review_document(document_text, doc_type=doc_type)
+            st.rerun()
+
+        if not document_text.strip():
+            st.info("Upload a file or paste text above, then click **Review Document**.")
+
+        if st.button("← Back to Home", key="review_back_to_home_pre"):
+            st.session_state.current_step = "intro"
+            st.rerun()
+        return
+
+    result = st.session_state.review_result
+
+    if result.doc_type == "insufficient_content":
+        st.warning(
+            f"⚠️ Document is too short to review ({result.stats.get('char_count', 0)} "
+            f"characters after cleanup — need at least {REVIEW_MIN_CONTENT_CHARS})."
+        )
+        if st.button("← Try another document", use_container_width=True):
+            _reset_review_mode_state()
+            st.rerun()
+        return
+
+    st.markdown(f"**Detected document type:** `{result.doc_type}`")
+    st.metric("Overall Score", f"{result.overall_score}/100")
+
+    dim_cols = st.columns(len(result.dimension_scores))
+    for col, (dim, score) in zip(dim_cols, result.dimension_scores.items()):
+        col.metric(dim.replace("_", " ").title(), f"{score}")
+
+    st.markdown("### Findings")
+    if not result.findings:
+        st.success("No findings — the document satisfies every mechanical check in the rubric.")
+    else:
+        for finding in result.findings:
+            icon = _REVIEW_SEVERITY_ICON.get(finding.severity, "⚪")
+            title = f"{icon} [{finding.dimension.replace('_', ' ').title()}] {finding.message}"
+            with st.expander(title):
+                st.markdown(f"**Severity:** {finding.severity}")
+                st.markdown(f"**Evidence:** {finding.evidence}")
+
+    st.markdown("---")
+
+    # Step 2: LLM narrative — an LLM call, so it consumes run_count like render_strategy().
+    if st.session_state.get("review_narrative") is None:
+        if st.session_state.get("run_count", 0) >= MAX_RUNS_PER_SESSION:
+            st.warning(
+                f"⚠️ You've used all {MAX_RUNS_PER_SESSION} free runs for this session. "
+                "Refresh the page to start a new session."
+            )
+        elif st.button("🤖 Generate narrative review", use_container_width=True, type="primary"):
+            st.session_state.run_count += 1
+            agent = st.session_state.get("agent")
+
+            queries = []
+            seen_queries = set()
+            for finding in result.findings:
+                for q in finding.citation_queries:
+                    if q not in seen_queries:
+                        seen_queries.add(q)
+                        queries.append(q)
+
+            with st.spinner("⚡ Retrieving grounding sources..."):
+                chunks = []
+                for q in queries[:5]:
+                    chunks.extend(agent.retrieve_knowledge(q, k=1))
+                if not chunks:
+                    chunks = agent.retrieve_knowledge(
+                        f"{result.doc_type.replace('_', ' ')} quality review", k=5,
+                    )
+            knowledge_context = agent.format_knowledge_context(chunks)
+
+            prompt = build_review_prompt(result, knowledge_context)
+            try:
+                narrative = clean_markdown_html(st.write_stream(
+                    agent.ask_streaming(prompt, system_prompt=REVIEW_SYSTEM_PROMPT)
+                ))
+            except (StopException, RerunException):
+                # Same rule as render_strategy()'s 4 stages — never swallow
+                # Streamlit's own stop/rerun control-flow signals.
+                raise
+            except Exception as exc:
+                logger.error("Quality review narrative generation failed: %s", exc)
+                st.error(f"❌ Narrative generation failed: {exc}")
+                narrative = ""
+
+            st.session_state.review_narrative = narrative
+            st.session_state.review_narrative_sources = list({
+                f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
+                for c in chunks
+            })
+            st.rerun()
+    else:
+        if st.session_state.review_narrative:
+            st.markdown("### 🤖 Narrative Review")
+            st.markdown(st.session_state.review_narrative)
+            with st.expander("📚 Knowledge Sources Used"):
+                for source in st.session_state.get("review_narrative_sources", []):
+                    st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
+
+        # Save + PDF bytes computed once, only after the narrative step has
+        # resolved (success or error) — mirrors render_strategy()'s "PDF
+        # bytes precomputed once, never inside the tab render block" rule.
+        if st.session_state.get("review_pdf_bytes") is None:
+            report_md = build_review_report_markdown(result, st.session_state.review_narrative or "")
+            st.session_state.review_output_path = save_review_report(
+                report_md, st.session_state.get("review_source_label") or "Document",
+            )
+            _ai_pdf_meta = pdf_meta_html(MISTRAL_MODEL)
+            st.session_state.review_pdf_bytes = markdown_to_pdf(
+                with_ai_footer(report_md), "QA Document Quality Review", _ai_pdf_meta,
+            )
+
+        report_md = build_review_report_markdown(result, st.session_state.review_narrative or "")
+        st.markdown("---")
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                label="⬇️ Download (.md)",
+                data=with_ai_footer(report_md),
+                file_name="quality_review.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with dl_col2:
+            pdf_bytes = st.session_state.review_pdf_bytes
+            st.download_button(
+                label="⬇️ Download (.pdf)",
+                data=pdf_bytes or b"",
+                file_name="quality_review.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                disabled=pdf_bytes is None,
+            )
+
+    st.markdown("###")
+    if st.button("🔄 Review Another Document", use_container_width=True):
+        _reset_review_mode_state()
+        st.rerun()
+    if st.button("← Back to Home"):
+        _reset_review_mode_state()
+        st.session_state.current_step = "intro"
+        st.rerun()
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -1050,6 +1296,8 @@ def main():
         render_review()
     elif step == "strategy":
         render_strategy()
+    elif step == "doc_review":
+        render_doc_review()
 
 
 if __name__ == "__main__":
