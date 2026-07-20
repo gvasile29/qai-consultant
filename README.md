@@ -7,7 +7,7 @@
 
 # QAI Consultant
 
-An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, **Effort Estimation Report**, and **Test Plan** from a simple project description. Also available as an **MCP server** so Claude Code, Claude Desktop, and claude.ai can ground their own QA work in the same standards and numbers.
+An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, **Effort Estimation Report**, and **Test Plan** from a simple project description, plus deterministic **QA Document Quality Review** and **Test Results Analysis** for evaluating what already exists. Also available as an **MCP server** so Claude Code, Claude Desktop, and claude.ai can ground their own QA work in the same standards and numbers.
 
 > 🌐 **Live demo:** [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
 
@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.0.0-green.svg)
+![Version](https://img.shields.io/badge/version-3.1.0-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -218,6 +218,8 @@ claude mcp add qai-consultant -- uvx qai-consultant-mcp
 | `retrieve_qa_knowledge` | Grounding chunks from the KB (ISTQB, OWASP, IEEE, ISO, EU AI Act), filterable by category |
 | `list_kb_sources` | Every document in the KB, grouped by category |
 | `estimate_qa_effort` | Deterministic PERT-based effort estimate (no LLM narrative — you write your own from the numbers) |
+| `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829 dimensions, with findings + KB citations |
+| `analyze_test_results` | Deterministic health metrics from JUnit XML/CSV test execution data — flaky tests, ever-failing tests, slowest tests, failure clustering |
 
 **Prompts:** `qa_project_interview` (the same 11-question intake this app uses), `risk_register_structure`, `test_strategy_structure`, `test_plan_structure` — each grounds the client's generation in `retrieve_qa_knowledge` with `[Source N]` citations.
 
@@ -254,7 +256,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v2.5.2** ✅ EU AI Act Article 50 transparency patch — sidebar AI-interaction notice + visible "AI-generated content" label on every generated document
 - **v2.6.0** ✅ EU AI Act knowledge base pillar — risk tiers, provider/deployer obligations, Article 50 transparency, Articles 9-15 testing implications, conformity assessment, timeline
 - **v3.0.0** ✅ MCP server MVP — local, keyless `qai-consultant-mcp` (standards-grounded retrieval + deterministic effort estimation), in-app announcement, and machine-readable AI-generated marking (EU AI Act Article 50(2))
-- **v3.1** QA maturity audit tool — `assess_qa_maturity`, deterministic TMMi-inspired scoring
+- **v3.1.0** ✅ Evaluation Package — QA Document Quality Review (deterministic ISTQB/IEEE-829 rubric scoring an existing Test Plan/Strategy/test case list, with an optional AI narrative) and Test Results Analysis (flaky/ever-failing/slowest/failure-clustering metrics from JUnit XML/CSV, grounding the Risk Register in real execution data); available in the web app, CLI (`--review`, `--results`), and the MCP server (`review_qa_document`, `analyze_test_results`)
 - **v3.2** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---
