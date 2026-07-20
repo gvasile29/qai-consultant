@@ -1,0 +1,3 @@
+name,classname,status,duration_s,run_id,message
+test_a,pkg.Parity,passed,1.5,run1,
+test_b,pkg.Parity,failed,2.5,run1,boom

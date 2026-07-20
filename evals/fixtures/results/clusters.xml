@@ -1,0 +1,20 @@
+<testsuite name="clusters">
+    <testcase classname="suite.Cluster" name="test_timeout_1" time="1.0">
+        <failure message="TimeoutError waiting for element after 5 seconds">stack</failure>
+    </testcase>
+    <testcase classname="suite.Cluster" name="test_timeout_2" time="1.0">
+        <failure message="TimeoutError waiting for element after 12 seconds">stack</failure>
+    </testcase>
+    <testcase classname="suite.Cluster" name="test_assert_1" time="1.0">
+        <failure message="AssertionError: expected 5 got 3">stack</failure>
+    </testcase>
+    <testcase classname="suite.Cluster" name="test_assert_2" time="1.0">
+        <failure message="AssertionError: expected 9 got 1">stack</failure>
+    </testcase>
+    <testcase classname="suite.Cluster" name="test_null_1" time="1.0">
+        <failure message="NullPointerException at line 22">stack</failure>
+    </testcase>
+    <testcase classname="suite.Cluster" name="test_null_2" time="1.0">
+        <failure message="NullPointerException at line 87">stack</failure>
+    </testcase>
+</testsuite>

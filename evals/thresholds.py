@@ -37,6 +37,11 @@ SOURCE_ATTRIBUTION_MIN = 0.9  # >=90% of [Source N] citations must point at a re
 JUDGED_QUORUM_MIN = 0.5       # >=half of judged cases must grade successfully, else the judged metrics SKIP (not pass on thin data)
 JUDGE_MAX_WORKERS = 3         # concurrent judged cases — capped low to stay under the paid API's rate limit
 
+# ── review_integrity (v3.1 — src/review_core.py QA document quality rubric) ──────
+# A strong, IEEE-829-shaped test plan must score meaningfully higher than a
+# deliberately weak one — matches V3.1_PLAN.md's acceptance criterion (section 6).
+REVIEW_SCORE_ORDERING_DELTA_MIN = 20
+
 # ── local_index_parity (v3.0 — the MCP server's served LocalIndex vs the eval index) ──
 # Same rag_golden.jsonl, same retrieval depth, but against the real chunked (1000/200)
 # index the MCP server serves, not evals/rag.py's coarser doc-level (4000-char) index.

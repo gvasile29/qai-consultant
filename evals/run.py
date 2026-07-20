@@ -28,6 +28,26 @@ def main(argv: list[str]) -> int:
         print(f"[estimate_integrity] tier errored (did not run): {type(exc).__name__}: {exc}")
         det_ok = False
 
+    from . import review_integrity
+    print("\n══ review_integrity (deterministic, keyless) ══")
+    try:
+        review_outcomes = review_integrity.run_all()
+        print(review_integrity.format_table(review_outcomes))
+        review_ok = all(o.passed for o in review_outcomes)
+    except Exception as exc:  # noqa: BLE001 — same rationale as estimate_integrity above
+        print(f"[review_integrity] tier errored (did not run): {type(exc).__name__}: {exc}")
+        review_ok = False
+
+    from . import results_integrity
+    print("\n══ results_integrity (deterministic, keyless) ══")
+    try:
+        results_outcomes = results_integrity.run_all()
+        print(results_integrity.format_table(results_outcomes))
+        results_ok = all(o.passed for o in results_outcomes)
+    except Exception as exc:  # noqa: BLE001 — same rationale as estimate_integrity above
+        print(f"[results_integrity] tier errored (did not run): {type(exc).__name__}: {exc}")
+        results_ok = False
+
     rag_ok = True
     local_index_ok = True
     if not det_only:
@@ -52,9 +72,11 @@ def main(argv: list[str]) -> int:
             print(f"\n[local_index_parity] tier errored (did not run): {type(exc).__name__}: {exc}")
             local_index_ok = False
 
-    overall = det_ok and rag_ok and local_index_ok
+    overall = det_ok and review_ok and results_ok and rag_ok and local_index_ok
     print(f"\nRelease gate: {'PASS' if overall else 'FAIL'} "
           f"(deterministic {'pass' if det_ok else 'FAIL'}"
+          f", review {'pass' if review_ok else 'FAIL'}"
+          f", results {'pass' if results_ok else 'FAIL'}"
           + ("" if det_only else f", rag {'pass' if rag_ok else 'FAIL'}"
                                   f", local_index_parity {'pass' if local_index_ok else 'FAIL'}") + ")")
     return 0 if overall else 1

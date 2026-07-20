@@ -1,0 +1,7 @@
+<testsuite name="example">
+    <testcase classname="suite.Example" name="test_stable" time="0.09"/>
+    <testcase classname="suite.Example" name="test_flaky" time="0.19"/>
+    <testcase classname="suite.Example" name="test_ever_failing" time="0.16">
+        <failure message="AssertionError: expected true got false">stack trace</failure>
+    </testcase>
+</testsuite>

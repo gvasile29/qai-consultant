@@ -1,0 +1,6 @@
+<testsuite name="parity">
+    <testcase classname="pkg.Parity" name="test_a" time="1.5"/>
+    <testcase classname="pkg.Parity" name="test_b" time="2.5">
+        <failure message="boom">stack trace</failure>
+    </testcase>
+</testsuite>
