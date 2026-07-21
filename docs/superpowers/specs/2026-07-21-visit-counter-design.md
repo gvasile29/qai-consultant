@@ -97,7 +97,7 @@ Subsequent reruns within the same session reuse `st.session_state.visit_count`
 
 ```python
 if st.session_state.get("visit_count") is not None:
-    st.caption(f"👀 {st.session_state.visit_count:,} vizite")
+    st.caption(f"👀 {st.session_state.visit_count:,} visits")
 ```
 
 If the increment failed (`visit_count is None`), the caption line is simply

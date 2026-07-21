@@ -272,7 +272,7 @@ def render_sidebar():
         st.markdown("AI-powered QA Architect")
         st.caption(f"v{__version__}")
         if st.session_state.get("visit_count") is not None:
-            st.caption(f"👀 {st.session_state.visit_count:,} vizite")
+            st.caption(f"👀 {st.session_state.visit_count:,} visits")
         st.info(AI_INTERACTION_NOTICE)
         with st.expander("📋 Release Notes"):
             st.markdown(load_changelog())
