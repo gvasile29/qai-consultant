@@ -960,7 +960,10 @@ jobs:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
         run: |
-          python -m pytest tests/test_live_contracts.py -v
+          echo "## Live API contract tests" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/test_live_contracts.py -v | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 ```
 
 Note: no `on: push`/`on: pull_request` triggers at all — this is what structurally guarantees it can never block a PR, rather than relying on `continue-on-error`.
