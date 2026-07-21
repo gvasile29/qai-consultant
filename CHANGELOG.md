@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.3] - 2026-07-21
+
+### Fixed
+- The sidebar visit counter's label was in Romanian ("vizite") while the rest of the app's UI copy is in English — it now reads "visits" to match.
+
 ## [3.1.2] - 2026-07-21
 
 ### Fixed
