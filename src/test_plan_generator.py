@@ -9,6 +9,7 @@ Receives the Risk Register to inform test priorities and resource allocation.
 import re
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
@@ -152,7 +153,7 @@ class TestPlanGenerator:
         """
         self.agent = agent
 
-    def generate(self, context: ProjectContext, risk_register: str, chunks: list = None) -> tuple:
+    def generate(self, context: ProjectContext, risk_register: str, chunks: Optional[list] = None) -> tuple:
         """
         Generate a Test Plan using RAG + LLM.
 
@@ -194,7 +195,7 @@ class TestPlanGenerator:
             parts.append(f"test plan tools {context.tech_stack}")
         return " | ".join(parts)
 
-    def save(self, test_plan: str, context: ProjectContext, output_dir: Path = None) -> Path:
+    def save(self, test_plan: str, context: ProjectContext, output_dir: Optional[Path] = None) -> Path:
         """Save the generated Test Plan to a timestamped markdown file."""
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "output"

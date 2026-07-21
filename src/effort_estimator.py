@@ -281,7 +281,7 @@ Write the following sections (keep each concise — 3-5 sentences max):
     def _parse_team_size(self, team_str: str) -> int:
         return effort_core.parse_team_size(team_str)
 
-    def save(self, report: str, context: ProjectContext, output_dir: Path = None) -> Path:
+    def save(self, report: str, context: ProjectContext, output_dir: Optional[Path] = None) -> Path:
         """Save the Effort Estimation Report to a markdown file."""
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "output"
@@ -314,6 +314,7 @@ if __name__ == "__main__":
 
     while dialogue.has_next_question():
         question = dialogue.get_next_question()
+        assert question is not None
         current, total = dialogue.get_progress()
         print(f"[{current}/{total}] {question['question']}")
         print(f"  Hint: {question['hint']}")

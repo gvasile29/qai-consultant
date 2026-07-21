@@ -122,7 +122,7 @@ def _send(event_name: str, properties: dict) -> None:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        _urllib_request.urlopen(req, timeout=_TIMEOUT_SECONDS)
+        _urllib_request.urlopen(req, timeout=_TIMEOUT_SECONDS)  # nosec B310 -- URL is built from a hardcoded https:// constant (_POSTHOG_HOST), never user-influenced
     except Exception:
         pass  # telemetry must never raise, log, or retry — a dropped event is fine
 

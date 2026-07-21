@@ -285,7 +285,7 @@ def pert_breakdown(data: EstimationData) -> None:
     raw_total = sum((lo + hi) / 2 for lo, hi in activities.values())
     norm_scale = 100.0 / raw_total if raw_total > 0 else 1.0
 
-    total_o = total_m = total_p = 0
+    total_o = total_m = total_p = 0.0
 
     for activity, (pct_lo, pct_hi) in activities.items():
         pct_mid = ((pct_lo + pct_hi) / 2) * norm_scale

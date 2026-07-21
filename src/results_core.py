@@ -17,10 +17,12 @@ from __future__ import annotations
 import csv
 import io
 import re
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # ET.ParseError only -- parsing itself uses defusedxml below (B314)
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, cast
+
+import defusedxml.ElementTree as DefusedET
 
 VALID_STATUSES = ("passed", "failed", "error", "skipped")
 
@@ -80,7 +82,7 @@ def parse_junit_xml(content: str, run_id: str) -> list[TestRecord]:
     <testcase> missing its `time` attribute defaults to duration_s=0.0.
     """
     try:
-        root = ET.fromstring(content)
+        root = DefusedET.fromstring(content)
     except ET.ParseError:
         return []
 
@@ -186,6 +188,12 @@ def _cluster_signature(message: str) -> str:
 
 # ── Analysis ───────────────────────────────────────────────────────────────────
 
+def _slowest_sort_key(entry: dict[str, object]) -> float:
+    """Sort key for `slowest` entries: `mean_s` is always a float (set via
+    `round(mean_s, 4)` above), narrower than the dict's `object` value type."""
+    return cast(float, entry["mean_s"])
+
+
 def analyze(
     records: list[TestRecord],
     reference_tests: Optional[list[str]] = None,
@@ -232,7 +240,7 @@ def analyze(
             "max_s": round(max(durations), 4) if durations else 0.0,
         })
 
-    slowest.sort(key=lambda d: d["mean_s"], reverse=True)
+    slowest.sort(key=_slowest_sort_key, reverse=True)
     slowest = slowest[:slowest_n]
 
     never_run = []
