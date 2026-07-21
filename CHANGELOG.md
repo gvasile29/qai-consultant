@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.1] - 2026-07-21
+
+### Added
+- A visit counter is now shown in the sidebar, tracking the total number of times the app has been opened over time.
+
 ## [3.1.0] - 2026-07-20
 
 ### Added
