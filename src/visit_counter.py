@@ -12,8 +12,13 @@ Storage: the existing Pinecone index, but a new dedicated namespace,
 see agent.PINECONE_NAMESPACE) so the counter vector can never surface in
 agent.retrieve_knowledge() search results. A single vector at a fixed ID
 ("visit_counter") holds the count in its metadata; the vector's own values
-are a dummy zero-vector — Pinecone requires one structurally, but it
-carries no semantic meaning here.
+are a dummy placeholder — Pinecone requires one structurally, but it
+carries no semantic meaning here. It must NOT be all-zero: Pinecone's API
+rejects dense vectors with "Dense vectors must contain at least one
+non-zero value" (found the hard way — the original all-zero dummy made
+every upsert() fail, silently swallowed by the except below, so the
+counter never worked from its first deploy). DUMMY_VECTOR sets just the
+first component to a non-zero value to satisfy that constraint.
 
 Used only from app.py — never imported by the MCP server path, so unlike
 kb_config.py it doesn't need to stay keyless/Pinecone-free.
@@ -24,10 +29,14 @@ from typing import Optional
 from pinecone import Pinecone
 
 from agent import _get_secret
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 NAMESPACE = "app-metrics"
 VECTOR_ID = "visit_counter"
 VECTOR_DIM = 384  # matches kb_config.EMBEDDING_MODEL (all-MiniLM-L6-v2); values carry no semantic meaning
+DUMMY_VECTOR = [1.0] + [0.0] * (VECTOR_DIM - 1)  # must not be all-zero — see module docstring
 
 
 def get_and_increment_visit_count() -> Optional[int]:
@@ -62,12 +71,13 @@ def get_and_increment_visit_count() -> Optional[int]:
             vectors=[
                 {
                     "id": VECTOR_ID,
-                    "values": [0.0] * VECTOR_DIM,
+                    "values": DUMMY_VECTOR,
                     "metadata": {"count": new_count},
                 }
             ],
             namespace=NAMESPACE,
         )
         return new_count
-    except Exception:
+    except Exception as exc:
+        logger.warning("Visit counter increment failed: %s", exc)
         return None

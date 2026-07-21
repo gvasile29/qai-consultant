@@ -16,6 +16,13 @@ Covers:
    returns None, does not raise.
 5. Failure path: _get_secret raises (missing credentials) -> function
    returns None, does not raise.
+6. Regression guard: the vector passed to upsert() must not be all-zero.
+   The original implementation used an all-zero dummy vector, which the
+   mocks above don't catch since they don't replicate Pinecone's real API
+   validation -- Pinecone's real API rejects that with "Dense vectors must
+   contain at least one non-zero value", which silently made every real
+   upsert() fail (caught by the bare except, so it never surfaced until a
+   live reproduction against the real Pinecone API was run).
 """
 
 import sys
@@ -84,6 +91,10 @@ def test_first_ever_visit_returns_one_and_upserts_count_one():
     assert upserted_vector["id"] == VECTOR_ID
     assert upserted_vector["metadata"] == {"count": 1}
     assert len(upserted_vector["values"]) == VECTOR_DIM
+    assert any(v != 0 for v in upserted_vector["values"]), (
+        "upserted vector must not be all-zero -- Pinecone's real API rejects "
+        "all-zero dense vectors, see module docstring"
+    )
 
 
 def test_normal_increment_returns_n_plus_one():
