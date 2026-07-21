@@ -36,6 +36,9 @@ Repository = "https://github.com/gvasile29/qai-consultant"
 [project.scripts]
 qai-consultant-mcp = "mcp_server:main"
 
+[tool.mypy]
+ignore_missing_imports = true
+
 # ── uv: pin torch to the CPU wheel index, scoped ONLY to torch ──────────────────
 # (see MCP_PLAN.md section 6's "Decided 2026-07-15" note.) Unlike requirements.txt's
 # uv.toml (index-strategy = "unsafe-best-match", applied globally because plain
