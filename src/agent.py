@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.schema import Document
+from langchain_core.documents import Document
 from pinecone import Pinecone
 from kb_config import EMBEDDING_MODEL
 from logger import get_logger, setup_logging
