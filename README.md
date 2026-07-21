@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.1.0-green.svg)
+![Version](https://img.shields.io/badge/version-3.1.1-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -257,6 +257,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v2.6.0** ✅ EU AI Act knowledge base pillar — risk tiers, provider/deployer obligations, Article 50 transparency, Articles 9-15 testing implications, conformity assessment, timeline
 - **v3.0.0** ✅ MCP server MVP — local, keyless `qai-consultant-mcp` (standards-grounded retrieval + deterministic effort estimation), in-app announcement, and machine-readable AI-generated marking (EU AI Act Article 50(2))
 - **v3.1.0** ✅ Evaluation Package — QA Document Quality Review (deterministic ISTQB/IEEE-829 rubric scoring an existing Test Plan/Strategy/test case list, with an optional AI narrative) and Test Results Analysis (flaky/ever-failing/slowest/failure-clustering metrics from JUnit XML/CSV, grounding the Risk Register in real execution data); available in the web app, CLI (`--review`, `--results`), and the MCP server (`review_qa_document`, `analyze_test_results`)
+- **v3.1.1** ✅ Visit counter — a running total of app visits now shows in the sidebar, persisted in Pinecone so it survives redeploys
 - **v3.2** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---

@@ -3,7 +3,7 @@ Tests for QAI Consultant release version bump + CHANGELOG.md
 regression guards.
 
 Covers:
-1. version.py is bumped to 3.1.0 / 2026-07-20
+1. version.py is bumped to 3.1.1 / 2026-07-21
 2. CHANGELOG.md exists, is non-empty, and has all expected version headings
 3. CHANGELOG.md's top heading matches version.py's __version__ (drift guard)
 """
@@ -26,12 +26,12 @@ _EXPECTED_HEADING_SUBSTRINGS = [
 ]
 
 
-def test_version_bumped_to_3_1_0():
-    """version.py must be bumped for the v3.1 evaluation package ship."""
-    assert __version__ == "3.1.0", f"Expected __version__ == '3.1.0', got {__version__!r}"
-    assert __release_date__ == "2026-07-20", \
-        f"Expected __release_date__ == '2026-07-20', got {__release_date__!r}"
-    print("  PASS: version.py bumped to 3.1.0 / 2026-07-20")
+def test_version_bumped_to_3_1_1():
+    """version.py must be bumped for the visit-counter release."""
+    assert __version__ == "3.1.1", f"Expected __version__ == '3.1.1', got {__version__!r}"
+    assert __release_date__ == "2026-07-21", \
+        f"Expected __release_date__ == '2026-07-21', got {__release_date__!r}"
+    print("  PASS: version.py bumped to 3.1.1 / 2026-07-21")
 
 
 def test_changelog_exists_and_nonempty():

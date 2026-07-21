@@ -38,6 +38,7 @@ from results_core import (
     parse_results_csv,
     summarize_for_prompt,
 )
+from visit_counter import get_and_increment_visit_count
 
 setup_logging()
 logger = get_logger(__name__)
@@ -270,6 +271,8 @@ def render_sidebar():
         st.markdown("## 🧪 QAI Consultant")
         st.markdown("AI-powered QA Architect")
         st.caption(f"v{__version__}")
+        if st.session_state.get("visit_count") is not None:
+            st.caption(f"👀 {st.session_state.visit_count:,} vizite")
         st.info(AI_INTERACTION_NOTICE)
         with st.expander("📋 Release Notes"):
             st.markdown(load_changelog())
@@ -1300,6 +1303,14 @@ def render_doc_review():
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     init_session_state()
+
+    # Visit counter: once per browser session (not per rerun) — see the
+    # "visit_counted" guard. Excluded from both "Start Over" and "Generate
+    # Another Strategy" cleanup lists on purpose (a visit is per page load,
+    # not per generation attempt).
+    if "visit_counted" not in st.session_state:
+        st.session_state.visit_count = get_and_increment_visit_count()
+        st.session_state.visit_counted = True
 
     _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
     with _logo_col2:
