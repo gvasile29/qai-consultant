@@ -198,6 +198,20 @@ No LLM, no API keys in any of the three; a red row names a real defect in the sh
 
 > **Skip semantics:** judged metrics SKIP (never fail) when the judge backend is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still runs the full deterministic tier. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
 
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`/`master`:
+
+| Job | Blocking? | What it checks |
+|-----|-----------|-----------------|
+| `test` | Yes | `pytest tests/` on Python 3.10/3.11/3.12 |
+| `lint` | Yes | `ruff check src/ tests/` |
+| `typecheck` | **No** | `mypy src/` — non-blocking because the codebase has partial, inconsistent type-annotation coverage; a strict pass surfaces ~53 pre-existing errors unrelated to any given PR. Promote to blocking once that backlog is addressed. |
+| `security-bandit` | **No** | `bandit -r src/ -ll` — non-blocking; currently reports 2 pre-existing medium-severity findings (`results_core.py`'s `ET.fromstring`, `telemetry.py`'s `urlopen`). |
+| `security-pip-audit` | **No** | `pip-audit -r requirements.txt --desc` — non-blocking; currently reports known CVEs in transitive dependencies (`langchain`, `nltk`, `transformers`, etc.) that aren't immediately fixable without upstream upgrades. |
+
+All three non-blocking jobs use `continue-on-error: true` (not a shell-level `|| true`) so their findings stay visible as a neutral/warning status in the PR checks list and in each job's `$GITHUB_STEP_SUMMARY`, without blocking merge. Promoting any of them to blocking is a deliberate future decision — not an oversight — once the pre-existing backlog each surfaces is actually cleared.
+
 ## Roadmap
 
 - **v0.1** ✅ Core agent + CLI + Streamlit Web UI
