@@ -224,7 +224,7 @@ class StrategyGenerator:
             "test_plan_sources": test_plan_sources,
         }
 
-    def generate(self, context: ProjectContext, chunks: list = None) -> tuple:
+    def generate(self, context: ProjectContext, chunks: Optional[list] = None) -> tuple:
         """
         Generate a Test Strategy document for the given project context.
 
@@ -263,7 +263,7 @@ class StrategyGenerator:
 
         return strategy, sources
 
-    def save(self, strategy: str, context: ProjectContext, output_dir: Path = None) -> Path:
+    def save(self, strategy: str, context: ProjectContext, output_dir: Optional[Path] = None) -> Path:
         """
         Save the generated strategy to a timestamped markdown file.
 
@@ -310,6 +310,7 @@ if __name__ == "__main__":
 
     while dialogue.has_next_question():
         question = dialogue.get_next_question()
+        assert question is not None
         current, total = dialogue.get_progress()
         print(f"[{current}/{total}] {question['question']}")
         print(f"  Hint: {question['hint']}")

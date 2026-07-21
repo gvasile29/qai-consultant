@@ -185,15 +185,15 @@ def estimate_qa_effort(
         **cleaned,
     )
     data = compute_estimation(context)
-    result = asdict(data)
+    estimation_result = asdict(data)
     # multipliers is a list of (reason, pct) tuples — dataclasses.asdict() leaves
     # tuples as tuples, which json.dumps renders as arrays anyway, but the MCP
     # SDK's schema validation expects genuine JSON-safe types; normalize explicitly.
-    result["multipliers"] = [list(m) for m in result["multipliers"]]
+    estimation_result["multipliers"] = [list(m) for m in estimation_result["multipliers"]]
 
     duration_ms = (time.monotonic() - start) * 1000
     telemetry.track_tool_called("estimate_qa_effort", success=True, duration_ms=duration_ms)
-    return result
+    return estimation_result
 
 
 # ── Tool: review_qa_document ─────────────────────────────────────────────────────
@@ -248,7 +248,7 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
 
     findings = []
     for finding in result.findings:
-        kb_citations = []
+        kb_citations: list[dict] = []
         for query in finding.citation_queries:
             search_result = index.search(query, k=2)
             if "error" not in search_result:
@@ -366,6 +366,9 @@ def analyze_test_results(
         else:
             records = results_core.parse_junit_xml(junit_xml, "run1")
     else:
+        # Reached only when junit_xml is None; the `len(provided) != 1` guard
+        # above already ensured exactly one of junit_xml/csv_text is non-None.
+        assert csv_text is not None
         if len(csv_text.encode("utf-8", errors="ignore")) > _MAX_RESULTS_INPUT_BYTES:
             return _fail(f"Input exceeds the {_MAX_RESULTS_INPUT_BYTES}-byte limit.")
         records = results_core.parse_results_csv(csv_text)

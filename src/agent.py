@@ -6,6 +6,7 @@ Connects to Mistral API (LLM) and Pinecone (knowledge base) and provides RAG que
 import os
 import re
 from pathlib import Path
+from typing import Optional
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.schema import Document
@@ -92,18 +93,22 @@ class LLMClient:
                 max_tokens=LLM_NUM_PREDICT,
                 temperature=LLM_TEMPERATURE,
             )
-            return response.choices[0].message.content
+            # Mistral SDK stubs type message/content as Optional/union to cover all
+            # possible API responses; this call always returns a populated str here.
+            return response.choices[0].message.content  # type: ignore[union-attr,return-value]
         except Exception as e:
             logger.warning(f"Mistral failed ({e}), falling back to OpenRouter")
 
         try:
-            response = self._openrouter.chat.completions.create(
+            response = self._openrouter.chat.completions.create(  # type: ignore[assignment]
                 model=OPENROUTER_MODEL,
                 messages=messages,
                 max_tokens=LLM_NUM_PREDICT,
                 temperature=LLM_TEMPERATURE,
             )
-            return response.choices[0].message.content
+            # OpenAI SDK stubs type message/content as Optional/union to cover all
+            # possible API responses; this call always returns a populated str here.
+            return response.choices[0].message.content  # type: ignore[union-attr,return-value]
         except Exception as e:
             raise QAIConnectionError(
                 f"\n❌ LLM generation failed!\n\n"
@@ -129,7 +134,7 @@ class LLMClient:
             logger.warning(f"Mistral streaming failed ({e}), falling back to OpenRouter")
 
         try:
-            stream = self._openrouter.chat.completions.create(
+            stream = self._openrouter.chat.completions.create(  # type: ignore[assignment]
                 model=OPENROUTER_MODEL,
                 messages=messages,
                 max_tokens=LLM_NUM_PREDICT,
@@ -312,7 +317,7 @@ class QAIAgent:
             )
         return "\n\n---\n\n".join(context_parts)
 
-    def ask(self, prompt: str, system_prompt: str = None) -> str:
+    def ask(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """
         Send a prompt to the LLM and return the generated response.
 
@@ -337,7 +342,7 @@ class QAIAgent:
         logger.debug(f"Response received ({len(content)} chars)")
         return content
 
-    def ask_streaming(self, prompt: str, system_prompt: str = None):
+    def ask_streaming(self, prompt: str, system_prompt: Optional[str] = None):
         """
         Stream a prompt to the LLM, yielding text chunks as they arrive.
 
@@ -359,7 +364,7 @@ class QAIAgent:
         logger.debug(f"Streaming prompt to LLM ({len(prompt)} chars)...")
         yield from self._llm_client.chat(messages, stream=True)
 
-    def ask_with_rag(self, query: str, system_prompt: str = None) -> tuple:
+    def ask_with_rag(self, query: str, system_prompt: Optional[str] = None) -> tuple:
         """
         Answer a query using RAG — retrieve relevant knowledge first,
         then generate a response grounded in the retrieved context.

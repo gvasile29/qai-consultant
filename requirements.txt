@@ -15,3 +15,4 @@ mistralai>=1.2.0
 openai>=2.44.0
 pinecone>=3.0.0
 platformdirs>=4.0.0
+defusedxml>=0.7.1

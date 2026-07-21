@@ -137,7 +137,7 @@ class RiskAnalyzer:
         """
         self.agent = agent
 
-    def analyze(self, context: ProjectContext, chunks: list = None, results_summary: Optional[str] = None) -> tuple:
+    def analyze(self, context: ProjectContext, chunks: Optional[list] = None, results_summary: Optional[str] = None) -> tuple:
         """
         Analyze project risks using RAG + LLM and generate a Risk Register.
 
@@ -189,7 +189,7 @@ class RiskAnalyzer:
             parts.append(f"testing risks {context.tech_stack}")
         return " | ".join(parts)
 
-    def save(self, risk_register: str, context: ProjectContext, output_dir: Path = None) -> Path:
+    def save(self, risk_register: str, context: ProjectContext, output_dir: Optional[Path] = None) -> Path:
         """Save the generated Risk Register to a markdown file."""
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "output"
@@ -223,6 +223,7 @@ if __name__ == "__main__":
 
     while dialogue.has_next_question():
         question = dialogue.get_next_question()
+        assert question is not None
         current, total = dialogue.get_progress()
         print(f"[{current}/{total}] {question['question']}")
         print(f"  Hint: {question['hint']}")

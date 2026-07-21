@@ -64,6 +64,7 @@ def run_dialogue(dialogue: DialogueManager) -> bool:
 
     while dialogue.has_next_question():
         question = dialogue.get_next_question()
+        assert question is not None
         current, total = dialogue.get_progress()
 
         # Question header
@@ -498,16 +499,16 @@ def _run_main_loop(agent: QAIAgent, results_paths: Optional[list] = None):
         else:
             # Generate strategy + risk register
             console.print()
-            result = generate_strategy(agent, dialogue, results_summary=results_summary)
+            strategy_result = generate_strategy(agent, dialogue, results_summary=results_summary)
 
             # Display Risk Register
             console.print(Panel(
                 "[bold yellow]⚠️  Risk Register[/bold yellow]",
                 border_style="yellow",
             ))
-            console.print(Markdown(result["risk_register"]))
-            show_sources(result["risk_sources"])
-            console.print(f"\n[bold green]💾 Risk Register saved to:[/bold green] [cyan]{result['risk_path']}[/cyan]")
+            console.print(Markdown(strategy_result["risk_register"]))
+            show_sources(strategy_result["risk_sources"])
+            console.print(f"\n[bold green]💾 Risk Register saved to:[/bold green] [cyan]{strategy_result['risk_path']}[/cyan]")
 
             # Display Effort Estimation
             console.print()
@@ -515,8 +516,8 @@ def _run_main_loop(agent: QAIAgent, results_paths: Optional[list] = None):
                 "[bold green]📊 Effort Estimation Report[/bold green]",
                 border_style="green",
             ))
-            console.print(Markdown(result["effort_report"]))
-            console.print(f"\n[bold green]💾 Effort Report saved to:[/bold green] [cyan]{result['effort_path']}[/cyan]")
+            console.print(Markdown(strategy_result["effort_report"]))
+            console.print(f"\n[bold green]💾 Effort Report saved to:[/bold green] [cyan]{strategy_result['effort_path']}[/cyan]")
 
             # Display Test Strategy
             console.print()
@@ -524,9 +525,9 @@ def _run_main_loop(agent: QAIAgent, results_paths: Optional[list] = None):
                 "[bold cyan]📋 Generated Test Strategy[/bold cyan]",
                 border_style="cyan",
             ))
-            console.print(Markdown(result["strategy"]))
-            show_sources(result["sources"])
-            console.print(f"\n[bold green]💾 Strategy saved to:[/bold green] [cyan]{result['strategy_path']}[/cyan]")
+            console.print(Markdown(strategy_result["strategy"]))
+            show_sources(strategy_result["sources"])
+            console.print(f"\n[bold green]💾 Strategy saved to:[/bold green] [cyan]{strategy_result['strategy_path']}[/cyan]")
 
             # Display Test Plan
             console.print()
@@ -534,11 +535,11 @@ def _run_main_loop(agent: QAIAgent, results_paths: Optional[list] = None):
                 "[bold blue]📝 Test Plan[/bold blue]",
                 border_style="blue",
             ))
-            console.print(Markdown(result["test_plan"]))
-            show_sources(result["test_plan_sources"])
-            console.print(f"\n[bold green]💾 Test Plan saved to:[/bold green] [cyan]{result['test_plan_path']}[/cyan]")
+            console.print(Markdown(strategy_result["test_plan"]))
+            show_sources(strategy_result["test_plan_sources"])
+            console.print(f"\n[bold green]💾 Test Plan saved to:[/bold green] [cyan]{strategy_result['test_plan_path']}[/cyan]")
 
-            output_path = result["strategy_path"]
+            output_path = strategy_result["strategy_path"]
 
             # Feedback loop
             console.print()

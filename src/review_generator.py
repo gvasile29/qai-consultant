@@ -12,6 +12,7 @@ in the MCP server's import graph.
 import re
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 from agent import MISTRAL_MODEL
 from ai_disclosure import build_front_matter, with_ai_footer
@@ -117,7 +118,7 @@ def build_review_report_markdown(result: ReviewResult, narrative: str = "") -> s
     return "\n".join(lines)
 
 
-def save_review_report(markdown_text: str, source_label: str, output_dir: Path = None) -> Path:
+def save_review_report(markdown_text: str, source_label: str, output_dir: Optional[Path] = None) -> Path:
     """Save a quality review report with the same filename-sanitization and
     Article 50(2) front-matter/footer convention as the other generators."""
     if output_dir is None:

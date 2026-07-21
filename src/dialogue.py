@@ -412,6 +412,7 @@ if __name__ == "__main__":
 
     while dialogue.has_next_question():
         question = dialogue.get_next_question()
+        assert question is not None
         current, total = dialogue.get_progress()
 
         print(f"\n[{current}/{total}] {question['question']}")
