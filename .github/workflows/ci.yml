@@ -141,3 +141,27 @@ jobs:
         # dependency with no fixed version yet available, which would block
         # unrelated PRs with no escape hatch. Promote once there's an
         # allowlist/waiver mechanism for exactly this case. See CLAUDE.md's CI section.
+
+  evals-det:
+    name: Evals (deterministic)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run deterministic eval gate
+        run: |
+          echo "## evals/run --det" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          python -m evals.run --det | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

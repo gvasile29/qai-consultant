@@ -209,6 +209,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`/`mas
 | `typecheck` | **Yes** (since PR #63) | `mypy src/` — the ~53-error pre-existing backlog was cleared in PR #61; any new mypy error now blocks merge. |
 | `security-bandit` | **Yes** (since PR #63) | `bandit -r src/ -ll` — the 2-finding pre-existing backlog (`results_core.py`'s `ET.fromstring`, `telemetry.py`'s `urlopen`) was cleared in PR #61; any new medium+ finding now blocks merge. |
 | `security-pip-audit` | **No** | `pip-audit -r requirements.txt --desc` — non-blocking. The 10-CVE backlog (langchain/nltk/transformers family) was cleared in PR #62, but this job stays non-blocking on purpose: a new CVE can land in a transitive dependency with no fixed version yet published, which would block unrelated PRs with no way out. Promote once there's an allowlist/waiver mechanism for exactly that case. |
+| `evals-det` | Yes | `python -m evals.run --det` — the tier-1 deterministic eval suite described in the "Evals" section above, now enforced on every PR instead of only run manually. |
 
 `security-pip-audit` uses `continue-on-error: true` (not a shell-level `|| true`) so its findings stay visible as a neutral/warning status in the PR checks list and in the job's `$GITHUB_STEP_SUMMARY`, without blocking merge. `typecheck`/`security-bandit` no longer use `continue-on-error` — a failure there now fails the job for real, same as `test`/`lint`.
 
