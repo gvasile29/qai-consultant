@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 QAI Consultant is a Python-based AI agent that acts as a senior QA Architect. It collects project context via a structured 11-question dialogue, then generates Test Strategies grounded in ISTQB, OWASP, IEEE, and ISO standards using a cloud LLM (Mistral API, with OpenRouter fallback) and RAG over a Pinecone vector knowledge base.
 
-**Deployed:** https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app
+**Deployed:** https://quality-ai-consultant.streamlit.app
 **Latest GitHub release:** [v2.5.1](https://github.com/gvasile29/qai-consultant/releases/tag/v2.5.1) (2026-07-13, tagged on `master`) — catches up the release history to `version.py`/`CHANGELOG.md`; v2.0.0–v2.5.0 were never individually tagged.
 
 ## Development Commands

@@ -9,7 +9,7 @@
 
 An open-source AI agent that acts as a senior QA Architect — automatically generating a **Test Strategy**, **Risk Register**, **Effort Estimation Report**, and **Test Plan** from a simple project description, plus deterministic **QA Document Quality Review** and **Test Results Analysis** for evaluating what already exists. Also available as an **MCP server** so Claude Code, Claude Desktop, and claude.ai can ground their own QA work in the same standards and numbers.
 
-> 🌐 **Live demo:** [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
+> 🌐 **Live demo:** [quality-ai-consultant.streamlit.app](https://quality-ai-consultant.streamlit.app)
 
 > 🔌 **New:** QAI Consultant is now also an MCP server — `uvx qai-consultant-mcp`. No API keys, no Pinecone. See [MCP Server](#mcp-server-for-claude-code-claude-desktop-claudeai) below or the [package on PyPI](https://pypi.org/project/qai-consultant-mcp/).
 
@@ -45,7 +45,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 
 ### Option A — Use the live app (no setup)
 
-👉 [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
+👉 [quality-ai-consultant.streamlit.app](https://quality-ai-consultant.streamlit.app)
 
 ### Option B — Run locally
 
@@ -172,7 +172,7 @@ LLM calls use **Mistral API** as the primary provider, with **OpenRouter** as au
 streamlit run src/app.py
 ```
 
-Or use the **live hosted version**: [appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app](https://appi-consultant-esodgczvwpmozzybuhdhek.streamlit.app)
+Or use the **live hosted version**: [quality-ai-consultant.streamlit.app](https://quality-ai-consultant.streamlit.app)
 
 ### CLI (Terminal)
 
