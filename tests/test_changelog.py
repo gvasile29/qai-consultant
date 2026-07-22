@@ -62,3 +62,35 @@ def test_changelog_top_version_matches_version_py():
         f"version.py's __version__ is {__version__!r} — they must match."
     )
     print(f"  PASS: CHANGELOG.md top heading [{match.group(1)}] matches __version__")
+
+
+def test_pyproject_version_matches_version_py():
+    """pyproject.toml's [project] version must match src/version.py's
+    __version__ -- these were kept in sync by hand 3 times in one day
+    (v3.1.1/3.1.2/3.1.3) with nothing catching a slip."""
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', text)
+    assert match, "No 'version = \"X.Y.Z\"' line found in pyproject.toml"
+    assert match.group(1) == __version__, (
+        f"pyproject.toml's version is {match.group(1)!r} but "
+        f"version.py's __version__ is {__version__!r} -- they must match."
+    )
+    print(f"  PASS: pyproject.toml version {match.group(1)!r} matches __version__")
+
+
+def test_changelog_top_entry_has_content():
+    """The newest CHANGELOG.md entry must have substantive content (at
+    least one bullet line) between its heading and the next version
+    heading (or end of file) -- catches a version bump that adds the
+    heading but forgets to fill in what actually changed."""
+    text = CHANGELOG_PATH.read_text(encoding="utf-8")
+    headings = list(re.finditer(r"(?m)^## \[", text))
+    assert headings, "No '## [X.Y.Z]' version heading found in CHANGELOG.md"
+    start = headings[0].end()
+    end = headings[1].start() if len(headings) > 1 else len(text)
+    body = text[start:end]
+    assert re.search(r"(?m)^- ", body), (
+        "The topmost CHANGELOG.md entry has no '- ' bullet content -- "
+        "looks like a bare heading with nothing describing the change."
+    )
+    print("  PASS: topmost CHANGELOG.md entry has bullet content")

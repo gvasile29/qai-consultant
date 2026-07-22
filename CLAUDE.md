@@ -160,6 +160,8 @@ python -m pytest tests/test_agent.py::test_kb_missing_raises_error -v  # single 
 | `test_app_v03.py` | Streamlit v0.3 Risk Register integration — 11 tests |
 | `test_integration.py` | End-to-end pipeline — dialogue → Risk Register + Effort Report + Test Strategy — 5 tests |
 
+`tests/test_changelog.py` also guards the release checklist itself: `test_pyproject_version_matches_version_py` fails if `pyproject.toml`'s version drifts from `src/version.py`'s `__version__`, and `test_changelog_top_entry_has_content` fails if a version bump adds a bare CHANGELOG heading with no actual bullet content underneath it.
+
 > **Rule:** After every code change, run relevant tests before committing. Add new tests for every new feature.
 
 > **Baseline (v3.0.0):** 317 passed, 0 known errors. The `test_full_estimate_bmw` / `test_risk_analyzer` live-`agent`-fixture tests documented as errors as of v2.0.1 now pass directly (SKIP without API keys, per their own fixtures) rather than erroring — this baseline note had drifted stale relative to the growing suite well before v3.0; the table above is similarly incomplete (many test files added since v2.0.1/v2.5.x/v3.0 aren't listed) and due for a fuller audit, out of scope for this release.
@@ -210,6 +212,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`/`mas
 | `security-bandit` | **Yes** (since PR #63) | `bandit -r src/ -ll` — the 2-finding pre-existing backlog (`results_core.py`'s `ET.fromstring`, `telemetry.py`'s `urlopen`) was cleared in PR #61; any new medium+ finding now blocks merge. |
 | `security-pip-audit` | **No** | `pip-audit -r requirements.txt --desc` — non-blocking. The 10-CVE backlog (langchain/nltk/transformers family) was cleared in PR #62, but this job stays non-blocking on purpose: a new CVE can land in a transitive dependency with no fixed version yet published, which would block unrelated PRs with no way out. Promote once there's an allowlist/waiver mechanism for exactly that case. |
 | `evals-det` | Yes | `python -m evals.run --det` — the tier-1 deterministic eval suite described in the "Evals" section above, now enforced on every PR instead of only run manually. |
+| `coverage` | Yes | `pytest --cov=src --cov-fail-under=61` — the coverage floor is the measured baseline at the time this gate was added; it can only be raised over time, never silently regress. |
 
 `security-pip-audit` uses `continue-on-error: true` (not a shell-level `|| true`) so its findings stay visible as a neutral/warning status in the PR checks list and in the job's `$GITHUB_STEP_SUMMARY`, without blocking merge. `typecheck`/`security-bandit` no longer use `continue-on-error` — a failure there now fails the job for real, same as `test`/`lint`.
 
