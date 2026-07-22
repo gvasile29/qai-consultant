@@ -54,10 +54,21 @@ st.set_page_config(
 )
 
 # Sidebar logo (Streamlit >= 1.35): full lockup expanded, symbol-only collapsed.
-st.logo(
-    str(BRAND_DIR / "qai_logo.svg"),
-    icon_image=str(BRAND_DIR / "qai_icon.svg"),
-)
+# st.logo() has no built-in light/dark pair, so pick the variant ourselves via
+# st.context.theme.type ("light"/"dark"/None on first render) -- the light SVGs
+# fill #0F172A, nearly invisible against Streamlit's dark-theme background;
+# assets/brand/README_BRAND.md's "_dark" variants (fill #F1F5F9) exist for this.
+_theme_type = st.context.theme.type
+if _theme_type == "dark":
+    st.logo(
+        str(BRAND_DIR / "qai_logo_dark.svg"),
+        icon_image=str(BRAND_DIR / "qai_icon_dark.svg"),
+    )
+else:
+    st.logo(
+        str(BRAND_DIR / "qai_logo.svg"),
+        icon_image=str(BRAND_DIR / "qai_icon.svg"),
+    )
 
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -1314,7 +1325,12 @@ def main():
 
     _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
     with _logo_col2:
-        st.image(str(BRAND_DIR / "qai_logo_horizontal_1680.png"), width=280)
+        _header_logo = (
+            "qai_logo_horizontal_dark_1680.png"
+            if st.context.theme.type == "dark"
+            else "qai_logo_horizontal_1680.png"
+        )
+        st.image(str(BRAND_DIR / _header_logo), width=280)
 
     # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()
