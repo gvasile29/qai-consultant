@@ -27,6 +27,7 @@ dependencies = [
     "sentence-transformers==2.7.0",
     "platformdirs>=4.0.0",
     "torch==2.13.0",
+    "defusedxml>=0.7.1",
 ]
 
 [project.urls]
