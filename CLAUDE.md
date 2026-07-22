@@ -206,11 +206,11 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`/`mas
 |-----|-----------|-----------------|
 | `test` | Yes | `pytest tests/` on Python 3.10/3.11/3.12 |
 | `lint` | Yes | `ruff check src/ tests/` |
-| `typecheck` | **No** | `mypy src/` — non-blocking because the codebase has partial, inconsistent type-annotation coverage; a strict pass surfaces ~53 pre-existing errors unrelated to any given PR. Promote to blocking once that backlog is addressed. |
-| `security-bandit` | **No** | `bandit -r src/ -ll` — non-blocking; currently reports 2 pre-existing medium-severity findings (`results_core.py`'s `ET.fromstring`, `telemetry.py`'s `urlopen`). |
-| `security-pip-audit` | **No** | `pip-audit -r requirements.txt --desc` — non-blocking; currently reports known CVEs in transitive dependencies (`langchain`, `nltk`, `transformers`, etc.) that aren't immediately fixable without upstream upgrades. |
+| `typecheck` | **Yes** (since PR #63) | `mypy src/` — the ~53-error pre-existing backlog was cleared in PR #61; any new mypy error now blocks merge. |
+| `security-bandit` | **Yes** (since PR #63) | `bandit -r src/ -ll` — the 2-finding pre-existing backlog (`results_core.py`'s `ET.fromstring`, `telemetry.py`'s `urlopen`) was cleared in PR #61; any new medium+ finding now blocks merge. |
+| `security-pip-audit` | **No** | `pip-audit -r requirements.txt --desc` — non-blocking. The 10-CVE backlog (langchain/nltk/transformers family) was cleared in PR #62, but this job stays non-blocking on purpose: a new CVE can land in a transitive dependency with no fixed version yet published, which would block unrelated PRs with no way out. Promote once there's an allowlist/waiver mechanism for exactly that case. |
 
-All three non-blocking jobs use `continue-on-error: true` (not a shell-level `|| true`) so their findings stay visible as a neutral/warning status in the PR checks list and in each job's `$GITHUB_STEP_SUMMARY`, without blocking merge. Promoting any of them to blocking is a deliberate future decision — not an oversight — once the pre-existing backlog each surfaces is actually cleared.
+`security-pip-audit` uses `continue-on-error: true` (not a shell-level `|| true`) so its findings stay visible as a neutral/warning status in the PR checks list and in the job's `$GITHUB_STEP_SUMMARY`, without blocking merge. `typecheck`/`security-bandit` no longer use `continue-on-error` — a failure there now fails the job for real, same as `test`/`lint`.
 
 ## Roadmap
 
