@@ -17,6 +17,7 @@ streamlit_logs/
 # Test / lint caches
 .pytest_cache/
 .ruff_cache/
+.coverage
 
 # qai-consultant-mcp packaging artifacts (pyproject.toml, v3.0 step 8)
 build/
