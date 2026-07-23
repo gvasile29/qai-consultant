@@ -120,7 +120,20 @@ Targets, in priority order:
 - [ ] **Official Anthropic MCP registry** (the `modelcontextprotocol` ecosystem registry). This is the highest-signal listing. Requires `mcp-publisher` CLI + a `mcp-name:` marker line in `README_MCP.md` validated against live PyPI metadata — needs a version bump/re-upload first (PyPI never allows re-uploading an existing version). Pending a decision on that release.
 - [x] **Awesome MCP servers lists on GitHub** — submitted to `punkpeye/awesome-mcp-servers` (the well-known one). PR: [#10736](https://github.com/punkpeye/awesome-mcp-servers/pull/10736), added under Developer Tools matching existing entry format, `🤖🤖🤖` fast-track tag per their own CONTRIBUTING.md. Awaiting maintainer merge.
 - [ ] **Smithery** (smithery.ai) — not started; their submission flow looks oriented at hosted-URL servers, needs investigation into whether our local stdio/`uvx` model fits before attempting.
-- [ ] **Glama** (glama.ai/mcp) — not started; has an "Add Server" flow, exact form fields need a live check.
+- [x] **Glama** (glama.ai/mcp) — submitted via the "Add Server" form (Name/Description/GitHub URL only; confirmed no login needed for this initial step — "Public submissions are reviewed before becoming publicly visible"). "Your server has been submitted for review" confirmed. Once approved and listed, a follow-up claim (GitHub OAuth, Gabi's own account) + pasting a Dockerfile into Glama's own admin page (not committed to this repo) is still needed to get it passing checks and generate the score badge that `punkpeye/awesome-mcp-servers#10736`'s bot is asking for. Verified locally (built + ran, real stdio MCP introspection passed) Dockerfile to paste at that step:
+
+  ```dockerfile
+  FROM python:3.12-slim
+  COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+  RUN uv pip install --system qai-consultant-mcp==3.1.3
+  # Bake the full KB index (not just the model weights) into the image so the
+  # container's first real run doesn't pay the ~1-2 min cold-start cost --
+  # this is the same LocalIndex() + warmup call src/mcp_server.py's main()
+  # does before mcp.run(), just run once at build time instead of on every
+  # container start.
+  RUN python -c "from local_index import LocalIndex; LocalIndex().search('warmup', k=1)"
+  ENTRYPOINT ["qai-consultant-mcp"]
+  ```
 - [x] **mcp.so** — submitted via comment on the pinned submission issue: [chatmcp/mcpso#1](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601).
 
 > Note: directory names, URLs, and submission mechanics change quickly. At implementation time, verify each directory's current submission process rather than trusting these names blindly. Do a fresh web check.
@@ -134,7 +147,7 @@ Targets, in priority order:
 | Anthropic MCP registry | | Not started | Requires `mcp-publisher` CLI + a `mcp-name: io.github.gvasile29/qai-consultant-mcp` line in `README_MCP.md`, validated against **live PyPI metadata** — needs a version bump (e.g. 3.1.4) and re-upload before this can be submitted, since PyPI never allows re-uploading an existing version. Decision pending. |
 | awesome-mcp-servers | 2026-07-23 | PR open | [punkpeye/awesome-mcp-servers#10736](https://github.com/punkpeye/awesome-mcp-servers/pull/10736) — added under Developer Tools, `🤖🤖🤖` fast-track tag used per their CONTRIBUTING.md. |
 | Smithery | | Not started | Their flow appears oriented at hosted-URL servers; needs investigation into whether a `uvx`-launched local stdio server fits before attempting. |
-| Glama | | Not started | Has an "Add Server" flow on glama.ai/mcp/servers; exact form fields need a live check when we get to it. |
+| Glama | 2026-07-23 | Submitted, pending review | Add Server form (Name/Description/GitHub URL); no login needed for this step. Next: once approved, claim the listing + paste the verified Dockerfile (baked-in KB index, see repo scratch notes) to pass checks and get the score badge for the awesome-mcp-servers PR. |
 | mcp.so | 2026-07-23 | Comment posted | [chatmcp/mcpso#1 (comment)](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601) |
 
 ---
