@@ -134,7 +134,7 @@ Targets, in priority order:
   RUN python -c "from local_index import LocalIndex; LocalIndex().search('warmup', k=1)"
   ENTRYPOINT ["qai-consultant-mcp"]
   ```
-- [x] **mcp.so** — submitted via comment on the pinned submission issue: [chatmcp/mcpso#1](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601).
+- [x] **mcp.so** — submitted twice: (1) comment on the pinned submission issue [chatmcp/mcpso#1](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601); (2) the actual official form at mcp.so/submit (free tier — queued review, no badge, random placement, nofollow link), which requires sign-in (GitHub/Google/email) — Gabi completed that step himself since it needs his own account.
 
 > Note: directory names, URLs, and submission mechanics change quickly. At implementation time, verify each directory's current submission process rather than trusting these names blindly. Do a fresh web check.
 
@@ -148,7 +148,7 @@ Targets, in priority order:
 | awesome-mcp-servers | 2026-07-23 | PR open | [punkpeye/awesome-mcp-servers#10736](https://github.com/punkpeye/awesome-mcp-servers/pull/10736) — added under Developer Tools, `🤖🤖🤖` fast-track tag used per their CONTRIBUTING.md. |
 | Smithery | | Not started | Their flow appears oriented at hosted-URL servers; needs investigation into whether a `uvx`-launched local stdio server fits before attempting. |
 | Glama | 2026-07-23 | Submitted, pending review | Add Server form (Name/Description/GitHub URL); no login needed for this step. Next: once approved, claim the listing + paste the verified Dockerfile (baked-in KB index, see repo scratch notes) to pass checks and get the score badge for the awesome-mcp-servers PR. |
-| mcp.so | 2026-07-23 | Comment posted | [chatmcp/mcpso#1 (comment)](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601) |
+| mcp.so | 2026-07-23 | Submitted (both channels) | [chatmcp/mcpso#1 (comment)](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601) + official free-tier form at mcp.so/submit (queued review, no badge/priority since it's the free tier), submitted by Gabi directly (sign-in required) |
 
 ---
 
