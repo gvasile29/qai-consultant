@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.4] - 2026-07-23
+
+### Changed
+- Added the `mcp-name: io.github.gvasile29/qai-consultant-mcp` marker to `README_MCP.md` (the package's PyPI long description), a prerequisite for listing `qai-consultant-mcp` in the official Anthropic MCP registry — no functional change.
+
 ## [3.1.3] - 2026-07-21
 
 ### Fixed

@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.1.3-green.svg)
+![Version](https://img.shields.io/badge/version-3.1.4-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -260,6 +260,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.1.1** ✅ Visit counter — a running total of app visits now shows in the sidebar, persisted in Pinecone so it survives redeploys
 - **v3.1.2** ✅ Fix — the 3.1.1 visit counter never actually incremented (Pinecone rejected its all-zero placeholder vector); now works correctly
 - **v3.1.3** ✅ Fix — the visit counter's label was in Romanian ("vizite") instead of English; now reads "visits" to match the rest of the app's UI copy
+- **v3.1.4** ✅ Added the `mcp-name` marker to `README_MCP.md` (PyPI long description) — a prerequisite for listing `qai-consultant-mcp` in the official Anthropic MCP registry; no functional change
 - **v3.2** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---

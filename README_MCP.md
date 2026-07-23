@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.gvasile29/qai-consultant-mcp -->
 ![QAI Consultant](https://raw.githubusercontent.com/gvasile29/qai-consultant/master/assets/brand/qai_logo_horizontal_1680.png)
 
 # qai-consultant-mcp
