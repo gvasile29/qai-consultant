@@ -119,7 +119,7 @@ Targets, in priority order:
 
 - [x] **Official Anthropic MCP registry** (the `modelcontextprotocol` ecosystem registry) — **live**. Shipped v3.1.4 (mcp-name marker in `README_MCP.md`, re-uploaded to PyPI), installed `mcp-publisher` 1.8.0 (Windows binary), ran `mcp-publisher init` fresh rather than hand-authoring (schema had already moved to `2025-12-11`/camelCase since the research pass a few hours earlier — confirms the plan's own "verify at implementation time" warning was warranted), fixed the auto-generated `server.json` (wrong name — repo-derived `io.github.gvasile29/qai-consultant` instead of the PyPI-matching `io.github.gvasile29/qai-consultant-mcp`; a stray `\r` in the identifier; a >100-char description that failed validation), `mcp-publisher login github` (device-flow, Gabi authorized directly — needed 3 attempts, the device code kept expiring before he got to the link), `mcp-publisher publish` succeeded. Verified live via `registry.modelcontextprotocol.io/v0/servers?search=qai-consultant`: `status: active`, `isLatest: true`. `server.json` committed to the repo root for future version bumps.
 - [x] **Awesome MCP servers lists on GitHub** — submitted to `punkpeye/awesome-mcp-servers` (the well-known one). PR: [#10736](https://github.com/punkpeye/awesome-mcp-servers/pull/10736), added under Developer Tools matching existing entry format, `🤖🤖🤖` fast-track tag per their own CONTRIBUTING.md. Awaiting maintainer merge.
-- [ ] **Smithery** (smithery.ai) — not started; their submission flow looks oriented at hosted-URL servers, needs investigation into whether our local stdio/`uvx` model fits before attempting.
+- [x] **Smithery** (smithery.ai) — **dropped, decided 2026-07-23.** Their flow looked oriented at hosted-URL servers rather than a local `uvx`-launched stdio server; Gabi decided not to pursue it rather than invest time resolving the fit.
 - [x] **Glama** (glama.ai/mcp) — submitted via the "Add Server" form (Name/Description/GitHub URL only; confirmed no login needed for this initial step — "Public submissions are reviewed before becoming publicly visible"). "Your server has been submitted for review" confirmed. Once approved and listed, a follow-up claim (GitHub OAuth, Gabi's own account) + pasting a Dockerfile into Glama's own admin page (not committed to this repo) is still needed to get it passing checks and generate the score badge that `punkpeye/awesome-mcp-servers#10736`'s bot is asking for. Verified locally (built + ran, real stdio MCP introspection passed) Dockerfile to paste at that step:
 
   ```dockerfile
@@ -138,7 +138,7 @@ Targets, in priority order:
 
 > Note: directory names, URLs, and submission mechanics change quickly. At implementation time, verify each directory's current submission process rather than trusting these names blindly. Do a fresh web check.
 
-**Acceptance:** submissions prepared (and, where Gabi approves, submitted) to at least the Anthropic registry + one awesome-list PR + two of the three third-party directories.
+**Acceptance:** submissions prepared (and, where Gabi approves, submitted) to at least the Anthropic registry + one awesome-list PR + two of the three third-party directories. **Met** — Anthropic registry live, awesome-mcp-servers PR open, mcp.so + Glama both submitted (Smithery dropped by decision, not attempted). Phase 5 is effectively done pending the awesome-mcp-servers PR merge (blocked on the Glama badge, tracked above) and Glama's own review completing.
 
 **Track submission status** so five parallel submissions don't get lost (a checklist in an issue, or a small table appended here — whichever Gabi prefers when this phase starts):
 
@@ -146,7 +146,7 @@ Targets, in priority order:
 |---|---|---|---|
 | Anthropic MCP registry | 2026-07-23 | Live | `io.github.gvasile29/qai-consultant-mcp` v3.1.4, `status: active`. Required shipping v3.1.4 (mcp-name marker + PyPI re-upload) first. |
 | awesome-mcp-servers | 2026-07-23 | PR open | [punkpeye/awesome-mcp-servers#10736](https://github.com/punkpeye/awesome-mcp-servers/pull/10736) — added under Developer Tools, `🤖🤖🤖` fast-track tag used per their CONTRIBUTING.md. |
-| Smithery | | Not started | Their flow appears oriented at hosted-URL servers; needs investigation into whether a `uvx`-launched local stdio server fits before attempting. |
+| Smithery | | Dropped | Gabi decided not to pursue it — their flow looks oriented at hosted-URL servers, not our local stdio/`uvx` model. |
 | Glama | 2026-07-23 | Submitted, pending review | Add Server form (Name/Description/GitHub URL); no login needed for this step. Next: once approved, claim the listing + paste the verified Dockerfile (baked-in KB index, see repo scratch notes) to pass checks and get the score badge for the awesome-mcp-servers PR. |
 | mcp.so | 2026-07-23 | Submitted (both channels) | [chatmcp/mcpso#1 (comment)](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601) + official free-tier form at mcp.so/submit (queued review, no badge/priority since it's the free tier), submitted by Gabi directly (sign-in required) |
 
