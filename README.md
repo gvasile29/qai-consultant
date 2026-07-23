@@ -188,6 +188,8 @@ local embedding index over the same knowledge base and exposes deterministic
 QA effort estimation, so your own AI coding assistant can ground its QA
 planning directly, no separate LLM call needed.
 
+![qai-consultant-mcp answering a retrieve_qa_knowledge call in MCP Inspector](assets/demo/qai-consultant-mcp-demo.gif)
+
 ```bash
 uvx qai-consultant-mcp
 ```

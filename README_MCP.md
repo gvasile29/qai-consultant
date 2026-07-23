@@ -3,6 +3,8 @@
 
 # qai-consultant-mcp
 
+![qai-consultant-mcp answering a retrieve_qa_knowledge call in MCP Inspector](https://raw.githubusercontent.com/gvasile29/qai-consultant/master/assets/demo/qai-consultant-mcp-demo.gif)
+
 A local, fully keyless [MCP](https://modelcontextprotocol.io) server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, and test-results health analysis — callable directly from Claude Code, Claude Desktop, or claude.ai.
 
 No API keys, no Pinecone, no cloud LLM calls. It runs a local embedding index over a self-authored QA knowledge base and does the estimation math itself; **the client LLM writes the narrative**, this server just supplies grounding and numbers.

@@ -156,11 +156,11 @@ Targets, in priority order:
 
 A directory entry only works if the click-through lands on something convincing.
 
-- [ ] **README_MCP.md polish:** ensure the install one-liner, the 5-tool table, and a 2-3 line "why this exists" are the first thing a reader sees. Set the correct first-run expectation (model download timing).
-- [ ] **Add a short demo GIF** (~15s) showing a tool call answering inside an MCP client (e.g. `review_qa_document` scoring a Test Plan, or `retrieve_qa_knowledge` citing a standard). Put it near the top of README_MCP.md and the root README. Without a visual, directory click-throughs rarely install.
-- [ ] **GitHub repo discoverability:** confirm repo topics include `mcp`, `model-context-protocol`, `qa`, `testing`, `quality-assurance` (already used as PyPI tags), plus `istqb` if desired.
+- [x] **README_MCP.md polish:** already had the install one-liner, 5-tool table, and "why this exists" paragraphs up top from earlier MCP work (v3.0/v3.1) — no structural changes needed, verified against the acceptance bar directly. First-run timing note already present.
+- [x] **Add a short demo GIF** (~15s) — landed at ~20.3s/16 frames, `assets/demo/qai-consultant-mcp-demo.gif` (3.24 MB, 1743×826). Produced via a 2-agent workflow (record + independently verify): launched the official MCP Inspector against the real, PyPI-installed `uvx qai-consultant-mcp`, connected over real stdio, called `retrieve_qa_knowledge` with `query="risk based testing"`, captured the flow through to `Tool Result: Success` with real KB content (`methodologies/Risk_Based_Testing.md`, score 0.7091). Hit one real snag (a first-connection timeout racing a second Connect click crashed the Inspector's proxy) — diagnosed and recovered by killing the stuck process tree and reconnecting fresh. Embedded near the top of both `README_MCP.md` (absolute `raw.githubusercontent.com` URL, matches how the logo above it is already referenced, since PyPI's renderer needs an absolute path) and root `README.md` (relative path, GitHub's own convention already used for other repo screenshots).
+- [x] **GitHub repo discoverability:** added `mcp`, `model-context-protocol`, `quality-assurance`, `istqb` topics (the pre-existing set already had `qa`/`testing`) via the GitHub topics API.
 
-**Acceptance:** README_MCP.md leads with install + tools + demo GIF; repo has the right topics.
+**Acceptance:** README_MCP.md leads with install + tools + demo GIF; repo has the right topics. **Met.**
 
 ---
 
