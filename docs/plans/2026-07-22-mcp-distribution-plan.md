@@ -117,11 +117,11 @@ For each target, prepare the submission (fork/PR, form fields, or config entry),
 
 Targets, in priority order:
 
-- [ ] **Official Anthropic MCP registry** (the `modelcontextprotocol` ecosystem registry). This is the highest-signal listing. Follow its current submission process (server.json / registry schema as required at implementation time; verify the exact format, do not assume).
-- [ ] **Awesome MCP servers lists on GitHub** (the well-known `awesome-mcp-servers` repos). Open a PR adding the server under the appropriate category (developer tools / testing). Match the existing entry format in each list exactly.
-- [ ] **Smithery** (smithery.ai) — submit / register the server.
-- [ ] **Glama** (glama.ai/mcp) — submit the server.
-- [ ] **mcp.so** — submit the server.
+- [ ] **Official Anthropic MCP registry** (the `modelcontextprotocol` ecosystem registry). This is the highest-signal listing. Requires `mcp-publisher` CLI + a `mcp-name:` marker line in `README_MCP.md` validated against live PyPI metadata — needs a version bump/re-upload first (PyPI never allows re-uploading an existing version). Pending a decision on that release.
+- [x] **Awesome MCP servers lists on GitHub** — submitted to `punkpeye/awesome-mcp-servers` (the well-known one). PR: [#10736](https://github.com/punkpeye/awesome-mcp-servers/pull/10736), added under Developer Tools matching existing entry format, `🤖🤖🤖` fast-track tag per their own CONTRIBUTING.md. Awaiting maintainer merge.
+- [ ] **Smithery** (smithery.ai) — not started; their submission flow looks oriented at hosted-URL servers, needs investigation into whether our local stdio/`uvx` model fits before attempting.
+- [ ] **Glama** (glama.ai/mcp) — not started; has an "Add Server" flow, exact form fields need a live check.
+- [x] **mcp.so** — submitted via comment on the pinned submission issue: [chatmcp/mcpso#1](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601).
 
 > Note: directory names, URLs, and submission mechanics change quickly. At implementation time, verify each directory's current submission process rather than trusting these names blindly. Do a fresh web check.
 
@@ -131,11 +131,11 @@ Targets, in priority order:
 
 | Directory | Submitted (date) | Status | Notes |
 |---|---|---|---|
-| Anthropic MCP registry | | | |
-| awesome-mcp-servers | | | |
-| Smithery | | | |
-| Glama | | | |
-| mcp.so | | | |
+| Anthropic MCP registry | | Not started | Requires `mcp-publisher` CLI + a `mcp-name: io.github.gvasile29/qai-consultant-mcp` line in `README_MCP.md`, validated against **live PyPI metadata** — needs a version bump (e.g. 3.1.4) and re-upload before this can be submitted, since PyPI never allows re-uploading an existing version. Decision pending. |
+| awesome-mcp-servers | 2026-07-23 | PR open | [punkpeye/awesome-mcp-servers#10736](https://github.com/punkpeye/awesome-mcp-servers/pull/10736) — added under Developer Tools, `🤖🤖🤖` fast-track tag used per their CONTRIBUTING.md. |
+| Smithery | | Not started | Their flow appears oriented at hosted-URL servers; needs investigation into whether a `uvx`-launched local stdio server fits before attempting. |
+| Glama | | Not started | Has an "Add Server" flow on glama.ai/mcp/servers; exact form fields need a live check when we get to it. |
+| mcp.so | 2026-07-23 | Comment posted | [chatmcp/mcpso#1 (comment)](https://github.com/chatmcp/mcpso/issues/1#issuecomment-5054921601) |
 
 ---
 
