@@ -53,8 +53,8 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
 
       - name: Run ruff
         run: |
