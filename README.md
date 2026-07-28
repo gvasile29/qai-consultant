@@ -182,6 +182,9 @@ python src/cli.py
 
 ### MCP Server (for Claude Code, Claude Desktop, claude.ai)
 
+[![qai-consultant MCP server](https://glama.ai/mcp/servers/gvasile29/qai-consultant/badges/card.svg)](https://glama.ai/mcp/servers/gvasile29/qai-consultant)
+[![qai-consultant MCP server](https://glama.ai/mcp/servers/gvasile29/qai-consultant/badges/score.svg)](https://glama.ai/mcp/servers/gvasile29/qai-consultant)
+
 QAI Consultant is also available as a local, fully keyless MCP server —
 `qai-consultant-mcp`. No Pinecone, no Mistral/OpenRouter API keys: it runs a
 local embedding index over the same knowledge base and exposes deterministic

@@ -3,6 +3,9 @@
 
 # qai-consultant-mcp
 
+[![qai-consultant MCP server](https://glama.ai/mcp/servers/gvasile29/qai-consultant/badges/card.svg)](https://glama.ai/mcp/servers/gvasile29/qai-consultant)
+[![qai-consultant MCP server](https://glama.ai/mcp/servers/gvasile29/qai-consultant/badges/score.svg)](https://glama.ai/mcp/servers/gvasile29/qai-consultant)
+
 ![qai-consultant-mcp answering a retrieve_qa_knowledge call in MCP Inspector](https://raw.githubusercontent.com/gvasile29/qai-consultant/master/assets/demo/qai-consultant-mcp-demo.gif)
 
 A local, fully keyless [MCP](https://modelcontextprotocol.io) server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, and test-results health analysis — callable directly from Claude Code, Claude Desktop, or claude.ai.
