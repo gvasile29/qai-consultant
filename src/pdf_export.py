@@ -29,7 +29,12 @@ blockquote { border-left: 3px solid #00b4d8; margin-left: 0; padding-left: 10pt;
 """
 
 
-def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report", extra_meta_html: str = "") -> bytes | None:
+def markdown_to_pdf(
+    md_text: str,
+    title: str = "QAI Consultant Report",
+    extra_meta_html: str = "",
+    extra_body_html: str = "",
+) -> bytes | None:
     """Convert a markdown string to a styled PDF and return the raw bytes.
 
     Parameters
@@ -44,6 +49,11 @@ def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report", extra_me
         ai_disclosure.pdf_meta_html() for the EU AI Act Article 50(2)
         machine-readable marking (mapped onto /Author, /Subject, /Keywords).
         Empty string (default) injects nothing.
+    extra_body_html:
+        Additional raw HTML to inject into <body>, right after the <h1>
+        title — e.g. ai_disclosure.pdf_icon_html() for the EU AI-Generated
+        Content icon (Article 50(4)). Unlike extra_meta_html, this is
+        rendered, visible content. Empty string (default) injects nothing.
 
     Returns
     -------
@@ -69,6 +79,7 @@ def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report", extra_me
 
         safe_title = escape(title)
         meta_block = f"  {extra_meta_html}\n" if extra_meta_html else ""
+        body_prefix = f"  {extra_body_html}\n" if extra_body_html else ""
         html = (
             f'<!DOCTYPE html>\n'
             f'<html>\n'
@@ -80,6 +91,7 @@ def markdown_to_pdf(md_text: str, title: str = "QAI Consultant Report", extra_me
             f'</head>\n'
             f'<body>\n'
             f'  <h1>{safe_title}</h1>\n'
+            f'{body_prefix}'
             f'  {body_html}\n'
             f'</body>\n'
             f'</html>\n'

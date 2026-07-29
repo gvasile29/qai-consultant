@@ -99,6 +99,35 @@ def test_headers_markdown_converts():
     assert result is None or isinstance(result, bytes)
 
 
+def test_extra_body_html_injected_into_generated_html():
+    """extra_body_html's content reaches xhtml2pdf's actual HTML input."""
+    captured = {}
+
+    def fake_create_pdf(src, dest, encoding):
+        captured["html"] = src.decode("utf-8") if isinstance(src, bytes) else src
+        dest.write(b"%PDF-fake")
+
+        class _Result:
+            err = 0
+
+        return _Result()
+
+    with patch("xhtml2pdf.pisa.CreatePDF", side_effect=fake_create_pdf):
+        result = markdown_to_pdf(
+            _SIMPLE_MD,
+            extra_body_html='<img src="data:image/png;base64,AAAA" alt="EU AI icon" />',
+        )
+
+    assert result == b"%PDF-fake"
+    assert 'alt="EU AI icon"' in captured["html"], "extra_body_html did not reach the HTML body"
+
+
+def test_extra_body_html_default_empty_does_not_raise():
+    """Default (no icon passed) behaves exactly as before this change."""
+    result = markdown_to_pdf(_SIMPLE_MD)
+    assert result is None or isinstance(result, bytes)
+
+
 if __name__ == "__main__":
     tests = [
         ("Returns bytes for valid markdown", test_returns_bytes_for_valid_markdown),
@@ -109,6 +138,8 @@ if __name__ == "__main__":
         ("Returns None when xhtml2pdf unavailable", test_returns_none_when_xhtml2pdf_unavailable),
         ("Table markdown converts", test_table_markdown_converts),
         ("Headers markdown converts", test_headers_markdown_converts),
+        ("extra_body_html injected into generated HTML", test_extra_body_html_injected_into_generated_html),
+        ("extra_body_html default empty does not raise", test_extra_body_html_default_empty_does_not_raise),
     ]
     passed = failed = 0
     for name, fn in tests:
