@@ -53,6 +53,18 @@ First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2
 | `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829-grounded dimensions, with findings and resolved KB citations — no LLM scoring, you write the narrative from the findings |
 | `analyze_test_results` | Deterministic health metrics from JUnit XML or CSV test execution data — flaky tests, ever-failing tests, slowest tests, and failure clustering — no LLM anywhere in this tool |
 
+## Try It — Example Prompts
+
+Type these directly in Claude Code, Claude Desktop, or claude.ai once the server is attached:
+
+- *"Using qai-consultant, what does the knowledge base say about risk-based testing?"* → `retrieve_qa_knowledge`
+- *"List every document in the qai-consultant knowledge base, grouped by category."* → `list_kb_sources`
+- *"Using qai-consultant's estimate_qa_effort, estimate the effort for a B2B SaaS project called 'Test Migration', React + Node.js + PostgreSQL, 2 QA / 5 dev engineers, 3-month timeline, Agile/Scrum, no notable known risks, minimal existing test automation, no special compliance requirements."* → `estimate_qa_effort`
+- *"Here's a Test Plan [paste it] — use qai-consultant to review it with review_qa_document and give me the score and findings."* → `review_qa_document`
+- *"Here's a JUnit XML report from my last 3 CI runs [paste them] — use qai-consultant's analyze_test_results to find flaky tests."* → `analyze_test_results`
+
+The first one (`retrieve_qa_knowledge`) is the fastest way to confirm the server actually attached.
+
 ## Prompts
 
 - `qa_project_interview` — the project-intake interview (11 questions covering scope, tech stack, team, timeline, risks, compliance)
