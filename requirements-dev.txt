@@ -11,6 +11,8 @@ pip-audit==2.10.1
 # MCP server (v3.0) — needed to run/test src/mcp_server.py locally. Not part of
 # requirements.txt: the MCP server is a separate package (pyproject.toml, step 8),
 # not something the Streamlit Cloud deploy needs.
-mcp>=1.8.0
+# <2.0.0: the 2.0.0 release removed mcp.shared.memory.create_connected_server_and_client_session
+# (used by tests/test_mcp_server.py), breaking CI the same day it was published.
+mcp>=1.8.0,<2.0.0
 build>=1.0.0
 setuptools>=67.0

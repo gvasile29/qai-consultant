@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "mcp>=1.8.0",
+    "mcp>=1.8.0,<2.0.0",
     "langchain-community>=0.3.30",
     "sentence-transformers==2.7.0",
     "platformdirs>=4.0.0",
