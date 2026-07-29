@@ -3,6 +3,21 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.3.0] - 2026-07-29
+
+### Added
+- Adopted the EU's official "Fully AI-Generated" icon from the Code of
+  Practice on Transparency of AI-Generated Content (supporting AI Act
+  Article 50(4)) as a visual reinforcement of the existing text/metadata AI
+  disclosure (v2.5.2/v2.6). The icon now appears in the Streamlit sidebar
+  (theme-aware, above the existing "you are interacting with an AI system"
+  notice) and in every generated document's PDF export (Risk Register,
+  Effort Estimation, Test Strategy, Test Plan, QA Document Quality Review).
+  Markdown `.md` downloads, the CLI, and the MCP server are unaffected —
+  they keep the existing text-only disclosure, since none of those are
+  rendered surfaces for an image. Design rationale:
+  `docs/superpowers/specs/2026-07-29-eu-ai-icon-adoption-design.md`.
+
 ## [3.1.6] - 2026-07-29
 
 ### Fixed
