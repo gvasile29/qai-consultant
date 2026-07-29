@@ -44,6 +44,7 @@ setup_logging()
 logger = get_logger(__name__)
 
 BRAND_DIR = Path(__file__).resolve().parent.parent / "assets" / "brand"
+EU_AI_ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "eu_ai_icon"
 
 # ── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -103,8 +104,10 @@ st.markdown("""
         font-size: 0.85rem;
         color: #aaa;
     }
-    /* Centers the top-of-page logo (the only st.image in this app) within its column */
-    [data-testid="stImage"] {
+    /* Centers the top-of-page logo within its column. Scoped to the keyed
+       container (not a blanket [data-testid="stImage"] rule) so it doesn't
+       also apply to the sidebar's EU AI-generated-content icon below. */
+    .st-key-header-logo [data-testid="stImage"] {
         display: flex;
         justify-content: center;
     }
@@ -284,6 +287,12 @@ def render_sidebar():
         st.caption(f"v{__version__}")
         if st.session_state.get("visit_count") is not None:
             st.caption(f"👀 {st.session_state.visit_count:,} visits")
+        _eu_icon_svg = (
+            "eu_ai_generated_icon_dark.svg"
+            if _theme_type == "dark"
+            else "eu_ai_generated_icon.svg"
+        )
+        st.image(str(EU_AI_ICON_DIR / _eu_icon_svg), width=140)
         st.info(AI_INTERACTION_NOTICE)
         with st.expander("📋 Release Notes"):
             st.markdown(load_changelog())
@@ -1327,12 +1336,13 @@ def main():
 
     _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
     with _logo_col2:
-        _header_logo = (
-            "qai_logo_horizontal_dark_1680.png"
-            if st.context.theme.type == "dark"
-            else "qai_logo_horizontal_1680.png"
-        )
-        st.image(str(BRAND_DIR / _header_logo), width=280)
+        with st.container(key="header-logo"):
+            _header_logo = (
+                "qai_logo_horizontal_dark_1680.png"
+                if st.context.theme.type == "dark"
+                else "qai_logo_horizontal_1680.png"
+            )
+            st.image(str(BRAND_DIR / _header_logo), width=280)
 
     # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()
