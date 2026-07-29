@@ -426,27 +426,40 @@ def test_plan_structure() -> str:
 def main() -> None:
     telemetry.track_server_start()
     try:
-        index = _get_index()  # fail-fast: a server with no usable KB index is useless
+        index = _get_index()
         # Force the FIRST real embedding-model inference (constructing
-        # HuggingFaceEmbeddings + one encode() call — native torch/MKL thread
-        # and DLL init) to happen here, on the main thread, before mcp.run()
-        # starts stdio_server()'s concurrent stdin-reader task. Deferring this
-        # to the first retrieve_qa_knowledge call (which FastMCP dispatches to
-        # an anyio worker thread) deadlocks on Windows: that worker thread's
-        # torch/MKL native thread creation races the stdin-reader thread's
-        # blocking ReadFile() on the piped stdin for the process loader lock,
-        # and neither ever proceeds. Confirmed via a real `uvx qai-consultant-
-        # mcp` stdio subprocess (v3.0/v3.0.1 E2E test) hanging indefinitely on
-        # the second tool call; a warmup call here — even with a warm on-disk
-        # index cache, where list_kb_sources alone never touches the model —
-        # eliminates it because the model init lands before stdin_reader()
-        # exists as a concurrent task. list_kb_sources() doesn't trigger this
-        # (it never calls the embedding model), so this warmup is the only
-        # thing standing between a cold-cache-index-but-first-query session
-        # and a silent, unrecoverable hang.
-        index.search("warmup", k=1)
+        # HuggingFaceEmbeddings + one embed_query() call — native torch/MKL
+        # thread and DLL init) to happen here, on the main thread, before
+        # mcp.run() starts stdio_server()'s concurrent stdin-reader task.
+        # Deferring this to the first retrieve_qa_knowledge call (which
+        # FastMCP dispatches to an anyio worker thread) deadlocks on Windows:
+        # that worker thread's torch/MKL native thread creation races the
+        # stdin-reader thread's blocking ReadFile() on the piped stdin for
+        # the process loader lock, and neither ever proceeds. Confirmed via
+        # a real `uvx qai-consultant-mcp` stdio subprocess (v3.0/v3.0.1 E2E
+        # test) hanging indefinitely on the second tool call.
+        #
+        # Deliberately NOT a full index build (that used to be bundled into
+        # this same call via search("warmup", k=1), which forced embedding
+        # the entire KB corpus here too — v3.1.6 found this made cold-start
+        # exceed real clients' initialize handshake timeout, e.g. Claude
+        # Desktop's ~60s, since the server can't respond to `initialize`
+        # until mcp.run() starts). warmup_embedder() only forces the
+        # one-time native init; LocalIndex._ensure_built() defers the slow
+        # full-corpus embed_documents() call to the first real search()/
+        # list_sources() call. That's safe from the same deadlock because
+        # the loader-lock race is specifically about the native runtime's
+        # *first* initialization, not about ordinary calls into an
+        # already-initialized one from a different thread afterward.
+        #
+        # Trade-off: this no longer fails fast on a corrupted/unreadable KB
+        # file (only caught lazily on the first real tool call) — accepted,
+        # since the shipped KB is package content, not user-editable, and
+        # the far more common startup failure (no network / HF Hub down /
+        # disk full for the model cache) still fails fast here.
+        index.warmup_embedder()
     except Exception as exc:
-        print(f"FATAL: could not build the knowledge base index: {exc}", file=sys.stderr)
+        print(f"FATAL: could not initialize the embedding model: {exc}", file=sys.stderr)
         raise SystemExit(1)
     mcp.run()
 

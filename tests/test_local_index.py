@@ -52,8 +52,14 @@ def _write_kb(kb_dir: Path, files: dict) -> None:
 
 
 def _build_index(kb_dir: Path, cache_dir: Path) -> LocalIndex:
+    """Construct AND eagerly build the corpus index — LocalIndex itself is
+    lazy now (see local_index.py's _ensure_built() docstring), but these
+    tests are about corpus/cache mechanics, not the lazy-build timing
+    itself, so force it here to keep their original intent."""
     with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()):
-        return LocalIndex(kb_dir=kb_dir, cache_dir=cache_dir)
+        index = LocalIndex(kb_dir=kb_dir, cache_dir=cache_dir)
+        index._ensure_built()
+        return index
 
 
 # ── Chunk counts and boundaries ─────────────────────────────────────────────────
@@ -157,10 +163,12 @@ def test_cache_round_trip_avoids_recomputing_embeddings(tmp_path):
     fake1 = _FakeEmbeddings()
     with patch("local_index.HuggingFaceEmbeddings", return_value=fake1):
         idx1 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
+        idx1._ensure_built()
     assert len(list(cache_dir.glob("*.json"))) == 1, "First construction must write a cache file"
 
     with patch("local_index.HuggingFaceEmbeddings") as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
+        idx2._ensure_built()
         mock_cls.assert_not_called()  # unchanged KB must load from cache, not re-embed
 
     assert idx2.kb_version == idx1.kb_version
@@ -180,6 +188,7 @@ def test_cache_invalidates_when_kb_file_changes(tmp_path):
 
     with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
+        idx2._ensure_built()
         assert mock_cls.called, "An edited KB file must invalidate the cache and trigger a rebuild"
 
     assert idx2.kb_version != version1
@@ -208,7 +217,8 @@ def test_corrupted_cache_falls_back_to_rebuild(tmp_path):
     cache_files[0].write_text("{ this is not valid json !!!", encoding="utf-8")
 
     with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()):
-        idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)  # must not raise
+        idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
+        idx2._ensure_built()  # must not raise
 
     assert idx2.kb_version == idx1.kb_version
     assert len(idx2._chunks) == len(idx1._chunks)
@@ -230,6 +240,7 @@ def test_cache_with_wrong_embedding_model_falls_back_to_rebuild(tmp_path):
 
     with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
+        idx2._ensure_built()
         assert mock_cls.called, "A cache built with a different embedding model must not be trusted"
 
     assert idx2.kb_version == idx1.kb_version

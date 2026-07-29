@@ -164,10 +164,11 @@ class LocalIndex:
         self._chunks: list[Chunk] = []
         self._vectors: list[list[float]] = []
         self._norms: list[float] = []
-        self.kb_version: str = ""
+        # Cheap (file hashing only, no embedding) — safe to compute eagerly.
+        self.kb_version: str = _kb_content_hash(self.kb_dir)
         self._qcache: dict[str, list[float]] = {}
         self._embedder = None
-        self._build_or_load()
+        self._built = False
 
     # ── Construction ─────────────────────────────────────────────────────────
 
@@ -176,28 +177,46 @@ class LocalIndex:
             self._embedder = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
         return self._embedder
 
+    def warmup_embedder(self) -> None:
+        """Force the embedding model's one-time native init (model download
+        if needed, torch/MKL thread + DLL init) via a single cheap
+        embed_query() call — deliberately WITHOUT embedding the full KB
+        corpus. Call this on the main thread before mcp.run() starts
+        stdio_server()'s concurrent stdin-reader task: the Windows loader-
+        lock deadlock documented in CLAUDE.md is specifically about that
+        first native init racing the reader thread, not about subsequent
+        calls into an already-initialized native runtime — so the (much
+        slower) full corpus build in _ensure_built() can safely stay lazy
+        and run later, off the main thread, once a real tool call needs it."""
+        self._embedding_model().embed_query("warmup")
+
     def _cache_path(self, kb_version: str) -> Path:
         return self.cache_dir / f"index_v{_CACHE_FORMAT_VERSION}_{kb_version}.json"
 
-    def _build_or_load(self) -> None:
-        kb_version = _kb_content_hash(self.kb_dir)
-        self.kb_version = kb_version
-        cache_path = self._cache_path(kb_version)
+    def _ensure_built(self) -> None:
+        """Lazily build or load the full corpus index on first real use
+        (search()/list_sources()) — deliberately not done in __init__ or
+        warmup_embedder(); see warmup_embedder()'s docstring for why."""
+        if self._built:
+            return
 
+        cache_path = self._cache_path(self.kb_version)
         if cache_path.exists():
             try:
                 self._load_cache(cache_path)
+                self._built = True
                 return
             except Exception:
                 pass  # corrupted/unreadable cache — fall through to a rebuild
 
-        self._build_fresh(kb_version)
+        self._build_fresh()
+        self._built = True
         try:
             self._save_cache(cache_path)
         except Exception:
             pass  # a cache write failure must never break index construction
 
-    def _build_fresh(self, kb_version: str) -> None:
+    def _build_fresh(self) -> None:
         chunks: list[Chunk] = []
         for path in sorted(self.kb_dir.rglob("*.md")):
             text = path.read_text(encoding="utf-8")
@@ -270,6 +289,7 @@ class LocalIndex:
                 "valid_categories": list(VALID_CATEGORIES),
             }
 
+        self._ensure_built()
         k = max(1, min(k, 20))
 
         if not self._chunks:
@@ -299,6 +319,7 @@ class LocalIndex:
 
     def list_sources(self) -> dict:
         """Returns {"categories": {category: [{"source", "title"}]}, "kb_version", "doc_count"}."""
+        self._ensure_built()
         seen: dict[str, dict[str, str]] = {}
         for chunk in self._chunks:
             seen.setdefault(chunk.category, {})[chunk.source] = chunk.title

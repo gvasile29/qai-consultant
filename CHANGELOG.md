@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.6] - 2026-07-29
+
+### Fixed
+- `qai-consultant-mcp` failed to attach in Claude Desktop with "could not attach" (a client-side handshake timeout, not a crash) on a cold cache. The server used to force a full embedding of the entire knowledge base — every chunk of every KB document — before it could respond to the very first `initialize` message, which could take longer than a client's connection timeout on a fresh install. The server now does a minimal one-time warmup of the embedding model before responding to `initialize`, and builds the full knowledge base index lazily on the first real request instead. Verified with a real subprocess-and-piped-stdio test (the same way Claude Desktop/Claude Code actually launch it): no hang on the first real tool call under a cold cache. Separately, importing the underlying ML libraries (`sentence-transformers`/`torch`) still takes roughly 20-25 seconds on a typical machine regardless of this fix — a deeper optimization (a lighter embedding backend) is tracked as a future improvement, not part of this release.
+
 ## [3.1.5] - 2026-07-29
 
 ### Fixed

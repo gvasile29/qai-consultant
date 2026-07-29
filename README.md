@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.1.5-green.svg)
+![Version](https://img.shields.io/badge/version-3.1.6-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -271,6 +271,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.1.3** ✅ Fix — the visit counter's label was in Romanian ("vizite") instead of English; now reads "visits" to match the rest of the app's UI copy
 - **v3.1.4** ✅ Added the `mcp-name` marker to `README_MCP.md` (PyPI long description) — a prerequisite for listing `qai-consultant-mcp` in the official Anthropic MCP registry; no functional change
 - **v3.1.5** ✅ Fix — `qai-consultant-mcp` failed to start (`ModuleNotFoundError: mcp.server.fastmcp`) after the upstream `mcp` SDK's breaking 2.0.0 release removed the `FastMCP` module the server depends on; `mcp` is now pinned to `>=1.8.0,<2.0.0`
+- **v3.1.6** ✅ Fix — `qai-consultant-mcp` could fail to attach in Claude Desktop on a cold cache (a client-side handshake timeout, since the server used to fully embed the whole knowledge base before responding to `initialize`); the full index build is now lazy, deferred until the first real request
 - **v3.2** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---
