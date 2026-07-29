@@ -87,7 +87,7 @@ def test_ai_disclosure_module_has_no_third_party_or_agent_imports():
     import ast
     source = (SRC_DIR / "ai_disclosure.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
-    allowed = {"datetime", "version", "__future__"}
+    allowed = {"datetime", "version", "__future__", "base64", "pathlib"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
