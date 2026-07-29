@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parent))
 import streamlit as st
 from streamlit.runtime.scriptrunner import RerunException, StopException
 from agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
-from ai_disclosure import AI_INTERACTION_NOTICE, pdf_meta_html, with_ai_footer
+from ai_disclosure import AI_INTERACTION_NOTICE, pdf_icon_html, pdf_meta_html, with_ai_footer
 from dialogue import DialogueManager, InputValidator, QUESTIONS
 from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from risk_analyzer import RiskAnalyzer, append_execution_data_appendix
@@ -927,10 +927,11 @@ def render_strategy():
         # Pre-compute PDF bytes once — avoids regenerating on every re-render
         if st.session_state.get("risk_pdf_bytes") is None:
             _ai_pdf_meta = pdf_meta_html(MISTRAL_MODEL)
-            st.session_state.risk_pdf_bytes = markdown_to_pdf(with_ai_footer(risk_register), "Risk Register", _ai_pdf_meta)
-            st.session_state.effort_pdf_bytes = markdown_to_pdf(with_ai_footer(effort_report), "Effort Estimation", _ai_pdf_meta)
-            st.session_state.strategy_pdf_bytes = markdown_to_pdf(with_ai_footer(strategy), "Test Strategy", _ai_pdf_meta)
-            st.session_state.test_plan_pdf_bytes = markdown_to_pdf(with_ai_footer(test_plan), "Test Plan", _ai_pdf_meta)
+            _ai_pdf_icon = pdf_icon_html()
+            st.session_state.risk_pdf_bytes = markdown_to_pdf(with_ai_footer(risk_register), "Risk Register", _ai_pdf_meta, _ai_pdf_icon)
+            st.session_state.effort_pdf_bytes = markdown_to_pdf(with_ai_footer(effort_report), "Effort Estimation", _ai_pdf_meta, _ai_pdf_icon)
+            st.session_state.strategy_pdf_bytes = markdown_to_pdf(with_ai_footer(strategy), "Test Strategy", _ai_pdf_meta, _ai_pdf_icon)
+            st.session_state.test_plan_pdf_bytes = markdown_to_pdf(with_ai_footer(test_plan), "Test Plan", _ai_pdf_meta, _ai_pdf_icon)
 
         # All 4 stages (and the PDF-bytes precompute) finished this pass —
         # only NOW is it safe to stop re-entering this block on a rerun.
@@ -1275,8 +1276,9 @@ def render_doc_review():
                 report_md, st.session_state.get("review_source_label") or "Document",
             )
             _ai_pdf_meta = pdf_meta_html(MISTRAL_MODEL)
+            _ai_pdf_icon = pdf_icon_html()
             st.session_state.review_pdf_bytes = markdown_to_pdf(
-                with_ai_footer(report_md), "QA Document Quality Review", _ai_pdf_meta,
+                with_ai_footer(report_md), "QA Document Quality Review", _ai_pdf_meta, _ai_pdf_icon,
             )
 
         report_md = build_review_report_markdown(result, st.session_state.review_narrative or "")
