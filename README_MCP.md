@@ -5,6 +5,10 @@
 
 [![qai-consultant MCP server](https://glama.ai/mcp/servers/gvasile29/qai-consultant/badges/card.svg)](https://glama.ai/mcp/servers/gvasile29/qai-consultant)
 [![qai-consultant MCP server](https://glama.ai/mcp/servers/gvasile29/qai-consultant/badges/score.svg)](https://glama.ai/mcp/servers/gvasile29/qai-consultant)
+![MCP Registry](https://img.shields.io/badge/MCP%20Registry-listed-6B46C1?logo=anthropic)
+![Awesome MCP Servers](https://img.shields.io/badge/Awesome%20MCP%20Servers-listed-blue?logo=github)
+
+Listed on the [official MCP registry](https://registry.modelcontextprotocol.io) (`io.github.gvasile29/qai-consultant-mcp`), [Glama](https://glama.ai/mcp/servers/gvasile29/qai-consultant), and [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers).
 
 ![qai-consultant-mcp answering a retrieve_qa_knowledge call in MCP Inspector](https://raw.githubusercontent.com/gvasile29/qai-consultant/master/assets/demo/qai-consultant-mcp-demo.gif)
 
