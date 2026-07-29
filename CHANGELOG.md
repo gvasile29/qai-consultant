@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.5] - 2026-07-29
+
+### Fixed
+- `qai-consultant-mcp` failed to start for every new install (`ModuleNotFoundError: No module named 'mcp.server.fastmcp'`) after the upstream `mcp` SDK released a breaking 2.0.0 that removed the `FastMCP` module the server is built on. `mcp` was pinned to `>=1.8.0,<2.0.0` in `pyproject.toml`; this release republishes the package with that pin in effect, so `uvx qai-consultant-mcp` resolves a working `mcp` version again. The same unbounded floor also broke `tests/test_mcp_server.py` in CI; the pin was applied there too.
+
 ## [3.1.4] - 2026-07-23
 
 ### Changed
