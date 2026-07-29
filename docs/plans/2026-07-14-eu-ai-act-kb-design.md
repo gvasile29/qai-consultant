@@ -8,7 +8,7 @@ QAI Consultant already implements the Article 50 *transparency mechanics* (v2.5.
 
 This adds a single self-authored KB document — `standards/eu_ai_act/` — so generated output can cite the Act the same way it already cites ISO 25010 or IEEE 829. Content-only release; no `src/` code changes.
 
-Out of scope for this pass: machine-readable Article 50(2) marking (YAML front matter / PDF metadata) — that's v3.0 scope per the Omnibus grace period (2026-12-02), tracked separately in `MCP_PLAN.md` section 12.
+Out of scope for this pass: machine-readable Article 50(2) marking (YAML front matter / PDF metadata) — that was v3.0 scope per the Omnibus grace period (2026-12-02) and shipped there; see CLAUDE.md's v3.0 roadmap entry.
 
 ## A. Folder structure & category
 
