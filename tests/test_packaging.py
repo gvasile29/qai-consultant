@@ -12,6 +12,7 @@ step 8 commit message — since it needs network + ~1-2 minutes to pull
 torch/sentence-transformers, too slow for every CI run.
 """
 
+import re
 import subprocess
 import sys
 import zipfile
@@ -47,6 +48,45 @@ _WHITELISTED_MD_FOLDERS = [
 # not meant for redistribution) — asserted absent explicitly, not just "not in
 # the whitelist above", so a rename doesn't silently stop testing for them.
 _FORBIDDEN_PATH_FRAGMENTS = ["standards/istqb/", "generated_strategies/"]
+
+
+def test_all_dependencies_are_exact_pinned():
+    """
+    Every entry in [project] dependencies must be exact-pinned (`==`).
+
+    A loose bound (`>=`, `~=`, or a bare name) lets `uv` re-resolve to a
+    newer upstream release between two `uvx qai-consultant-mcp` launches,
+    even when the user hasn't changed anything on their end. That forces
+    a full ~88-package reinstall (~26-30s) on top of the already-known
+    ~20-25s sentence-transformers/torch import cost, which can push the
+    total past Claude Desktop's ~60s `initialize` timeout and cause a
+    silent attach failure. See the MCP dependency-pinning gotcha in
+    CLAUDE.md for the incident this guards against.
+
+    Parsed as plain text/regex, not a TOML library, since CI's Python
+    3.10 matrix entry has no stdlib `tomllib` and this repo doesn't
+    otherwise depend on a TOML parser.
+    """
+    pyproject_text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r"dependencies\s*=\s*\[(.*?)\]", pyproject_text, re.DOTALL)
+    assert match, "Could not find a [project] dependencies list in pyproject.toml"
+
+    entries = [
+        line.strip().rstrip(",").strip('"').strip("'")
+        for line in match.group(1).splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert entries, "Parsed dependencies list from pyproject.toml is empty"
+
+    pin_pattern = re.compile(r"^[A-Za-z0-9_.-]+==[\w.]+$")
+    unpinned = [entry for entry in entries if not pin_pattern.match(entry)]
+    assert not unpinned, (
+        f"These dependencies are not exact-pinned with '==': {unpinned}. "
+        "A loose bound lets uv re-resolve on an unrelated upstream release "
+        "and reinstall everything on the next launch -- see CLAUDE.md's "
+        "MCP dependency-pinning gotcha."
+    )
+    print(f"  PASS: all {len(entries)} dependencies are exact-pinned")
 
 
 @pytest.fixture(scope="module")

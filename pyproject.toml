@@ -22,12 +22,12 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "mcp>=1.8.0,<2.0.0",
-    "langchain-community>=0.3.30",
+    "mcp==1.28.1",
+    "langchain-community==0.4.2",
     "sentence-transformers==2.7.0",
-    "platformdirs>=4.0.0",
+    "platformdirs==4.11.0",
     "torch==2.13.0",
-    "defusedxml>=0.7.1",
+    "defusedxml==0.7.1",
 ]
 
 [project.urls]
