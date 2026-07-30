@@ -79,10 +79,20 @@ torch==2.13.0
 defusedxml==0.7.1
 ```
 
-This makes the resolved dependency set for a given `qai-consultant-mcp`
-release fully deterministic — uv's cache key no longer changes because
-some unrelated package published a new version, so repeated launches of
-the same release reuse the cached environment instead of reinstalling.
+This removes the re-resolution trigger from the 4 packages that
+previously had loose bounds. It does not make the environment fully
+deterministic: each pinned package still has its own transitive
+dependencies (e.g. `langchain-community` → `langchain-core`/`langsmith`;
+`sentence-transformers` → `transformers`/`huggingface-hub`; `mcp` →
+`pydantic`/`anyio`/`httpx`) that remain unpinned and can still publish a
+new release that changes uv's resolved environment hash, triggering a
+reinstall. This fix targets the most direct, most-controllable trigger —
+the package's own declared dependencies — not the full transitive
+closure; see the CLAUDE.md gotcha added alongside this fix for the
+residual risk and the options considered for closing it fully (full
+transitive pinning via a compiled lockfile, or recommending `uv tool
+install` instead of `uvx` in `README_MCP.md` so the environment isn't
+re-resolved per launch).
 
 **2. Add a regression test in `tests/test_packaging.py`**
 (`test_all_dependencies_are_exact_pinned`): parses `pyproject.toml`'s

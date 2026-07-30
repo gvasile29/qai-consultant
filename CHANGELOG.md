@@ -19,7 +19,9 @@ end-user terms. The format is based on [Keep a Changelog](https://keepachangelog
   could push past Claude Desktop's ~60s `initialize` timeout. All six
   runtime dependencies are now exact-pinned, and a new test
   (`test_all_dependencies_are_exact_pinned`) fails the build if a loose
-  bound is reintroduced. Design rationale:
+  bound is reintroduced. Note this closes the most common trigger, not
+  every possible one: those six packages' own dependencies aren't pinned
+  and could in principle still force a reinstall. Design rationale:
   `docs/superpowers/specs/2026-07-30-mcp-dependency-pinning-design.md`.
 
 ## [3.3.0] - 2026-07-29
