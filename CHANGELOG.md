@@ -3,6 +3,27 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.3.1] - 2026-07-30
+
+### Fixed
+- `qai-consultant-mcp` could intermittently fail to attach in Claude
+  Desktop even on a warm cache. Four of the package's six runtime
+  dependencies (`mcp`, `langchain-community`, `platformdirs`,
+  `defusedxml`) had loose version bounds instead of exact pins — when
+  any of them (or the resolver's chosen version of a transitive
+  dependency) published a new release on PyPI, `uvx` would re-resolve
+  and reinstall the full ~88-package environment on the next launch,
+  regardless of which `qai-consultant-mcp` version was pinned in a
+  user's Claude Desktop config. That reinstall (~26-30s) combined with
+  the already-known ~20-25s `sentence-transformers`/`torch` import cost
+  could push past Claude Desktop's ~60s `initialize` timeout. All six
+  runtime dependencies are now exact-pinned, and a new test
+  (`test_all_dependencies_are_exact_pinned`) fails the build if a loose
+  bound is reintroduced. Note this closes the most common trigger, not
+  every possible one: those six packages' own dependencies aren't pinned
+  and could in principle still force a reinstall. Design rationale:
+  `docs/superpowers/specs/2026-07-30-mcp-dependency-pinning-design.md`.
+
 ## [3.3.0] - 2026-07-29
 
 ### Added

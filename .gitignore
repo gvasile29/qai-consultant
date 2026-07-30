@@ -34,6 +34,9 @@ venv/
 env/
 ENV/
 
+# Local git worktrees (subagent-driven-development scratch workspaces)
+.worktrees/
+
 # OS files
 .DS_Store
 Thumbs.db
