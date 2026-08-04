@@ -33,7 +33,7 @@
 
 **Interfaces:**
 - Produces: `theme.inject_theme_css() -> None` (call once, near the top of `app.py`, same place the old CSS block was) — injects the full `<style>` block via `st.markdown(..., unsafe_allow_html=True)`.
-- Produces: `theme.LIGHT_TOKENS: dict` and `theme.DARK_TOKENS: dict` — each has keys `bg, surface, surface_2, ink, ink_dim, line, accent, accent_ink, pass_, hold, fail, pass_bg, hold_bg, fail_bg` (all `str` hex values). `ledger_components.py` (Task 3) imports these.
+- Produces: `theme.LIGHT_TOKENS: dict` and `theme.DARK_TOKENS: dict` — each has keys `surface, surface_2, ink, ink_dim, line, accent, pass_, hold, fail, pass_bg, hold_bg, fail_bg` (all `str` hex values; deliberately no top-level `bg`/`accent_ink` keys — the plan's own "no `.stApp`/native-widget background reskin" constraint means no component in this design ever needs a raw page-background or accent-contrast-text tone, so those two were dropped rather than shipped as untested dead tokens). `ledger_components.py` (Task 3) does **not** import these directly — see Task 3's own Interfaces note.
 - Produces: `theme.build_css(tokens: dict) -> str` — pure function, used by both `inject_theme_css()` and the test below.
 
 - [ ] **Step 1: Fetch the 5 IBM Plex webfont files**
@@ -93,8 +93,8 @@ sys.path.insert(0, str(SRC_DIR))
 from theme import LIGHT_TOKENS, DARK_TOKENS, build_css  # noqa: E402
 
 _REQUIRED_KEYS = {
-    "bg", "surface", "surface_2", "ink", "ink_dim", "line",
-    "accent", "accent_ink", "pass_", "hold", "fail",
+    "surface", "surface_2", "ink", "ink_dim", "line",
+    "accent", "pass_", "hold", "fail",
     "pass_bg", "hold_bg", "fail_bg",
 }
 
@@ -125,12 +125,15 @@ def test_build_css_embeds_all_five_font_faces():
 
 
 def test_build_css_uses_the_given_tokens_not_a_hardcoded_theme():
+    # "ink" is used by .ledger-card .qtitle and table.risk-ledger td -- pick a
+    # token that build_css() actually interpolates, not one merely defined in
+    # the dict (there is no "bg" key -- see Task 1's Interfaces note on why).
     light_css = build_css(LIGHT_TOKENS)
     dark_css = build_css(DARK_TOKENS)
-    assert LIGHT_TOKENS["bg"] in light_css
-    assert DARK_TOKENS["bg"] not in light_css
-    assert DARK_TOKENS["bg"] in dark_css
-    assert LIGHT_TOKENS["bg"] not in dark_css
+    assert LIGHT_TOKENS["ink"] in light_css
+    assert DARK_TOKENS["ink"] not in light_css
+    assert DARK_TOKENS["ink"] in dark_css
+    assert LIGHT_TOKENS["ink"] not in dark_css
 
 
 def test_build_css_respects_reduced_motion_and_focus_visibility():
@@ -173,17 +176,17 @@ import streamlit as st
 from _theme_fonts import COND_700, MONO_400, MONO_500, SANS_400, SANS_600
 
 LIGHT_TOKENS = {
-    "bg": "#EDEAE0", "surface": "#F5F3EA", "surface_2": "#E4E0D2",
+    "surface": "#F5F3EA", "surface_2": "#E4E0D2",
     "ink": "#23281F", "ink_dim": "#5B5F52", "line": "#C9C3AF",
-    "accent": "#3E6E85", "accent_ink": "#F5F3EA",
+    "accent": "#3E6E85",
     "pass_": "#3F7A4C", "hold": "#9C6B1F", "fail": "#9C3F2C",
     "pass_bg": "#DCE7DA", "hold_bg": "#ECDFC7", "fail_bg": "#EAD7CF",
 }
 
 DARK_TOKENS = {
-    "bg": "#1B211D", "surface": "#212821", "surface_2": "#262E27",
+    "surface": "#212821", "surface_2": "#262E27",
     "ink": "#E6E8DF", "ink_dim": "#9BA69C", "line": "#3A453D",
-    "accent": "#86ADC2", "accent_ink": "#14201F",
+    "accent": "#86ADC2",
     "pass_": "#7FBC8A", "hold": "#D8AE68", "fail": "#CB7862",
     "pass_bg": "#23342A", "hold_bg": "#332C1F", "fail_bg": "#35251F",
 }
