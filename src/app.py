@@ -72,47 +72,9 @@ else:
     )
 
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #00b4d8;
-        margin-bottom: 0;
-    }
-    .sub-header {
-        font-size: 1rem;
-        color: #888;
-        margin-bottom: 2rem;
-    }
-    .question-card {
-        background-color: #1e1e2e;
-        border-left: 4px solid #00b4d8;
-        padding: 1rem;
-        border-radius: 4px;
-        margin-bottom: 1rem;
-    }
-    .progress-text {
-        color: #00b4d8;
-        font-weight: bold;
-    }
-    .source-item {
-        background-color: #1e1e2e;
-        padding: 0.3rem 0.6rem;
-        border-radius: 4px;
-        margin: 0.2rem 0;
-        font-size: 0.85rem;
-        color: #aaa;
-    }
-    /* Centers the top-of-page logo within its column. Scoped to the keyed
-       container (not a blanket [data-testid="stImage"] rule) so it doesn't
-       also apply to the sidebar's EU AI-generated-content icon below. */
-    .st-key-header-logo [data-testid="stImage"] {
-        display: flex;
-        justify-content: center;
-    }
-</style>
-""", unsafe_allow_html=True)
+from theme import inject_theme_css
+
+inject_theme_css()
 
 
 # ── Session State Init ─────────────────────────────────────────────────────────
