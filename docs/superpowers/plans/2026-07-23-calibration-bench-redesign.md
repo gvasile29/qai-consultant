@@ -662,7 +662,8 @@ def test_signal_ledger_html_escapes_label_and_sub_text():
 
 def test_risk_ledger_table_html_renders_all_rows():
     html = risk_ledger_table_html(SAMPLE_ROWS)
-    assert html.count("<tr>") == 2
+    # 1 header <tr> (inside <thead>) + 1 per data row (2 rows here) = 3.
+    assert html.count("<tr>") == 3
     assert "R01" in html and "R02" in html
     assert "Auth token expiry untested" in html
 
