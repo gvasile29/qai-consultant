@@ -914,6 +914,13 @@ def render_strategy():
     project_name = st.session_state.dialogue.get_context().project_name
 
     with tab1:
+        from risk_ledger import parse_risk_matrix
+        from ledger_components import risk_ledger_table_html
+
+        risk_rows = parse_risk_matrix(st.session_state.risk_register)
+        if risk_rows:
+            st.markdown(risk_ledger_table_html(risk_rows), unsafe_allow_html=True)
+            st.markdown("###")
         st.markdown(st.session_state.risk_register)
         st.markdown("---")
         with st.expander("📚 Knowledge Sources Used"):
