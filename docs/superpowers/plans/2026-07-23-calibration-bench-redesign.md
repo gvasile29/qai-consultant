@@ -566,7 +566,7 @@ def parse_risk_matrix(markdown_text: str) -> list:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/test_risk_ledger.py -v`
-Expected: `7 passed`
+Expected: `6 passed`
 
 - [ ] **Step 5: Commit**
 
