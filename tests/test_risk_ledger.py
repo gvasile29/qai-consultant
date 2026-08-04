@@ -53,6 +53,24 @@ def test_parse_risk_matrix_extracts_all_columns():
     }
 
 
+def test_parse_risk_matrix_strips_markdown_bold_from_cells():
+    # Real Mistral output routinely wraps Risk ID/Description cells in
+    # **bold** even though the prompt doesn't ask for it -- found via a live
+    # end-to-end browser check, not covered by SAMPLE_REGISTER above.
+    text = (
+        "## Risk Matrix Overview\n\n"
+        "| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **R01** | **Authentication & Session Security Flaws (OWASP A2, A5, A7)** "
+        "| High | Critical | Critical | 1 |\n"
+    )
+    rows = parse_risk_matrix(text)
+    assert rows[0]["risk_id"] == "R01"
+    assert rows[0]["description"] == "Authentication & Session Security Flaws (OWASP A2, A5, A7)"
+    assert "*" not in rows[0]["risk_id"]
+    assert "*" not in rows[0]["description"]
+
+
 def test_parse_risk_matrix_returns_empty_list_when_no_table_present():
     assert parse_risk_matrix("# Just a heading\n\nNo table here.") == []
 

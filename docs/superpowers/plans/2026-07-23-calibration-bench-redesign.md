@@ -460,6 +460,24 @@ def test_parse_risk_matrix_extracts_all_columns():
     }
 
 
+def test_parse_risk_matrix_strips_markdown_bold_from_cells():
+    # Real Mistral output routinely wraps Risk ID/Description cells in
+    # **bold** even though the prompt doesn't ask for it -- found via a live
+    # end-to-end browser check, not covered by SAMPLE_REGISTER above.
+    text = (
+        "## Risk Matrix Overview\n\n"
+        "| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **R01** | **Authentication & Session Security Flaws (OWASP A2, A5, A7)** "
+        "| High | Critical | Critical | 1 |\n"
+    )
+    rows = parse_risk_matrix(text)
+    assert rows[0]["risk_id"] == "R01"
+    assert rows[0]["description"] == "Authentication & Session Security Flaws (OWASP A2, A5, A7)"
+    assert "*" not in rows[0]["risk_id"]
+    assert "*" not in rows[0]["description"]
+
+
 def test_parse_risk_matrix_returns_empty_list_when_no_table_present():
     assert parse_risk_matrix("# Just a heading\n\nNo table here.") == []
 
@@ -512,6 +530,9 @@ import re
 
 _TABLE_HEADER_RE = re.compile(r"^\|\s*Risk ID\s*\|", re.IGNORECASE | re.MULTILINE)
 
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_MD_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
+
 _SEVERITY_TIERS = {
     "low": "pass",
     "medium": "hold",
@@ -526,6 +547,17 @@ def severity_tier(risk_level: str) -> str:
     "hold" rather than raising -- a wrong-but-visible middle tier is safer
     than crashing the whole Risk Register render over one bad LLM token."""
     return _SEVERITY_TIERS.get((risk_level or "").strip().lower(), "hold")
+
+
+def _strip_markdown_emphasis(text: str) -> str:
+    """Real LLM output routinely wraps table cells in **bold**/*italic*
+    markdown (e.g. "| **R01** | **Auth flaws** | ... |") even though the
+    prompt doesn't ask for it. This strips that emphasis so parsed fields
+    are clean text -- risk_ledger_table_html() HTML-escapes them afterward,
+    which would otherwise leave literal asterisks visible in the browser."""
+    text = _MD_BOLD_RE.sub(r"\1", text)
+    text = _MD_ITALIC_RE.sub(r"\1", text)
+    return text
 
 
 def parse_risk_matrix(markdown_text: str) -> list:
@@ -546,7 +578,7 @@ def parse_risk_matrix(markdown_text: str) -> list:
         stripped = line.strip()
         if not stripped.startswith("|"):
             break  # table ended
-        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        cells = [_strip_markdown_emphasis(c.strip()) for c in stripped.strip("|").split("|")]
         if len(cells) != 6:
             continue  # ragged row -- skip rather than guess
         risk_id, description, likelihood, impact, risk_level, priority = cells
@@ -566,7 +598,7 @@ def parse_risk_matrix(markdown_text: str) -> list:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/test_risk_ledger.py -v`
-Expected: `6 passed`
+Expected: `7 passed`
 
 - [ ] **Step 5: Commit**
 
