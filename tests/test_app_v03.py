@@ -471,6 +471,14 @@ def test_risk_ledger_table_is_skipped_gracefully_for_freeform_risk_register():
     assert risk_ledger_table_html(rows) == ""
 
 
+def test_effort_data_confidence_renders_as_signal_ledger():
+    from ledger_components import signal_ledger_html
+
+    html = signal_ledger_html("Confidence", 72, sub="Medium confidence")
+    assert "72" in html
+    assert "Medium confidence" in html
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

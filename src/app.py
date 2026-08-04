@@ -101,6 +101,8 @@ def init_session_state():
         st.session_state.effort_report = None
     if "effort_path" not in st.session_state:
         st.session_state.effort_path = None
+    if "effort_data" not in st.session_state:
+        st.session_state.effort_data = None
     if "test_plan" not in st.session_state:
         st.session_state.test_plan = None
     if "test_plan_path" not in st.session_state:
@@ -278,7 +280,7 @@ def render_sidebar():
         if st.button("🔄 Start Over", use_container_width=True):
             for key in ["dialogue", "answers", "strategy", "sources", "output_path",
                         "risk_register", "risk_sources", "risk_path",
-                        "effort_report", "effort_path",
+                        "effort_report", "effort_path", "effort_data",
                         "test_plan", "test_plan_path", "test_plan_sources",
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
@@ -835,6 +837,7 @@ def render_strategy():
 
         # Effort Estimation (deterministic + short LLM narrative)
         if st.session_state.get("effort_report") is None:
+            effort_data = None
             try:
                 with st.spinner("📊 Generating Effort Estimation..."):
                     effort_report, effort_data = estimator.estimate(context, risk_register)
@@ -847,6 +850,7 @@ def render_strategy():
                 effort_report, effort_path = "", None
             st.session_state.effort_report = effort_report
             st.session_state.effort_path = effort_path
+            st.session_state.effort_data = effort_data
         else:
             effort_report = st.session_state.effort_report
 
@@ -947,6 +951,19 @@ def render_strategy():
             )
 
     with tab2:
+        from ledger_components import signal_ledger_html
+
+        effort_data = st.session_state.get("effort_data")
+        if effort_data is not None:
+            st.markdown(
+                signal_ledger_html(
+                    "Confidence",
+                    effort_data.confidence_score,
+                    sub=f"{effort_data.confidence_level} confidence",
+                ),
+                unsafe_allow_html=True,
+            )
+            st.markdown("###")
         st.markdown(st.session_state.effort_report)
         st.markdown("---")
         dl_col1, dl_col2 = st.columns(2)
@@ -1028,7 +1045,7 @@ def render_strategy():
     if st.button("🔄 Generate Another Strategy", use_container_width=True):
         for key in ["dialogue", "answers", "strategy", "sources", "output_path",
                     "risk_register", "risk_sources", "risk_path",
-                    "effort_report", "effort_path",
+                    "effort_report", "effort_path", "effort_data",
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
