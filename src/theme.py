@@ -18,7 +18,7 @@ LIGHT_TOKENS = {
     "surface": "#F5F3EA", "surface_2": "#E4E0D2",
     "ink": "#23281F", "ink_dim": "#5B5F52", "line": "#C9C3AF",
     "accent": "#3E6E85",
-    "pass_": "#3F7A4C", "hold": "#9C6B1F", "fail": "#9C3F2C",
+    "pass_": "#386D44", "hold": "#805819", "fail": "#9C3F2C",
     "pass_bg": "#DCE7DA", "hold_bg": "#ECDFC7", "fail_bg": "#EAD7CF",
 }
 
