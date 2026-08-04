@@ -492,9 +492,15 @@ def render_dialogue():
         st.rerun()
 
     with st.form("dialogue_form"):
-        for question in QUESTIONS:
+        for idx, question in enumerate(QUESTIONS, start=1):
             key = question["key"]
-            st.markdown(f"**{question['question']}**")
+            st.markdown(
+                f'<div class="ledger-card">'
+                f'<div class="idx">{idx:02d} / {len(QUESTIONS):02d}</div>'
+                f'<div class="qtitle">{question["question"]}</div>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
             st.caption(f"💡 {question['hint']}")
             st.session_state.answers[key] = st.text_input(
                 label=question["question"],
