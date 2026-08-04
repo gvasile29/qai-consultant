@@ -479,6 +479,22 @@ def test_effort_data_confidence_renders_as_signal_ledger():
     assert "Medium confidence" in html
 
 
+def test_review_dimension_scores_render_as_signal_ledgers():
+    from ledger_components import signal_ledger_html
+
+    dimension_scores = {"structure_completeness": 92, "traceability": 70, "measurability": 45}
+    for dim, score in dimension_scores.items():
+        html = signal_ledger_html(dim.replace("_", " ").title(), score)
+        assert dim.replace("_", " ").title() in html
+        assert str(score) in html
+    # Sanity: the three thresholds actually land in different tiers, proving
+    # the display isn't silently uniform.
+    from ledger_components import score_tier
+    assert score_tier(92) == "pass"
+    assert score_tier(70) == "hold"
+    assert score_tier(45) == "fail"
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

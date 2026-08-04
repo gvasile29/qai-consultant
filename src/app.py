@@ -1185,12 +1185,21 @@ def render_doc_review():
             st.rerun()
         return
 
+    from ledger_components import signal_ledger_html
+
     st.markdown(f"**Detected document type:** `{result.doc_type}`")
-    st.metric("Overall Score", f"{result.overall_score}/100")
+    st.markdown(
+        signal_ledger_html("Overall Score", result.overall_score, sub=f"{result.doc_type} · 6-dimension rubric"),
+        unsafe_allow_html=True,
+    )
 
     dim_cols = st.columns(len(result.dimension_scores))
     for col, (dim, score) in zip(dim_cols, result.dimension_scores.items()):
-        col.metric(dim.replace("_", " ").title(), f"{score}")
+        with col:
+            st.markdown(
+                signal_ledger_html(dim.replace("_", " ").title(), score),
+                unsafe_allow_html=True,
+            )
 
     st.markdown("### Findings")
     if not result.findings:
