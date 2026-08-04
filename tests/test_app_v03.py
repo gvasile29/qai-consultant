@@ -495,6 +495,16 @@ def test_review_dimension_scores_render_as_signal_ledgers():
     assert score_tier(45) == "fail"
 
 
+def test_results_analysis_flaky_count_tier_is_inverted():
+    from ledger_components import signal_ledger_html
+
+    # Zero flaky tests is good news -> pass tier, not score_tier(0) == "fail".
+    html_zero = signal_ledger_html("Flaky Tests", 0, tier="pass")
+    assert "sl-score pass" in html_zero
+    html_some = signal_ledger_html("Flaky Tests", 4, tier="fail")
+    assert "sl-score fail" in html_some
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

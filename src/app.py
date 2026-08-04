@@ -628,11 +628,26 @@ def render_review():
 
         analysis = st.session_state.get("results_analysis")
         if analysis is not None:
+            from ledger_components import signal_ledger_html
+
+            pass_rate_pct = round(analysis.overall_pass_rate * 100)
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Runs", analysis.runs)
-            m2.metric("Pass Rate", f"{analysis.overall_pass_rate:.0%}")
-            m3.metric("Flaky Tests", len(analysis.flaky))
-            m4.metric("Ever-Failing", len(analysis.ever_failing))
+            with m1:
+                st.markdown(signal_ledger_html("Runs", analysis.runs, tier="hold"), unsafe_allow_html=True)
+            with m2:
+                st.markdown(signal_ledger_html("Pass Rate", pass_rate_pct, sub="%"), unsafe_allow_html=True)
+            with m3:
+                flaky_count = len(analysis.flaky)
+                st.markdown(
+                    signal_ledger_html("Flaky Tests", flaky_count, tier="pass" if flaky_count == 0 else "fail"),
+                    unsafe_allow_html=True,
+                )
+            with m4:
+                failing_count = len(analysis.ever_failing)
+                st.markdown(
+                    signal_ledger_html("Ever-Failing", failing_count, tier="pass" if failing_count == 0 else "fail"),
+                    unsafe_allow_html=True,
+                )
             if analysis.failure_clusters:
                 top_clusters = "; ".join(
                     f"{c['signature']} (x{c['count']})" for c in analysis.failure_clusters[:3]
