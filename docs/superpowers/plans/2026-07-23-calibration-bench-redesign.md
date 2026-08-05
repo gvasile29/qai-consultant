@@ -14,7 +14,8 @@
 - **The intake form stays a single scrollable form**, not the one-question-at-a-time pagination shown in the original design mockup — the real app renders all 11 questions in one `st.form` (`src/app.py:521-547`). Rebuilding that as paginated would be a behavior change, not a visual one, and is out of scope. Apply the "ledger card" look to each question's existing block instead.
 - **No `.stApp` / sidebar / native-widget background reskin.** Streamlit's own buttons, inputs, selectboxes, and sidebar chrome keep rendering under Streamlit's own light/dark theme. This plan only restyles: (a) typography app-wide, and (b) this app's own custom-HTML blocks (the existing `.sub-header`/`.source-item` classes, plus the new ledger components). A full native-widget reskin is a separate, much larger follow-up if ever wanted — attempting it here risks half-restyled, low-contrast Streamlit chrome.
 - **Both Streamlit themes must stay legible.** Pick light vs. dark tokens from `st.context.theme.type` — the exact mechanism `src/app.py:61-71` already uses to pick the light/dark logo variant. `None`/unset falls back to the **light** token set (matching that existing code's `else` branch).
-- **Brand logo/wordmark is preserved untouched — no task in this plan touches it.** The sidebar `st.logo()` call (`src/app.py:63-71`, swapping `assets/brand/qai_logo.svg`/`qai_logo_dark.svg`) and the header `st.image()` call (`src/app.py:1326-1333`, swapping `qai_logo_horizontal_1680.png`/`_dark_1680.png`) already pick their light/dark variant from `st.context.theme.type` independently of this plan's new CSS. `theme.py`'s injected `<style>` block must not resize, recolor, or reposition these two elements — they're pre-rendered image/SVG assets, not text, so the new Plex typefaces and color tokens don't apply to them. Verified visually in the approved implementation-preview mockup (both logo variants render correctly against both token sets).
+- **Brand logo/wordmark is preserved untouched — no task in this plan touches it.** The sidebar `st.logo()` call (`src/app.py:63-71`, swapping `assets/brand/qai_logo.svg`/`qai_logo_dark.svg`) and the header `st.image()` call (`src/app.py:1339-1345`, swapping `qai_logo_horizontal_1680.png`/`_dark_1680.png`) already pick their light/dark variant from `st.context.theme.type` independently of this plan's new CSS. `theme.py`'s injected `<style>` block must not resize, recolor, or reposition these two elements — they're pre-rendered image/SVG assets, not text, so the new Plex typefaces and color tokens don't apply to them. Verified visually in the approved implementation-preview mockup (both logo variants render correctly against both token sets).
+- **`theme.py` must carry forward the `.st-key-header-logo [data-testid="stImage"]` centering rule.** This rule was added to `src/app.py`'s existing inline CSS block *after* this plan's original brainstorm (2026-07-29's EU AI icon work, see `CLAUDE.md`'s v3.3 gotcha on `st.container(key=...)` scoping) and is not decorative — without it, the header logo (the second bullet above) loses its `display: flex; justify-content: center;` centering the moment Task 1 replaces the old inline block, because the sidebar's separate EU AI icon `st.image()` call (`src/app.py:295`, not inside the `header-logo` container) would otherwise inherit the same centering if the rule were widened instead of dropped. Task 1's `build_css()` includes this rule verbatim; do not drop it when consolidating the old block into `theme.py`.
 - **Fonts are embedded as base64 `data:` URIs, no external font CDN calls at runtime** — consistent with the rest of the app having no client-side network dependencies beyond what the user's browser already needs for Streamlit itself.
 - **PDF export (`src/pdf_export.py`) is untouched.** Downloaded `.md`/`.pdf` files keep their current appearance; this plan only changes the in-browser Streamlit rendering.
 - **Preserve existing custom CSS class names** `.sub-header` and `.source-item` — both have live call sites (`src/app.py:404`, and 4 call sites at lines 949, 998, 1025, 1267) that must keep working unmodified.
@@ -28,11 +29,11 @@
 - Create: `src/_theme_fonts.py` (generated — base64 font data URI constants)
 - Create: `src/theme.py`
 - Test: `tests/test_theme.py`
-- Modify: `src/app.py:73-112` (replace the existing inline `<style>` block with a call to `theme.inject_theme_css()`)
+- Modify: `src/app.py:74-115` (replace the existing inline `<style>` block with a call to `theme.inject_theme_css()`) — line numbers as of the current `master` tip; re-locate by the `# ── Custom CSS ──` comment and its matching `</style>` / `""", unsafe_allow_html=True)` if they've drifted further by execution time.
 
 **Interfaces:**
 - Produces: `theme.inject_theme_css() -> None` (call once, near the top of `app.py`, same place the old CSS block was) — injects the full `<style>` block via `st.markdown(..., unsafe_allow_html=True)`.
-- Produces: `theme.LIGHT_TOKENS: dict` and `theme.DARK_TOKENS: dict` — each has keys `bg, surface, surface_2, ink, ink_dim, line, accent, accent_ink, pass_, hold, fail, pass_bg, hold_bg, fail_bg` (all `str` hex values). `ledger_components.py` (Task 3) imports these.
+- Produces: `theme.LIGHT_TOKENS: dict` and `theme.DARK_TOKENS: dict` — each has keys `surface, surface_2, ink, ink_dim, line, accent, pass_, hold, fail, pass_bg, hold_bg, fail_bg` (all `str` hex values; deliberately no top-level `bg`/`accent_ink` keys — the plan's own "no `.stApp`/native-widget background reskin" constraint means no component in this design ever needs a raw page-background or accent-contrast-text tone, so those two were dropped rather than shipped as untested dead tokens). `ledger_components.py` (Task 3) does **not** import these directly — see Task 3's own Interfaces note.
 - Produces: `theme.build_css(tokens: dict) -> str` — pure function, used by both `inject_theme_css()` and the test below.
 
 - [ ] **Step 1: Fetch the 5 IBM Plex webfont files**
@@ -55,7 +56,7 @@ Expected: 5 files, `file *.woff2` reports `Web Open Font Format (Version 2)` for
 Run from the repo root:
 
 ```bash
-python3 -c "
+python -c "
 import base64
 files = {
     'MONO_400': '/tmp/plex_fonts/mono400.woff2',
@@ -74,7 +75,7 @@ print('wrote src/_theme_fonts.py')
 "
 ```
 
-Expected: `wrote src/_theme_fonts.py`, and `python3 -c "import sys; sys.path.insert(0,'src'); import _theme_fonts; print(len(_theme_fonts.SANS_400))"` prints a number greater than 50000 (the base64 string length).
+Expected: `wrote src/_theme_fonts.py`, and `python -c "import sys; sys.path.insert(0,'src'); import _theme_fonts; print(len(_theme_fonts.SANS_400))"` prints a number greater than 50000 (the base64 string length). (Use `python`, not `python3` — this is a Windows dev machine per `CLAUDE.md`'s Environment/Development Commands, where a bare `python3` is frequently not on `PATH`; every other command in this plan already uses `python`.)
 
 - [ ] **Step 3: Write the failing test for `build_css()`**
 
@@ -92,8 +93,8 @@ sys.path.insert(0, str(SRC_DIR))
 from theme import LIGHT_TOKENS, DARK_TOKENS, build_css  # noqa: E402
 
 _REQUIRED_KEYS = {
-    "bg", "surface", "surface_2", "ink", "ink_dim", "line",
-    "accent", "accent_ink", "pass_", "hold", "fail",
+    "surface", "surface_2", "ink", "ink_dim", "line",
+    "accent", "pass_", "hold", "fail",
     "pass_bg", "hold_bg", "fail_bg",
 }
 
@@ -124,18 +125,30 @@ def test_build_css_embeds_all_five_font_faces():
 
 
 def test_build_css_uses_the_given_tokens_not_a_hardcoded_theme():
+    # "ink" is used by .ledger-card .qtitle and table.risk-ledger td -- pick a
+    # token that build_css() actually interpolates, not one merely defined in
+    # the dict (there is no "bg" key -- see Task 1's Interfaces note on why).
     light_css = build_css(LIGHT_TOKENS)
     dark_css = build_css(DARK_TOKENS)
-    assert LIGHT_TOKENS["bg"] in light_css
-    assert DARK_TOKENS["bg"] not in light_css
-    assert DARK_TOKENS["bg"] in dark_css
-    assert LIGHT_TOKENS["bg"] not in dark_css
+    assert LIGHT_TOKENS["ink"] in light_css
+    assert DARK_TOKENS["ink"] not in light_css
+    assert DARK_TOKENS["ink"] in dark_css
+    assert LIGHT_TOKENS["ink"] not in dark_css
 
 
 def test_build_css_respects_reduced_motion_and_focus_visibility():
     css = build_css(LIGHT_TOKENS)
     assert "prefers-reduced-motion" in css
     assert ":focus-visible" in css
+
+
+def test_build_css_preserves_header_logo_centering_rule():
+    # This rule scopes centering to ONLY the header logo's st.container(key="header-logo")
+    # (src/app.py:1339-1345), not the sidebar's separate EU AI icon st.image() call
+    # (src/app.py:295) -- dropping it silently uncenters the header logo. See this
+    # plan's Global Constraints and CLAUDE.md's "Streamlit CSS scoping" gotcha.
+    css = build_css(LIGHT_TOKENS)
+    assert '.st-key-header-logo [data-testid="stImage"]' in css
 ```
 
 - [ ] **Step 4: Run the test to verify it fails**
@@ -163,17 +176,17 @@ import streamlit as st
 from _theme_fonts import COND_700, MONO_400, MONO_500, SANS_400, SANS_600
 
 LIGHT_TOKENS = {
-    "bg": "#EDEAE0", "surface": "#F5F3EA", "surface_2": "#E4E0D2",
+    "surface": "#F5F3EA", "surface_2": "#E4E0D2",
     "ink": "#23281F", "ink_dim": "#5B5F52", "line": "#C9C3AF",
-    "accent": "#3E6E85", "accent_ink": "#F5F3EA",
-    "pass_": "#3F7A4C", "hold": "#9C6B1F", "fail": "#9C3F2C",
+    "accent": "#3E6E85",
+    "pass_": "#386D44", "hold": "#805819", "fail": "#9C3F2C",
     "pass_bg": "#DCE7DA", "hold_bg": "#ECDFC7", "fail_bg": "#EAD7CF",
 }
 
 DARK_TOKENS = {
-    "bg": "#1B211D", "surface": "#212821", "surface_2": "#262E27",
+    "surface": "#212821", "surface_2": "#262E27",
     "ink": "#E6E8DF", "ink_dim": "#9BA69C", "line": "#3A453D",
-    "accent": "#86ADC2", "accent_ink": "#14201F",
+    "accent": "#86ADC2",
     "pass_": "#7FBC8A", "hold": "#D8AE68", "fail": "#CB7862",
     "pass_bg": "#23342A", "hold_bg": "#332C1F", "fail_bg": "#35251F",
 }
@@ -209,6 +222,16 @@ html, body, [class*="css"] {{
     margin: 0.2rem 0;
     font-size: 0.78rem;
     color: {tokens['ink_dim']};
+}}
+
+/* Centers the top-of-page logo within its column. Scoped to the keyed
+   container (not a blanket [data-testid="stImage"] rule) so it doesn't
+   also apply to the sidebar's EU AI-generated-content icon below.
+   Carried over verbatim from the pre-Calibration-Bench inline CSS block
+   -- see this plan's Global Constraints. */
+.st-key-header-logo [data-testid="stImage"] {{
+    display: flex;
+    justify-content: center;
 }}
 
 /* Intake ledger card (Task 6) */
@@ -339,11 +362,11 @@ def inject_theme_css() -> None:
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_theme.py -v`
-Expected: `5 passed`
+Expected: `6 passed`
 
 - [ ] **Step 7: Wire `inject_theme_css()` into `app.py`, replacing the old CSS block**
 
-In `src/app.py`, replace lines 73-112 (the `# ── Custom CSS ──` comment through the closing `""", unsafe_allow_html=True)`) with:
+In `src/app.py`, replace the `# ── Custom CSS ──` comment through its closing `""", unsafe_allow_html=True)` (lines 74-115 as of the current `master` tip — locate by the comment/closing-paren pair if line numbers have drifted) with:
 
 ```python
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
@@ -437,6 +460,24 @@ def test_parse_risk_matrix_extracts_all_columns():
     }
 
 
+def test_parse_risk_matrix_strips_markdown_bold_from_cells():
+    # Real Mistral output routinely wraps Risk ID/Description cells in
+    # **bold** even though the prompt doesn't ask for it -- found via a live
+    # end-to-end browser check, not covered by SAMPLE_REGISTER above.
+    text = (
+        "## Risk Matrix Overview\n\n"
+        "| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **R01** | **Authentication & Session Security Flaws (OWASP A2, A5, A7)** "
+        "| High | Critical | Critical | 1 |\n"
+    )
+    rows = parse_risk_matrix(text)
+    assert rows[0]["risk_id"] == "R01"
+    assert rows[0]["description"] == "Authentication & Session Security Flaws (OWASP A2, A5, A7)"
+    assert "*" not in rows[0]["risk_id"]
+    assert "*" not in rows[0]["description"]
+
+
 def test_parse_risk_matrix_returns_empty_list_when_no_table_present():
     assert parse_risk_matrix("# Just a heading\n\nNo table here.") == []
 
@@ -489,6 +530,9 @@ import re
 
 _TABLE_HEADER_RE = re.compile(r"^\|\s*Risk ID\s*\|", re.IGNORECASE | re.MULTILINE)
 
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_MD_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
+
 _SEVERITY_TIERS = {
     "low": "pass",
     "medium": "hold",
@@ -503,6 +547,17 @@ def severity_tier(risk_level: str) -> str:
     "hold" rather than raising -- a wrong-but-visible middle tier is safer
     than crashing the whole Risk Register render over one bad LLM token."""
     return _SEVERITY_TIERS.get((risk_level or "").strip().lower(), "hold")
+
+
+def _strip_markdown_emphasis(text: str) -> str:
+    """Real LLM output routinely wraps table cells in **bold**/*italic*
+    markdown (e.g. "| **R01** | **Auth flaws** | ... |") even though the
+    prompt doesn't ask for it. This strips that emphasis so parsed fields
+    are clean text -- risk_ledger_table_html() HTML-escapes them afterward,
+    which would otherwise leave literal asterisks visible in the browser."""
+    text = _MD_BOLD_RE.sub(r"\1", text)
+    text = _MD_ITALIC_RE.sub(r"\1", text)
+    return text
 
 
 def parse_risk_matrix(markdown_text: str) -> list:
@@ -523,7 +578,7 @@ def parse_risk_matrix(markdown_text: str) -> list:
         stripped = line.strip()
         if not stripped.startswith("|"):
             break  # table ended
-        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        cells = [_strip_markdown_emphasis(c.strip()) for c in stripped.strip("|").split("|")]
         if len(cells) != 6:
             continue  # ragged row -- skip rather than guess
         risk_id, description, likelihood, impact, risk_level, priority = cells
@@ -564,7 +619,7 @@ git commit -m "feat: add deterministic Risk Matrix table parser (risk_ledger.py)
 - Consumes: `theme.LIGHT_TOKENS`/`DARK_TOKENS` keys (just the CSS class names defined in Task 1 — `signal-ledger`, `risk-ledger`, `sev`, etc. — no direct token import needed since colors come from the already-injected CSS).
 - Consumes: `risk_ledger.severity_tier` (Task 2).
 - Produces: `ledger_components.score_tier(score: int) -> str` — `"pass"` if `score >= 80`, `"hold"` if `50 <= score < 80`, else `"fail"`.
-- Produces: `ledger_components.signal_ledger_html(label: str, score: int, sub: str = "", tier: str = None) -> str` — returns an HTML string (not yet rendered); if `tier` is omitted it's computed via `score_tier(score)`. Task 5/6/7/8 call `st.markdown(signal_ledger_html(...), unsafe_allow_html=True)`.
+- Produces: `ledger_components.signal_ledger_html(label: str, score: int, sub: str = "", tier: str | None = None) -> str` — returns an HTML string (not yet rendered); if `tier` is omitted it's computed via `score_tier(score)`. Task 5/6/7/8 call `st.markdown(signal_ledger_html(...), unsafe_allow_html=True)`.
 - Produces: `ledger_components.risk_ledger_table_html(rows: list) -> str` — returns an HTML `<table class="risk-ledger">` string built from `risk_ledger.parse_risk_matrix()`'s output shape. Returns `""` for an empty list.
 
 - [ ] **Step 1: Write the failing tests**
@@ -639,7 +694,8 @@ def test_signal_ledger_html_escapes_label_and_sub_text():
 
 def test_risk_ledger_table_html_renders_all_rows():
     html = risk_ledger_table_html(SAMPLE_ROWS)
-    assert html.count("<tr>") == 2
+    # 1 header <tr> (inside <thead>) + 1 per data row (2 rows here) = 3.
+    assert html.count("<tr>") == 3
     assert "R01" in html and "R02" in html
     assert "Auth token expiry untested" in html
 
@@ -699,7 +755,7 @@ def score_tier(score: int) -> str:
     return "fail"
 
 
-def signal_ledger_html(label: str, score: int, sub: str = "", tier: str = None) -> str:
+def signal_ledger_html(label: str, score: int, sub: str = "", tier: str | None = None) -> str:
     """A compact score readout: an uppercase mono label, a large tabular
     score, an optional sub-line, and a 10-segment meter. `tier` overrides
     the auto-computed pass/hold/fail class when the caller's score isn't a
@@ -773,7 +829,7 @@ git commit -m "feat: add Signal Ledger / Risk Ledger HTML builders (ledger_compo
 ### Task 4: Wire the Risk Register tab to the Risk Ledger table
 
 **Files:**
-- Modify: `src/app.py:944-949` (inside `render_strategy()`'s `tab1`)
+- Modify: `src/app.py:954-956` (inside `render_strategy()`'s `tab1`; line numbers as of the current `master` tip — locate by the `with tab1:` block if drifted)
 - Test: `tests/test_app_v03.py` (existing file — add one test)
 
 **Interfaces:**
@@ -858,8 +914,10 @@ git commit -m "feat: render Risk Register severity as a heat-tiered ledger table
 ### Task 5: Persist `EstimationData` in session state + wire the Effort tab
 
 **Files:**
-- Modify: `src/app.py:866-880` (persist `effort_data`)
-- Modify: `src/app.py:970-971` (render the Signal Ledger)
+- Modify: `src/app.py:874-889` (persist `effort_data`)
+- Modify: `src/app.py:980-982` (render the Signal Ledger)
+
+(Line numbers as of the current `master` tip — locate by the `# Effort Estimation (deterministic + short LLM narrative)` comment and the `with tab2:` block respectively if drifted further by execution time.)
 - Test: `tests/test_app_v03.py`
 
 **Interfaces:**
@@ -914,7 +972,7 @@ with:
 
 - [ ] **Step 2: Initialize the new session-state key**
 
-In `src/app.py`'s `init_session_state()` (near line 135, right next to the existing `effort_report` init), add:
+In `src/app.py`'s `init_session_state()` (near line 138, right next to the existing `effort_report` init), add:
 
 ```python
     if "effort_data" not in st.session_state:
@@ -1004,7 +1062,7 @@ git commit -m "feat: persist EstimationData in session state, render confidence 
 ### Task 6: Wire Document Review score display
 
 **Files:**
-- Modify: `src/app.py:1192-1197` (inside `render_doc_review()`)
+- Modify: `src/app.py:1202-1207` (inside `render_doc_review()`; line numbers as of the current `master` tip)
 - Test: `tests/test_app_v03.py`
 
 **Interfaces:**
@@ -1085,7 +1143,7 @@ git commit -m "feat: render Document Review scores as Signal Ledger cards"
 ### Task 7: Wire Results Analysis display
 
 **Files:**
-- Modify: `src/app.py:656-667` (inside `render_review()`'s "Attach test execution results" expander)
+- Modify: `src/app.py:665-671` (inside `render_review()`'s "Attach test execution results" expander; line numbers as of the current `master` tip)
 - Test: `tests/test_app_v03.py`
 
 **Interfaces:**
@@ -1170,8 +1228,10 @@ git commit -m "feat: render Results Analysis metrics as Signal Ledger cards"
 ### Task 8: Intake Ledger card styling
 
 **Files:**
-- Modify: `src/app.py:521-532` (inside `render_dialogue()`'s question loop)
-- Modify: `src/app.py:403-404` (`render_intro()` — minor, uses the already-restyled `.sub-header`, no change needed beyond what Task 1 already did — verify only)
+- Modify: `src/app.py:530-541` (inside `render_dialogue()`'s question loop)
+- Modify: `src/app.py:412-413` (`render_intro()` — minor, uses the already-restyled `.sub-header`, no change needed beyond what Task 1 already did — verify only)
+
+(Line numbers as of the current `master` tip.)
 
 **Interfaces:**
 - Consumes: the `.ledger-card` CSS class from Task 1's `theme.py`.
@@ -1259,7 +1319,7 @@ Run: `streamlit run src/app.py`. For **both** Streamlit theme settings (Settings
 4. Generated Test Strategy — all 4 tabs (Risk Register table, Effort confidence ledger, Test Strategy, Test Plan)
 5. "Review an existing QA document" mode (Overall Score + per-dimension Signal Ledgers)
 
-Confirm in each: text is legible against its background in both themes (no `ink`-on-`ink` or low-contrast combinations), the mono font is visibly applied to scores/IDs, focus rings are visible when tabbing through interactive elements, no raw HTML tags leak into the visible page (a sign of a missed `unsafe_allow_html=True` or an escaping bug), and **the sidebar wordmark + header lockup still render correctly and swap light/dark variant** (see the Global Constraints "Brand logo/wordmark is preserved" entry — nothing in Tasks 1-8 should have changed this, but confirm it directly rather than assuming).
+Confirm in each: text is legible against its background in both themes (no `ink`-on-`ink` or low-contrast combinations), the mono font is visibly applied to scores/IDs, focus rings are visible when tabbing through interactive elements, no raw HTML tags leak into the visible page (a sign of a missed `unsafe_allow_html=True` or an escaping bug), and **the sidebar wordmark + header lockup still render correctly, stay horizontally centered, and swap light/dark variant** (see the Global Constraints "Brand logo/wordmark is preserved" and "`.st-key-header-logo` centering rule" entries — nothing in Tasks 1-8 should have changed this, but confirm it directly rather than assuming; an uncentered header logo is the specific regression `test_build_css_preserves_header_logo_centering_rule` in Task 1 guards against).
 
 - [ ] **Step 4: Compare against the approved design proposal**
 

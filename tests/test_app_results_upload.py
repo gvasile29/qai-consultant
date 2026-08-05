@@ -66,9 +66,11 @@ def test_render_review_stores_results_analysis_in_session_state():
 
 
 def test_render_review_shows_compact_metrics_panel():
+    # v3.4 Calibration Bench redesign replaced the raw st.metric() calls with
+    # signal_ledger_html() Signal Ledger cards (see src/ledger_components.py).
     fn = extract_function(read_app_source(), "render_review")
     for metric in ("Runs", "Pass Rate", "Flaky Tests", "Ever-Failing"):
-        assert f'.metric("{metric}"' in fn, f"Missing metric panel entry: {metric}"
+        assert f'signal_ledger_html("{metric}"' in fn, f"Missing Signal Ledger entry: {metric}"
 
 
 # ── Risk Register grounding in render_strategy() ────────────────────────────────

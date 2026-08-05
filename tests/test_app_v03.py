@@ -445,6 +445,66 @@ def test_both_documents_generated_and_stored(agent):
     print(f"        Risk sources:      {len(risk_sources)}")
 
 
+def test_risk_ledger_table_renders_for_well_formed_risk_register():
+    from risk_ledger import parse_risk_matrix
+    from ledger_components import risk_ledger_table_html
+
+    sample = """## Risk Matrix Overview
+
+| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |
+|---|---|---|---|---|---|
+| R01 | Sample risk | High | High | Critical | 1 |
+"""
+    rows = parse_risk_matrix(sample)
+    assert len(rows) == 1
+    html = risk_ledger_table_html(rows)
+    assert "R01" in html
+    assert 'class="sev fail"' in html
+
+
+def test_risk_ledger_table_is_skipped_gracefully_for_freeform_risk_register():
+    from risk_ledger import parse_risk_matrix
+    from ledger_components import risk_ledger_table_html
+
+    rows = parse_risk_matrix("Just some prose the LLM wrote, no table.")
+    assert rows == []
+    assert risk_ledger_table_html(rows) == ""
+
+
+def test_effort_data_confidence_renders_as_signal_ledger():
+    from ledger_components import signal_ledger_html
+
+    html = signal_ledger_html("Confidence", 72, sub="Medium confidence")
+    assert "72" in html
+    assert "Medium confidence" in html
+
+
+def test_review_dimension_scores_render_as_signal_ledgers():
+    from ledger_components import signal_ledger_html
+
+    dimension_scores = {"structure_completeness": 92, "traceability": 70, "measurability": 45}
+    for dim, score in dimension_scores.items():
+        html = signal_ledger_html(dim.replace("_", " ").title(), score)
+        assert dim.replace("_", " ").title() in html
+        assert str(score) in html
+    # Sanity: the three thresholds actually land in different tiers, proving
+    # the display isn't silently uniform.
+    from ledger_components import score_tier
+    assert score_tier(92) == "pass"
+    assert score_tier(70) == "hold"
+    assert score_tier(45) == "fail"
+
+
+def test_results_analysis_flaky_count_tier_is_inverted():
+    from ledger_components import signal_ledger_html
+
+    # Zero flaky tests is good news -> pass tier, not score_tier(0) == "fail".
+    html_zero = signal_ledger_html("Flaky Tests", 0, tier="pass")
+    assert "sl-score pass" in html_zero
+    html_some = signal_ledger_html("Flaky Tests", 4, tier="fail")
+    assert "sl-score fail" in html_some
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

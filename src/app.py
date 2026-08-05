@@ -72,47 +72,9 @@ else:
     )
 
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #00b4d8;
-        margin-bottom: 0;
-    }
-    .sub-header {
-        font-size: 1rem;
-        color: #888;
-        margin-bottom: 2rem;
-    }
-    .question-card {
-        background-color: #1e1e2e;
-        border-left: 4px solid #00b4d8;
-        padding: 1rem;
-        border-radius: 4px;
-        margin-bottom: 1rem;
-    }
-    .progress-text {
-        color: #00b4d8;
-        font-weight: bold;
-    }
-    .source-item {
-        background-color: #1e1e2e;
-        padding: 0.3rem 0.6rem;
-        border-radius: 4px;
-        margin: 0.2rem 0;
-        font-size: 0.85rem;
-        color: #aaa;
-    }
-    /* Centers the top-of-page logo within its column. Scoped to the keyed
-       container (not a blanket [data-testid="stImage"] rule) so it doesn't
-       also apply to the sidebar's EU AI-generated-content icon below. */
-    .st-key-header-logo [data-testid="stImage"] {
-        display: flex;
-        justify-content: center;
-    }
-</style>
-""", unsafe_allow_html=True)
+from theme import inject_theme_css
+
+inject_theme_css()
 
 
 # ── Session State Init ─────────────────────────────────────────────────────────
@@ -139,6 +101,8 @@ def init_session_state():
         st.session_state.effort_report = None
     if "effort_path" not in st.session_state:
         st.session_state.effort_path = None
+    if "effort_data" not in st.session_state:
+        st.session_state.effort_data = None
     if "test_plan" not in st.session_state:
         st.session_state.test_plan = None
     if "test_plan_path" not in st.session_state:
@@ -316,7 +280,7 @@ def render_sidebar():
         if st.button("🔄 Start Over", use_container_width=True):
             for key in ["dialogue", "answers", "strategy", "sources", "output_path",
                         "risk_register", "risk_sources", "risk_path",
-                        "effort_report", "effort_path",
+                        "effort_report", "effort_path", "effort_data",
                         "test_plan", "test_plan_path", "test_plan_sources",
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
@@ -528,9 +492,15 @@ def render_dialogue():
         st.rerun()
 
     with st.form("dialogue_form"):
-        for question in QUESTIONS:
+        for idx, question in enumerate(QUESTIONS, start=1):
             key = question["key"]
-            st.markdown(f"**{question['question']}**")
+            st.markdown(
+                f'<div class="ledger-card">'
+                f'<div class="idx">{idx:02d} / {len(QUESTIONS):02d}</div>'
+                f'<div class="qtitle">{question["question"]}</div>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
             st.caption(f"💡 {question['hint']}")
             st.session_state.answers[key] = st.text_input(
                 label=question["question"],
@@ -664,11 +634,26 @@ def render_review():
 
         analysis = st.session_state.get("results_analysis")
         if analysis is not None:
+            from ledger_components import signal_ledger_html
+
+            pass_rate_pct = round(analysis.overall_pass_rate * 100)
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Runs", analysis.runs)
-            m2.metric("Pass Rate", f"{analysis.overall_pass_rate:.0%}")
-            m3.metric("Flaky Tests", len(analysis.flaky))
-            m4.metric("Ever-Failing", len(analysis.ever_failing))
+            with m1:
+                st.markdown(signal_ledger_html("Runs", analysis.runs, tier="hold"), unsafe_allow_html=True)
+            with m2:
+                st.markdown(signal_ledger_html("Pass Rate", pass_rate_pct, sub="%"), unsafe_allow_html=True)
+            with m3:
+                flaky_count = len(analysis.flaky)
+                st.markdown(
+                    signal_ledger_html("Flaky Tests", flaky_count, tier="pass" if flaky_count == 0 else "fail"),
+                    unsafe_allow_html=True,
+                )
+            with m4:
+                failing_count = len(analysis.ever_failing)
+                st.markdown(
+                    signal_ledger_html("Ever-Failing", failing_count, tier="pass" if failing_count == 0 else "fail"),
+                    unsafe_allow_html=True,
+                )
             if analysis.failure_clusters:
                 top_clusters = "; ".join(
                     f"{c['signature']} (x{c['count']})" for c in analysis.failure_clusters[:3]
@@ -873,6 +858,7 @@ def render_strategy():
 
         # Effort Estimation (deterministic + short LLM narrative)
         if st.session_state.get("effort_report") is None:
+            effort_data = None
             try:
                 with st.spinner("📊 Generating Effort Estimation..."):
                     effort_report, effort_data = estimator.estimate(context, risk_register)
@@ -885,6 +871,7 @@ def render_strategy():
                 effort_report, effort_path = "", None
             st.session_state.effort_report = effort_report
             st.session_state.effort_path = effort_path
+            st.session_state.effort_data = effort_data
         else:
             effort_report = st.session_state.effort_report
 
@@ -952,6 +939,13 @@ def render_strategy():
     project_name = st.session_state.dialogue.get_context().project_name
 
     with tab1:
+        from risk_ledger import parse_risk_matrix
+        from ledger_components import risk_ledger_table_html
+
+        risk_rows = parse_risk_matrix(st.session_state.risk_register)
+        if risk_rows:
+            st.markdown(risk_ledger_table_html(risk_rows), unsafe_allow_html=True)
+            st.markdown("###")
         st.markdown(st.session_state.risk_register)
         st.markdown("---")
         with st.expander("📚 Knowledge Sources Used"):
@@ -978,6 +972,19 @@ def render_strategy():
             )
 
     with tab2:
+        from ledger_components import signal_ledger_html
+
+        effort_data = st.session_state.get("effort_data")
+        if effort_data is not None:
+            st.markdown(
+                signal_ledger_html(
+                    "Confidence",
+                    effort_data.confidence_score,
+                    sub=f"{effort_data.confidence_level} confidence",
+                ),
+                unsafe_allow_html=True,
+            )
+            st.markdown("###")
         st.markdown(st.session_state.effort_report)
         st.markdown("---")
         dl_col1, dl_col2 = st.columns(2)
@@ -1059,7 +1066,7 @@ def render_strategy():
     if st.button("🔄 Generate Another Strategy", use_container_width=True):
         for key in ["dialogue", "answers", "strategy", "sources", "output_path",
                     "risk_register", "risk_sources", "risk_path",
-                    "effort_report", "effort_path",
+                    "effort_report", "effort_path", "effort_data",
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
@@ -1199,12 +1206,21 @@ def render_doc_review():
             st.rerun()
         return
 
+    from ledger_components import signal_ledger_html
+
     st.markdown(f"**Detected document type:** `{result.doc_type}`")
-    st.metric("Overall Score", f"{result.overall_score}/100")
+    st.markdown(
+        signal_ledger_html("Overall Score", result.overall_score, sub=f"{result.doc_type} · 6-dimension rubric"),
+        unsafe_allow_html=True,
+    )
 
     dim_cols = st.columns(len(result.dimension_scores))
     for col, (dim, score) in zip(dim_cols, result.dimension_scores.items()):
-        col.metric(dim.replace("_", " ").title(), f"{score}")
+        with col:
+            st.markdown(
+                signal_ledger_html(dim.replace("_", " ").title(), score),
+                unsafe_allow_html=True,
+            )
 
     st.markdown("### Findings")
     if not result.findings:

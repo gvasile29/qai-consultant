@@ -3,6 +3,24 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.4.0] - 2026-08-05
+
+### Changed
+- App visual redesign ("Calibration Bench"): a token-based color and
+  typography system (IBM Plex fonts, embedded locally — no font CDN
+  call) and a reusable "Signal Ledger" score/severity component,
+  applied across the app. QA Document Review dimension scores, the
+  Effort Estimation confidence score, Test Results Analysis metrics
+  (runs, pass rate, flaky/ever-failing counts), and the Risk Register
+  now render as color-coded ledger cards instead of plain markdown.
+  The Risk Register table specifically required a new deterministic
+  parser (severity data previously lived only inside free-text LLM
+  output) so it can be re-rendered with heat-mapped severity swatches.
+  The 11-question Project Discovery intake now presents each question
+  in its own numbered card. This is a visual change only — no
+  interaction flow, session behavior, or PDF export content changed.
+  Colors meet WCAG AA contrast in both light and dark themes.
+
 ## [3.3.1] - 2026-07-30
 
 ### Fixed
