@@ -1,0 +1,18 @@
+# Normalize line endings to LF for all text files, overriding local
+# core.autocrlf settings (Windows dev machines default to true, which
+# otherwise flags every new text file with a CRLF-conversion warning
+# on `git add`/`git commit`).
+* text=auto eol=lf
+
+# Shell scripts specifically need LF endings to run correctly -- a
+# CRLF shebang line breaks the interpreter lookup.
+*.sh text eol=lf
+
+# Explicit binary types: skip line-ending handling entirely.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff2 binary
+*.whl binary
