@@ -64,3 +64,6 @@ docs/launch_strategy.md
 
 # Marketing materials (personal, not for public repo)
 marketing/
+
+# Brainstorming visual-companion session files (mockups, transient state)
+.superpowers/
