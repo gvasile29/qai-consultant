@@ -18,7 +18,9 @@ Existing collaboration rules (memory) hadn't been revisited since they were set 
 
 3. **New rule — no blind agreement:** every time Claude states something as fact or agrees with a user proposal, it must include the reasoning — not just an acknowledgment. Applies to any technical recommendation or evaluation of a user idea.
 
-4. **New project skill — `.claude/skills/ci-check/SKILL.md`:** fixes the exact command sequence for post-push CI verification (`gh run list` → `gh run watch --exit-status` → per-job report) so it doesn't need to be re-derived from scratch on every push.
+4. **New project skill — `.claude/skills/ci-check/`:** fixes the exact command sequence for post-push CI verification (`gh run list` → `gh run watch --exit-status` → per-job report) as a real script (`check.sh`), invoked with one tool call, rather than prose instructions the assistant re-executes as 3 separate commands each time.
+
+5. **New rule — scriptify repetition:** any multi-step command sequence that has been run before, or is clearly going to recur, gets written as a committed script and invoked directly, instead of being re-derived and re-run ad hoc. Raised by the user mid-implementation of decision 4, once it became clear the first draft of `ci-check` was prose-only and still cost 3 tool calls.
 
 ## Persistence
 
