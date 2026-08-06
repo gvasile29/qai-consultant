@@ -54,6 +54,17 @@ def test_mcp_announcement_body_mentions_install_and_tools():
     assert "estimate_qa_effort" in body
 
 
+def test_mcp_announcement_body_links_to_registries():
+    # Same three distribution links already carried in README.md/README_MCP.md
+    # (official MCP registry, Glama, Awesome MCP Servers) -- now surfaced in
+    # the app itself, not just the repo docs.
+    import app
+    body = app.MCP_ANNOUNCEMENT_BODY
+    assert "https://registry.modelcontextprotocol.io" in body
+    assert "https://glama.ai/mcp/servers/gvasile29/qai-consultant" in body
+    assert "https://github.com/punkpeye/awesome-mcp-servers" in body
+
+
 def test_banner_exists_and_gates_on_mcp_announcement_seen():
     fn = extract_function(read_app_source(), "main")
     assert 'st.session_state.get("mcp_announcement_seen")' in fn, \

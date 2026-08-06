@@ -240,6 +240,10 @@ this app uses, fully offline and keyless.
 
 See the [GitHub repo](https://github.com/gvasile29/qai-consultant) for setup
 and client configuration.
+
+Listed on the [official MCP registry](https://registry.modelcontextprotocol.io)
+(`io.github.gvasile29/qai-consultant-mcp`), [Glama](https://glama.ai/mcp/servers/gvasile29/qai-consultant),
+and [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers).
 """
 
 
