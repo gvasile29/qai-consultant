@@ -70,6 +70,7 @@ def build_landing_hero_html(tokens: dict) -> str:
 .pom-standards span:nth-child(4) {{ animation-delay: 1.55s; }}
 
 .pom-cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; }}
+@media (max-width: 640px) {{ .pom-cards {{ grid-template-columns: 1fr; }} }}
 .pom-card {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-radius: 8px; padding: 1rem 1.1rem; opacity: 0; animation: pom-card-in 0.5s ease-out both; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out; }}
 .pom-card:hover {{ border-color: {tokens['accent']}; box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); }}
 .pom-card:nth-child(1) {{ animation-delay: 1.7s; }}

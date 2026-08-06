@@ -52,9 +52,24 @@ def test_build_landing_hero_html_contains_how_it_works_copy():
     assert "Download your strategy" in html
 
 
-def test_build_landing_hero_html_respects_reduced_motion_globally():
-    # This module relies on theme.py's existing global
-    # `prefers-reduced-motion` rule (build_css(), not duplicated here) --
-    # confirm that global rule still exists so this reliance stays valid.
+def test_build_landing_hero_html_zeroes_animation_delays_for_reduced_motion():
+    # theme.py's global prefers-reduced-motion rule only zeroes
+    # animation-duration/transition-duration -- it never touches
+    # animation-delay, so delayed "pom-" elements (staggered standards
+    # badges, cards) would sit at their opacity:0 "from" state for the
+    # full original delay before snapping in. This module defines its own
+    # scoped prefers-reduced-motion block to zero those delays -- don't
+    # let it be deleted as "redundant" with theme.py's rule, they cover
+    # different CSS properties.
+    html = build_landing_hero_html(LIGHT_TOKENS)
+    assert "@media (prefers-reduced-motion: reduce)" in html
+    assert "animation-delay: 0s !important" in html
+
+
+def test_build_landing_hero_html_relies_on_theme_global_rule_for_duration():
+    # This module still relies on theme.py's existing global
+    # prefers-reduced-motion rule (build_css()) to zero out
+    # animation-duration/transition-duration -- confirm that global rule
+    # still exists so this reliance stays valid.
     from theme import build_css
     assert "prefers-reduced-motion" in build_css(LIGHT_TOKENS)
