@@ -25,6 +25,14 @@ streamlit run src/app.py                 # Run browser UI at http://localhost:85
 ruff check src/ tests/                   # Lint (config in ruff.toml)
 ```
 
+## Browser / UI Testing
+
+For local Streamlit UI verification (the "start the dev server and use the feature in a browser" step), **default to the Playwright Python CLI, not the Playwright/claude-in-chrome MCP browser tools.** Write a small script using `playwright.sync_api` and run it via Bash (`python script.py`), printing only what's needed (e.g. a specific `console.log`/assertion result) — a multi-step MCP browser session round-trips a full accessibility snapshot/DOM into context on every single action, which burns far more tokens than one script execution that returns just the final result.
+
+MCP browser tools (claude-in-chrome, Playwright MCP) are still the right choice for genuinely exploratory/ad-hoc work — debugging an unfamiliar page, poking around when you don't know the DOM structure yet. For repeatable/deterministic checks (does the page load, does a button work, does a redesign render correctly), use the CLI by default without waiting to be asked.
+
+Playwright is installed (`playwright==1.62.0`, pinned in `requirements-dev.txt`) with the Chromium browser binary already downloaded locally — no setup needed before writing a script.
+
 Required environment variables (`.env` or Streamlit Cloud secrets):
 ```
 MISTRAL_API_KEY=...

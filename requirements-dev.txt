@@ -16,3 +16,7 @@ pip-audit==2.10.1
 mcp>=1.8.0,<2.0.0
 build>=1.0.0
 setuptools>=67.0
+
+# Browser automation for local UI testing (Streamlit app) — not a runtime
+# dependency, and not part of the published qai-consultant-mcp wheel.
+playwright==1.62.0
