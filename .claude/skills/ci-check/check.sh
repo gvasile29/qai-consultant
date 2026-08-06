@@ -10,8 +10,8 @@ if [ -z "$RUN_ID" ]; then
   RUN_ID=$(gh run list --branch "$BRANCH" --limit 1 --json databaseId -q '.[0].databaseId')
 fi
 
-echo "Watching run $RUN_ID on branch $BRANCH..."
-gh run watch "$RUN_ID" --exit-status
+echo "Watching run $RUN_ID on branch $BRANCH (this can take a few minutes)..."
+gh run watch "$RUN_ID" --exit-status > /dev/null 2>&1
 STATUS=$?
 
 echo "--- Job results ---"
