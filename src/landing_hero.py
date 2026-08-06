@@ -21,8 +21,17 @@ stylesheet, and it must never reuse ".ledger-card" (that belongs to the
 Phase-2 dialogue screen and has no :hover rule of its own -- seeing it
 reused here was a caught error in an earlier draft of the design spec).
 Relies on theme.py's existing global `prefers-reduced-motion` rule
-(build_css()) to disable these animations for users who've turned off
-motion -- deliberately not duplicated here.
+(build_css()) to zero out `animation-duration`/`transition-duration`
+for users who've turned off motion -- deliberately not duplicated
+here. That global rule does NOT zero `animation-delay`, though, so
+this module defines its own scoped `prefers-reduced-motion` block
+(below, in build_landing_hero_html()'s <style>) to zero the delays on
+its own "pom-" elements -- without it, elements with a nonzero delay
+(the staggered standards badges, the cards) sit at their
+`animation-fill-mode: both` "from" state (`opacity: 0`) for the full
+original delay before snapping in, which is the opposite of "reduced
+motion." Do not remove this module-local block as "redundant" with
+theme.py's rule -- the two cover different CSS properties.
 """
 
 
