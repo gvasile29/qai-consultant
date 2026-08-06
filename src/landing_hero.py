@@ -69,6 +69,21 @@ def build_landing_hero_html(tokens: dict) -> str:
 .pom-card .pom-cidx {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; color: {tokens['ink_dim']}; margin-bottom: 0.35rem; }}
 .pom-card .pom-ctitle {{ font-family: 'Plex Sans', sans-serif; font-weight: 600; font-size: 0.92rem; color: {tokens['ink']}; margin-bottom: 0.2rem; }}
 .pom-card .pom-cbody {{ font-family: 'Plex Sans', sans-serif; font-size: 0.8rem; color: {tokens['ink_dim']}; }}
+
+/* theme.py's global prefers-reduced-motion rule (build_css()) only zeroes
+   animation-duration/transition-duration -- it never touches
+   animation-delay. Left alone, every "pom-" element with a nonzero delay
+   (the standards badges, the cards) sits at its pre-animation state
+   (opacity: 0) for the full original delay before snapping in, which is
+   the opposite of "reduced motion": content stays invisible instead of
+   just arriving without the animated flourish. Zero the delays here,
+   scoped to this module's own classes, so reduced-motion users see the
+   finished layout immediately. */
+@media (prefers-reduced-motion: reduce) {{
+  .pom-headline span, .pom-gauge .pom-gfill, .pom-standards span, .pom-card {{
+    animation-delay: 0s !important;
+  }}
+}}
 </style>
 
 <div class="pom-hero">
