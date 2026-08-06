@@ -6,8 +6,8 @@
 QAI Consultant — Version Information
 """
 
-__version__ = "3.4.0"
-__release_date__ = "2026-08-05"
+__version__ = "3.4.1"
+__release_date__ = "2026-08-06"
 __author__ = "QAI Consultant Contributors"
 __description__ = "AI-powered QA Architect — Test Strategy, Risk Register, Effort Estimation & Test Plan"
 __license__ = "Apache-2.0"

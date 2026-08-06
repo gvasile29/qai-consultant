@@ -3,6 +3,24 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.4.1] - 2026-08-06
+
+### Added
+- Distribution links surfaced in the app itself: the sidebar's "Use QAI
+  in your AI tools (MCP)" panel now links to the official MCP registry,
+  Glama, and Awesome MCP Servers — previously only in `README.md`/
+  `README_MCP.md`.
+
+### Changed
+- Landing page has started a visual redesign ("Power-On Sequence"): the
+  intro screen — the one screen the v3.4.0 "Calibration Bench" redesign
+  left unstyled — now opens with a one-shot entrance sequence (headline
+  reveal, three progress gauges, a standards checklist, fading-in "How
+  it works" cards), built from the existing Calibration Bench colors
+  and fonts. This is the first of three planned phases (interactive
+  flow and output screens are still native Streamlit styling); a fuller
+  changelog entry lands once the whole redesign is complete.
+
 ## [3.4.0] - 2026-08-05
 
 ### Changed

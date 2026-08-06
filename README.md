@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.4.0-green.svg)
+![Version](https://img.shields.io/badge/version-3.4.1-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -276,6 +276,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.3** ✅ Adopted the EU's official AI-generated-content icon (Code of Practice, AI Act Article 50(4)) in the Streamlit sidebar and all generated-document PDF exports, reinforcing the existing text/metadata disclosure
 - **v3.3.1** ✅ Fix — `qai-consultant-mcp` could intermittently fail to attach in Claude Desktop because 4 of its 6 runtime dependencies had loose version bounds, letting `uv` re-resolve and reinstall on any unrelated upstream release; all dependencies are now exact-pinned
 - **v3.4** ✅ App visual redesign ("Calibration Bench") — token-based color/typography system (IBM Plex fonts, no font CDN) and a reusable "Signal Ledger" score/severity component, applied to Document Review, Effort confidence, Results Analysis, Risk Register, and the Project Discovery question list
+- **v3.4.1** ✅ Distribution links (official MCP registry, Glama, Awesome MCP Servers) now shown in the app's own MCP panel, not just the READMEs; landing page redesign started (Phase 1 of 3 — see the CHANGELOG)
 - **v4.0** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---
