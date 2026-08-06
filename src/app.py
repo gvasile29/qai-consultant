@@ -374,15 +374,11 @@ EXAMPLE_TEST_PLAN = """
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
-    st.markdown('<p class="sub-header">Your AI-powered QA Architect — Test Strategy Generator</p>', unsafe_allow_html=True)
+    from landing_hero import build_landing_hero_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.info("📋 **Answer** a few questions about your project")
-    with col2:
-        st.info("🧠 **AI analyzes** using QA methodologies & standards")
-    with col3:
-        st.info("📄 **Download** your tailored Test Strategy (Markdown & PDF)")
+    _hero_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(build_landing_hero_html(_hero_tokens), unsafe_allow_html=True)
 
     st.markdown("---")
 
