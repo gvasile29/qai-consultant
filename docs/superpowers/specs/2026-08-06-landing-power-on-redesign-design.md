@@ -33,7 +33,7 @@ A separate, unrelated work stream — a Playwright Page Object Model test suite 
 
 A new module, `src/landing_hero.py`, follows the existing `ledger_components.py`/`theme.py` pattern: pure functions that generate HTML/CSS strings, no Streamlit dependency where avoidable (so they're unit-testable without a Streamlit runtime, matching `theme.py`'s `build_css()`). Imported lazily inside `render_intro()`, matching how `ledger_components.py` is already imported lazily at each call site in `app.py`.
 
-`theme.py` is **not modified** — no new color tokens, no new fonts. Power-On Sequence explicitly reuses the existing `LIGHT_TOKENS`/`DARK_TOKENS` palette and the already-embedded Plex Sans/Mono/Cond fonts from `_theme_fonts.py`.
+`theme.py` is **not modified** — no new color tokens, no new fonts, no new global CSS rules. Power-On Sequence explicitly reuses the existing `LIGHT_TOKENS`/`DARK_TOKENS` palette values and the already-embedded Plex Sans/Mono/Cond fonts from `_theme_fonts.py`. All new CSS this phase needs (the draw-in/reveal/fill/tick-in keyframes, the new landing-card hover rule) is self-contained: embedded as a `<style>` block inside the HTML string `landing_hero.py` returns, scoped to landing-only class names, not appended to `theme.py`'s `build_css()`. This keeps the new rules out of the global stylesheet the dialogue/review/output screens also load, so nothing here can leak into Phase 2/3 screens ahead of schedule. `landing_hero.py`'s functions still read color values from the `tokens` dict passed in by the caller (same pattern as `build_css(tokens)`) — they just don't live inside `theme.py`'s own stylesheet string.
 
 ### What changes in `render_intro()`
 
@@ -43,7 +43,7 @@ The native `st.info()`/`st.success()`/`st.columns()` blocks are replaced with cu
 - Headline revealed via a clip-path "readout" animation (~0.9s), not a generic fade.
 - Three progress bars (Risk / Effort / Strategy) sweeping from 0 to a resting value, using the existing `pass_`/`hold`/`accent` tokens — a genuine preview of the Signal Ledger component the user sees later in the real flow, not decorative.
 - Standards row (ISTQB / OWASP / IEEE 829 / ISO 25010) ticking in as a staggered checklist.
-- The existing three "How it works" cards get a staggered fade-in and a hover state (border + lift), reusing the `.ledger-card` hover language already established elsewhere in the app for consistency.
+- The existing three "How it works" cards get a staggered fade-in and a hover state (border + lift). **Correction from an earlier draft of this spec:** `.ledger-card` (used by the dialogue screen's question cards) has no `:hover` rule defined in `theme.py` today — there is no existing hover language to reuse. This is a new hover treatment, scoped to a new landing-only CSS class (not `.ledger-card`, and not added to `theme.py`) so it can't leak onto the Phase-2 dialogue screen ahead of schedule.
 - The two real navigation buttons (`st.button` for Start / Review an existing document) stay native Streamlit — only their surrounding visual context changes, not the interaction/routing logic.
 - All animations are one-shot on page load (no infinite loops except where the existing `prefers-reduced-motion` global rule in `theme.py` already zeroes out durations for users who've disabled motion — no additional accessibility work needed there).
 
