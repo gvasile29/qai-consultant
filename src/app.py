@@ -250,6 +250,12 @@ and [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers).
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
+        from interactive_flow_style import build_sidebar_polish_css
+        from theme import DARK_TOKENS, LIGHT_TOKENS
+
+        _sidebar_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+        st.markdown(build_sidebar_polish_css(_sidebar_tokens), unsafe_allow_html=True)
+
         st.markdown("## 🧪 QAI Consultant")
         st.markdown("AI-powered QA Architect")
         st.caption(f"v{__version__}")
@@ -473,8 +479,12 @@ def render_dialogue():
 
     total = len(QUESTIONS)
     answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
-    progress = answered / total
-    st.progress(progress, text=f"Progress: {answered}/{total} questions answered")
+
+    from interactive_flow_style import build_dialogue_header_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
+
+    _dialogue_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(build_dialogue_header_html(_dialogue_tokens, answered, total), unsafe_allow_html=True)
     st.markdown("###")
 
     selected_template = st.selectbox(
@@ -571,30 +581,16 @@ def render_review():
 
     context = st.session_state.dialogue.get_context()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Project Name**")
-        st.code(context.project_name)
-        st.markdown("**Project Type**")
-        st.code(context.project_type)
-        st.markdown("**Tech Stack**")
-        st.code(context.tech_stack)
-        st.markdown("**Methodology**")
-        st.code(context.methodology)
-        st.markdown("**Timeline**")
-        st.code(context.timeline)
+    from interactive_flow_style import build_review_summary_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
 
-    with col2:
-        st.markdown("**QA Team Size**")
-        st.code(context.team_qa_size)
-        st.markdown("**Dev Team Size**")
-        st.code(context.team_dev_size)
-        st.markdown("**Known Risks**")
-        st.code(context.known_risks)
-        st.markdown("**Existing Automation**")
-        st.code(context.existing_automation)
-        st.markdown("**Compliance**")
-        st.code(context.compliance_requirements)
+    _review_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    _animate = not st.session_state.get("review_intro_animated")
+    st.markdown(
+        build_review_summary_html(_review_tokens, context, animate=_animate),
+        unsafe_allow_html=True,
+    )
+    st.session_state.review_intro_animated = True
 
     st.markdown("**Project Description**")
     st.info(context.project_description)
