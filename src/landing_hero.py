@@ -18,8 +18,12 @@ All CSS here is scoped to "pom-" prefixed classes and lives in this
 module's own <style> block -- it is NOT added to theme.py's build_css(),
 so it can't leak onto the Phase 2/3 screens that load theme.py's global
 stylesheet, and it must never reuse ".ledger-card" (that belongs to the
-Phase-2 dialogue screen and has no :hover rule of its own -- seeing it
-reused here was a caught error in an earlier draft of the design spec).
+Phase-2 dialogue screen; as of Phase 2, interactive_flow_style.py owns
+a ".ledger-card:hover" rule for it -- this module must never add its
+own competing rule for that class, since two modules styling the same
+selector would be a genuine conflict, not just an outdated fact. Seeing
+".ledger-card" reused here at all was a caught error in an earlier
+draft of the design spec).
 Relies on theme.py's existing global `prefers-reduced-motion` rule
 (build_css()) to zero out `animation-duration`/`transition-duration`
 for users who've turned off motion -- deliberately not duplicated
