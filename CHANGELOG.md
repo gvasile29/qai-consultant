@@ -3,6 +3,19 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.4.2] - 2026-08-17
+
+### Changed
+- Interactive flow is now part of the "Power-On Sequence" visual
+  redesign too (Phase 2 of 3): the Project Discovery dialogue shows an
+  animated progress bar in place of Streamlit's default, the review
+  screen presents your project summary as tiles with a one-time
+  entrance animation on first visit instead of a plain code block, and
+  the sidebar gets subtle hover feedback on buttons and expanders.
+  Only the output screens (Risk Register, Effort Estimate, Test
+  Strategy, Test Plan) are still native Streamlit styling; a fuller
+  changelog entry lands once that final phase ships.
+
 ## [3.4.1] - 2026-08-06
 
 ### Added

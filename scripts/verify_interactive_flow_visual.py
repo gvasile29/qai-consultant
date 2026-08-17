@@ -66,6 +66,20 @@ def main() -> int:
         print(f"Dialogue progress fill after template applied (expect > 0px, wider): {fill_width_after}")
         page.screenshot(path=str(out_dir / "dialogue_filled.png"), full_page=True)
 
+        # Hover CSS (`.ledger-card:hover` and build_sidebar_polish_css()'s
+        # sidebar button hover) previously had zero visual verification --
+        # confirm each actually changes the rendered element, not just that
+        # the selector string exists in the injected <style> block.
+        first_card = page.locator(".ledger-card").first
+        first_card.hover()
+        page.wait_for_timeout(300)
+        page.screenshot(path=str(out_dir / "dialogue_card_hover.png"), full_page=True)
+
+        start_over_btn = page.get_by_role("button", name="🔄 Start Over")
+        start_over_btn.hover()
+        page.wait_for_timeout(300)
+        page.screenshot(path=str(out_dir / "sidebar_button_hover.png"), full_page=True)
+
         submit_btn = page.get_by_role("button", name="✅ Review & Generate Strategy")
         _reveal(page, submit_btn)
         submit_btn.click(timeout=10000)
