@@ -734,8 +734,35 @@ def render_strategy():
         )
         st.stop()
 
+    from output_screen_style import build_content_polish_css, build_output_eyebrow_html, build_stage_sequence_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
+
+    _strategy_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(build_content_polish_css(_strategy_tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(_strategy_tokens, "output analysis sequence"), unsafe_allow_html=True)
     st.markdown("## 📄 Generated Test Strategy")
     st.markdown("---")
+
+    stage_placeholder = st.empty()
+
+    def _render_stages(active_key=None):
+        order = [
+            ("Risk", "risk_register"),
+            ("Effort", "effort_report"),
+            ("Strategy", "strategy"),
+            ("Plan", "test_plan"),
+        ]
+        stages = []
+        for label, key in order:
+            if st.session_state.get(key) is not None:
+                stages.append((label, "done"))
+            elif key == active_key:
+                stages.append((label, "active"))
+            else:
+                stages.append((label, "pending"))
+        stage_placeholder.markdown(build_stage_sequence_html(_strategy_tokens, stages), unsafe_allow_html=True)
+
+    _render_stages()
 
     agent = st.session_state.get("agent")
     if agent is None:
@@ -819,6 +846,7 @@ def render_strategy():
         # traceback and discard whatever already generated successfully.
         # Each step is also skipped if a prior (interrupted) rerun already
         # produced it, so a resumed run doesn't redo completed work.
+        _render_stages(active_key="risk_register")
         if st.session_state.get("risk_register") is None:
             st.markdown("#### ⚠️ Generating Risk Register...")
             results_analysis = st.session_state.get("results_analysis")
@@ -851,8 +879,10 @@ def render_strategy():
             st.session_state.risk_path = risk_path
         else:
             risk_register = st.session_state.risk_register
+        _render_stages()
 
         # Effort Estimation (deterministic + short LLM narrative)
+        _render_stages(active_key="effort_report")
         if st.session_state.get("effort_report") is None:
             effort_data = None
             try:
@@ -870,8 +900,10 @@ def render_strategy():
             st.session_state.effort_data = effort_data
         else:
             effort_report = st.session_state.effort_report
+        _render_stages()
 
         # Test Strategy (streaming)
+        _render_stages(active_key="strategy")
         if st.session_state.get("strategy") is None:
             st.markdown("#### 📋 Generating Test Strategy...")
             strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
@@ -892,9 +924,11 @@ def render_strategy():
             st.session_state.output_path = output_path
         else:
             strategy = st.session_state.strategy
+        _render_stages()
 
         # Test Plan (streaming)
         from test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
+        _render_stages(active_key="test_plan")
         if st.session_state.get("test_plan") is None:
             st.markdown("#### 📝 Generating Test Plan...")
             test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
@@ -915,6 +949,7 @@ def render_strategy():
             st.session_state.test_plan_sources = test_plan_sources
         else:
             test_plan = st.session_state.test_plan
+        _render_stages()
 
         # Pre-compute PDF bytes once — avoids regenerating on every re-render
         if st.session_state.get("risk_pdf_bytes") is None:
@@ -933,6 +968,8 @@ def render_strategy():
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
 
     project_name = st.session_state.dialogue.get_context().project_name
+    _output_animate_class = " animate" if not st.session_state.get("output_intro_animated") else ""
+    st.session_state.output_intro_animated = True
 
     with tab1:
         from risk_ledger import parse_risk_matrix
@@ -940,7 +977,10 @@ def render_strategy():
 
         risk_rows = parse_risk_matrix(st.session_state.risk_register)
         if risk_rows:
-            st.markdown(risk_ledger_table_html(risk_rows), unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="output-tiles{_output_animate_class}">{risk_ledger_table_html(risk_rows)}</div>',
+                unsafe_allow_html=True,
+            )
             st.markdown("###")
         st.markdown(st.session_state.risk_register)
         st.markdown("---")
@@ -973,10 +1013,13 @@ def render_strategy():
         effort_data = st.session_state.get("effort_data")
         if effort_data is not None:
             st.markdown(
-                signal_ledger_html(
-                    "Confidence",
-                    effort_data.confidence_score,
-                    sub=f"{effort_data.confidence_level} confidence",
+                '<div class="output-tiles{}">{}</div>'.format(
+                    _output_animate_class,
+                    signal_ledger_html(
+                        "Confidence",
+                        effort_data.confidence_score,
+                        sub=f"{effort_data.confidence_level} confidence",
+                    ),
                 ),
                 unsafe_allow_html=True,
             )
