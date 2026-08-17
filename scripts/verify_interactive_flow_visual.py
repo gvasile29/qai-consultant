@@ -70,7 +70,12 @@ def main() -> int:
         _reveal(page, submit_btn)
         submit_btn.click(timeout=10000)
         page.wait_for_selector(".review-grid", timeout=15000)
-        page.wait_for_timeout(600)  # let the one-shot entrance finish (longest delay ~0.5s + 0.4s anim)
+        # interactive_flow_style.py sets animation-delay = i * 0.05s for i in
+        # 1..10 (10 fields) -> the last tile's delay is 0.50s; combined with
+        # the 0.4s animation itself, the entrance doesn't finish until ~0.90s
+        # after .review-grid mounts. Wait past that with margin, or the
+        # screenshot can catch the last tile still mid-fade.
+        page.wait_for_timeout(1000)
         page.screenshot(path=str(out_dir / "review_first_visit.png"), full_page=True)
         first_visit_class = page.eval_on_selector(".review-grid", "el => el.className")
         print(f"Review grid class on first visit (expect contains 'animate'): {first_visit_class}")
@@ -102,7 +107,15 @@ def main() -> int:
         page.locator('[data-testid="stSelectbox"]').first.click()
         page.get_by_text("🌐 Web Application", exact=False).click(timeout=10000)
         page.get_by_role("button", name="Apply template").click(timeout=10000)
-        page.wait_for_timeout(500)
+        # Shorter than the normal-motion pass's 1500ms is deliberate, not an
+        # oversight: theme.py's global `prefers-reduced-motion` rule zeroes
+        # animation/transition *durations*, so the CSS width-transition
+        # component of that wait genuinely doesn't apply here. The server
+        # round-trip for the rerun still does, though, so this isn't 0 --
+        # bumped from an undocumented 500ms to 800ms for margin on a slower
+        # machine (this step isn't screenshotted, so it only needs to be
+        # enough for the fields to be applied before the next click).
+        page.wait_for_timeout(800)
         submit_btn = page.get_by_role("button", name="✅ Review & Generate Strategy")
         _reveal(page, submit_btn)
         submit_btn.click(timeout=10000)
