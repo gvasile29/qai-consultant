@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.4.2-green.svg)
+![Version](https://img.shields.io/badge/version-3.4.3-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -278,6 +278,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.4** ✅ App visual redesign ("Calibration Bench") — token-based color/typography system (IBM Plex fonts, no font CDN) and a reusable "Signal Ledger" score/severity component, applied to Document Review, Effort confidence, Results Analysis, Risk Register, and the Project Discovery question list
 - **v3.4.1** ✅ Distribution links (official MCP registry, Glama, Awesome MCP Servers) now shown in the app's own MCP panel, not just the READMEs; landing page redesign started (Phase 1 of 3 — see the CHANGELOG)
 - **v3.4.2** ✅ Interactive flow redesign (Phase 2 of 3 — see the CHANGELOG): the Project Discovery dialogue, review screen, and sidebar now share the landing page's "Power-On Sequence" visual language (animated progress bar, one-time entrance-animated summary tiles, hover feedback)
+- **v3.4.3** ✅ Output screens redesign (Phase 3 of 3, completing the "Power-On Sequence" redesign — see the CHANGELOG): the Test Strategy results view and the document review screen now share the same visual language (live 4-stage sequence status, entrance-animated score tiles, hover feedback), plus a "What you get in ~2 minutes" addendum on the landing screen
 - **v4.0** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---

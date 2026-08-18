@@ -3,6 +3,25 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.4.3] - 2026-08-18
+
+### Changed
+- Output screens are now part of the "Power-On Sequence" visual redesign
+  too (Phase 3 of 3, the final phase): the Test Strategy results view
+  (Risk Register / Effort Estimate / Test Strategy / Test Plan tabs) now
+  shows a live status readout tracking which of the 4 stages is
+  pending, in progress, or done, its score/summary tiles animate in
+  once on first view, and buttons/tabs/expanders get the same hover
+  feedback the interactive flow already has. The document review
+  screen (upload-then-score an existing QA document) gets the same
+  treatment: its intake form sits in a styled input tray, and its
+  results tiles animate in the same way. The landing screen also picks
+  up a small addendum — a labeled "What you get in ~2 minutes" section
+  above its deliverable cards and stat tiles.
+- With this phase, the full 3-phase "Power-On Sequence" redesign
+  (landing screen → interactive flow → output screens) is complete
+  across the whole app.
+
 ## [3.4.2] - 2026-08-17
 
 ### Changed

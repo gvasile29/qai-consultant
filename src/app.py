@@ -392,35 +392,8 @@ def render_intro():
 
     st.markdown("---")
 
-    st.markdown("#### 🎯 What you get in ~2 minutes")
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        st.success(
-            "⚠️ **Risk Register**\n\n"
-            "Prioritized risks with likelihood, impact & mitigation — before a single line of code is written."
-        )
-    with d2:
-        st.success(
-            "📊 **Effort Estimation**\n\n"
-            "PERT-based timeline with team capacity analysis and a confidence score (0–100)."
-        )
-    with d3:
-        st.success(
-            "📋 **Test Strategy**\n\n"
-            "ISTQB-aligned approach tailored to your stack, methodology, and compliance requirements."
-        )
-    d4, = st.columns(1)
-    with d4:
-        st.success(
-            "📝 **Test Plan**\n\n"
-            "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."
-        )
-
-    e1, e2, e3, e4 = st.columns(4)
-    e1.metric("⏱️ Time to results", "~2 min", "vs. hours of manual work")
-    e2.metric("📚 Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors")
-    e3.metric("📄 Deliverables", "4 documents", "Risk · Effort · Strategy · Plan")
-    e4.metric("💰 Cost", "Free", "No sign-up required")
+    from landing_hero import build_landing_deliverables_html
+    st.markdown(build_landing_deliverables_html(_hero_tokens), unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -734,8 +707,41 @@ def render_strategy():
         )
         st.stop()
 
+    from output_screen_style import build_content_polish_css, build_output_eyebrow_html, build_stage_sequence_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
+
+    _strategy_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(build_content_polish_css(_strategy_tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(_strategy_tokens, "output analysis sequence"), unsafe_allow_html=True)
     st.markdown("## 📄 Generated Test Strategy")
     st.markdown("---")
+
+    stage_placeholder = st.empty()
+
+    def _render_stages(active_key=None):
+        order = [
+            ("Risk", "risk_register"),
+            ("Effort", "effort_report"),
+            ("Strategy", "strategy"),
+            ("Plan", "test_plan"),
+        ]
+        stages = []
+        for label, key in order:
+            value = st.session_state.get(key)
+            if value:
+                stages.append((label, "done"))
+            elif value is not None:
+                # Present but falsy ("") -- the per-stage except handler
+                # below sets this on an LLM failure, distinct from a stage
+                # that simply hasn't run yet (still None).
+                stages.append((label, "failed"))
+            elif key == active_key:
+                stages.append((label, "active"))
+            else:
+                stages.append((label, "pending"))
+        stage_placeholder.markdown(build_stage_sequence_html(_strategy_tokens, stages), unsafe_allow_html=True)
+
+    _render_stages()
 
     agent = st.session_state.get("agent")
     if agent is None:
@@ -819,6 +825,7 @@ def render_strategy():
         # traceback and discard whatever already generated successfully.
         # Each step is also skipped if a prior (interrupted) rerun already
         # produced it, so a resumed run doesn't redo completed work.
+        _render_stages(active_key="risk_register")
         if st.session_state.get("risk_register") is None:
             st.markdown("#### ⚠️ Generating Risk Register...")
             results_analysis = st.session_state.get("results_analysis")
@@ -851,8 +858,10 @@ def render_strategy():
             st.session_state.risk_path = risk_path
         else:
             risk_register = st.session_state.risk_register
+        _render_stages()
 
         # Effort Estimation (deterministic + short LLM narrative)
+        _render_stages(active_key="effort_report")
         if st.session_state.get("effort_report") is None:
             effort_data = None
             try:
@@ -870,8 +879,10 @@ def render_strategy():
             st.session_state.effort_data = effort_data
         else:
             effort_report = st.session_state.effort_report
+        _render_stages()
 
         # Test Strategy (streaming)
+        _render_stages(active_key="strategy")
         if st.session_state.get("strategy") is None:
             st.markdown("#### 📋 Generating Test Strategy...")
             strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
@@ -892,9 +903,11 @@ def render_strategy():
             st.session_state.output_path = output_path
         else:
             strategy = st.session_state.strategy
+        _render_stages()
 
         # Test Plan (streaming)
         from test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
+        _render_stages(active_key="test_plan")
         if st.session_state.get("test_plan") is None:
             st.markdown("#### 📝 Generating Test Plan...")
             test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
@@ -915,6 +928,7 @@ def render_strategy():
             st.session_state.test_plan_sources = test_plan_sources
         else:
             test_plan = st.session_state.test_plan
+        _render_stages()
 
         # Pre-compute PDF bytes once — avoids regenerating on every re-render
         if st.session_state.get("risk_pdf_bytes") is None:
@@ -933,6 +947,8 @@ def render_strategy():
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
 
     project_name = st.session_state.dialogue.get_context().project_name
+    _output_animate_class = " animate" if not st.session_state.get("output_intro_animated") else ""
+    st.session_state.output_intro_animated = True
 
     with tab1:
         from risk_ledger import parse_risk_matrix
@@ -940,7 +956,10 @@ def render_strategy():
 
         risk_rows = parse_risk_matrix(st.session_state.risk_register)
         if risk_rows:
-            st.markdown(risk_ledger_table_html(risk_rows), unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="output-tiles{_output_animate_class}">{risk_ledger_table_html(risk_rows)}</div>',
+                unsafe_allow_html=True,
+            )
             st.markdown("###")
         st.markdown(st.session_state.risk_register)
         st.markdown("---")
@@ -973,10 +992,13 @@ def render_strategy():
         effort_data = st.session_state.get("effort_data")
         if effort_data is not None:
             st.markdown(
-                signal_ledger_html(
-                    "Confidence",
-                    effort_data.confidence_score,
-                    sub=f"{effort_data.confidence_level} confidence",
+                '<div class="output-tiles{}">{}</div>'.format(
+                    _output_animate_class,
+                    signal_ledger_html(
+                        "Confidence",
+                        effort_data.confidence_score,
+                        sub=f"{effort_data.confidence_level} confidence",
+                    ),
                 ),
                 unsafe_allow_html=True,
             )
@@ -1141,6 +1163,12 @@ def render_doc_review():
     render_strategy()'s save/PDF conventions."""
     MAX_RUNS_PER_SESSION = 3  # mirrors render_strategy()'s per-session cap — narrative is an LLM call
 
+    from output_screen_style import build_content_polish_css, build_output_eyebrow_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
+
+    _doc_review_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(build_content_polish_css(_doc_review_tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(_doc_review_tokens, "document review sequence"), unsafe_allow_html=True)
     st.markdown("## 📝 Review an Existing QA Document")
     st.markdown(
         "Upload or paste a Test Plan, Test Strategy, or test case list for a "
@@ -1149,21 +1177,25 @@ def render_doc_review():
     st.markdown("---")
 
     if st.session_state.get("review_result") is None:
-        label = st.selectbox(
-            "Document type",
-            options=[label for label, _ in _REVIEW_DOC_TYPE_OPTIONS],
-            index=0,
-            key="review_doc_type_select",
-        )
-        doc_type = dict(_REVIEW_DOC_TYPE_OPTIONS)[label]
+        from output_screen_style import build_doc_review_input_tray_css
+        st.markdown(build_doc_review_input_tray_css(_doc_review_tokens), unsafe_allow_html=True)
 
-        uploaded = st.file_uploader(
-            "Upload a document (.md, .txt)", type=["md", "txt"], key="review_doc_uploader",
-        )
-        st.caption("...or paste the document text below")
-        pasted = st.text_area(
-            "Document text", key="review_doc_pasted_text", height=300, label_visibility="collapsed",
-        )
+        with st.container(key="doc-review-input"):
+            label = st.selectbox(
+                "Document type",
+                options=[label for label, _ in _REVIEW_DOC_TYPE_OPTIONS],
+                index=0,
+                key="review_doc_type_select",
+            )
+            doc_type = dict(_REVIEW_DOC_TYPE_OPTIONS)[label]
+
+            uploaded = st.file_uploader(
+                "Upload a document (.md, .txt)", type=["md", "txt"], key="review_doc_uploader",
+            )
+            st.caption("...or paste the document text below")
+            pasted = st.text_area(
+                "Document text", key="review_doc_pasted_text", height=300, label_visibility="collapsed",
+            )
 
         document_text = ""
         source_label = "Document"
@@ -1204,9 +1236,15 @@ def render_doc_review():
 
     from ledger_components import signal_ledger_html
 
+    _doc_review_animate_class = " animate" if not st.session_state.get("doc_review_intro_animated") else ""
+    st.session_state.doc_review_intro_animated = True
+
     st.markdown(f"**Detected document type:** `{result.doc_type}`")
     st.markdown(
-        signal_ledger_html("Overall Score", result.overall_score, sub=f"{result.doc_type} · 6-dimension rubric"),
+        '<div class="output-tiles{}">{}</div>'.format(
+            _doc_review_animate_class,
+            signal_ledger_html("Overall Score", result.overall_score, sub=f"{result.doc_type} · 6-dimension rubric"),
+        ),
         unsafe_allow_html=True,
     )
 
