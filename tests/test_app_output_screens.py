@@ -94,3 +94,16 @@ def test_doc_review_intro_animated_excluded_from_review_mode_state_keys():
     assert keys_block, "REVIEW_MODE_STATE_KEYS list not found"
     assert "doc_review_intro_animated" not in keys_block.group(1), \
         "doc_review_intro_animated must NOT be added to REVIEW_MODE_STATE_KEYS"
+
+    # Mirror test_cleanup_blocks_do_not_clear_output_intro_animated's
+    # approach exactly: also source-inspect render_sidebar()'s ("Start
+    # Over") and render_strategy()'s ("Generate Another Strategy") own
+    # inline cleanup lists directly, not just the shared
+    # REVIEW_MODE_STATE_KEYS list -- doc_review_intro_animated is a
+    # one-shot entrance-animation flag (same precedent as
+    # review_intro_animated/output_intro_animated/mcp_announcement_seen)
+    # and must never be cleared by either handler.
+    for fn_name in ["render_sidebar", "render_strategy"]:
+        fn = extract_function(source, fn_name)
+        assert '"doc_review_intro_animated"' not in fn, \
+            f"{fn_name}() must NOT clear doc_review_intro_animated"

@@ -97,6 +97,15 @@ def test_build_landing_deliverables_html_contains_all_four_stat_labels():
         assert label in html
 
 
+def test_build_landing_deliverables_html_has_a_pom_readout_eyebrow_label():
+    # Regression guard: this section was the landing screen's only
+    # unlabeled content block after dropping the pre-existing "What you
+    # get in ~2 minutes" markdown heading. Must reuse the .pom-readout
+    # class build_landing_hero_html() already defines, not a new one.
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    assert '<div class="pom-readout">&gt; what you get in ~2 minutes</div>' in html
+
+
 def test_build_landing_deliverables_html_does_not_redefine_the_pom_card_in_keyframe():
     # Regression guard: must reuse the pom-card-in keyframe from
     # build_landing_hero_html() (concatenated into the same document) rather

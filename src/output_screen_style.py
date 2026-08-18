@@ -36,15 +36,17 @@ import html as _html
 def build_output_eyebrow_html(tokens: dict, label: str) -> str:
     """Pure function: token dict + a caller-supplied label -> a mono
     uppercase eyebrow line, reusing the label style
-    interactive_flow_style.py's .dialogue-eyebrow established. `label` is
-    always a hardcoded string from an app.py call site (never user input),
-    so it is not HTML-escaped -- consistent with build_dialogue_header_html()
-    not escaping its own interpolations."""
+    interactive_flow_style.py's .dialogue-eyebrow established. Both current
+    call sites pass a hardcoded string literal (never user input), but
+    `label` is HTML-escaped anyway -- consistent with every sibling builder
+    in this codebase (e.g. build_stage_sequence_html()'s stage labels) that
+    escapes caller-facing text as a matter of course rather than relying on
+    the call site staying trusted forever."""
     return f"""
 <style>
 .output-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.4rem; }}
 </style>
-<div class="output-eyebrow">&gt; {label}</div>
+<div class="output-eyebrow">&gt; {_html.escape(label)}</div>
 """
 
 
@@ -84,14 +86,29 @@ def build_content_polish_css(tokens: dict) -> str:
     [data-testid="stSidebar"] so both rule sets coexist without conflict),
     a themed tab bar, and the .output-tiles score-tile entrance animation.
     Selectors verified against this app's real Streamlit 1.59.1 DOM -- see
-    this module's docstring and tests/test_output_screen_style.py."""
+    this module's docstring and tests/test_output_screen_style.py.
+
+    The hover `color` override is split into its own rule that excludes
+    `type="primary"` buttons (Streamlit 1.59.1 renders the `<button>` itself
+    with `data-testid="stBaseButton-primary"`/`"-secondary"`, confirmed via a
+    live local Streamlit + Playwright DOM probe -- `el.outerHTML` on the
+    landing screen's primary and secondary buttons). Streamlit's default
+    `primaryColor` (#FF4B4B, red) already gives a primary button's label
+    white-on-red contrast; repainting that label to this app's blue accent on
+    hover leaves it barely legible against the still-red fill (~1.56:1 in the
+    light theme, far under WCAG AA's 4.5:1). `border-color` has no such
+    problem and stays unscoped -- it never fights a button's own fill/text
+    contrast. See CLAUDE.md's Gotchas entry on this."""
     return f"""
 <style>
 [data-testid="stMain"] [data-testid="stButton"] button:hover,
 [data-testid="stMain"] [data-testid="stDownloadButton"] button:hover {{
     border-color: {tokens['accent']};
-    color: {tokens['accent']};
     transition: border-color 0.15s ease-out, color 0.15s ease-out;
+}}
+[data-testid="stMain"] [data-testid="stButton"] button:not([data-testid$="-primary"]):hover,
+[data-testid="stMain"] [data-testid="stDownloadButton"] button:not([data-testid$="-primary"]):hover {{
+    color: {tokens['accent']};
 }}
 [data-testid="stMain"] [data-testid="stExpander"] summary:hover {{
     color: {tokens['accent']};
@@ -126,6 +143,10 @@ def build_doc_review_input_tray_css(tokens: dict) -> str:
     belongs to the Phase-2 dialogue screen's per-question cards."""
     return f"""
 <style>
+/* Deliberately kept byte-for-byte in sync with theme.py's .ledger-card
+   background/border/padding/margin block (build_css()) -- update both
+   together if that ruleset ever changes. Not reused directly (see the
+   docstring above: .ledger-card is scoped to the Phase-2 dialogue cards). */
 .st-key-doc-review-input {{
     background: {tokens['surface']};
     border: 1px solid {tokens['line']};

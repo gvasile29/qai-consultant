@@ -1,6 +1,7 @@
 """Tests for src/output_screen_style.py -- Phase 3 output-screen styling,
 shared by render_strategy() and render_doc_review(). See
 docs/superpowers/specs/2026-08-17-output-screens-power-on-redesign-design.md."""
+import re
 import sys
 from pathlib import Path
 
@@ -64,6 +65,29 @@ def test_content_polish_css_scopes_buttons_and_expanders_to_main_not_sidebar():
     assert '[data-testid="stMain"]' in html
     assert '[data-testid="stSidebar"]' not in html
     assert LIGHT_TOKENS["accent"] in html
+
+
+def test_content_polish_css_scopes_hover_color_away_from_primary_buttons():
+    # Regression guard: Streamlit's default primaryColor is red (#FF4B4B)
+    # with a white label; repainting a primary button's label to this app's
+    # blue accent on hover leaves near-illegible contrast against the still-
+    # red fill. border-color has no such conflict and stays unscoped; the
+    # `color` override must exclude buttons whose real rendered <button>
+    # carries data-testid="stBaseButton-primary" (confirmed via a live
+    # Streamlit + Playwright DOM probe -- see this module's docstring).
+    html = build_content_polish_css(LIGHT_TOKENS)
+    assert 'button:not([data-testid$="-primary"]):hover {' in html
+    color_rule_start = html.index('button:not([data-testid$="-primary"]):hover {')
+    color_rule_body = html[color_rule_start:html.index("}", color_rule_start)]
+    assert "color:" in color_rule_body
+    assert "border-color:" not in color_rule_body
+
+    border_rule_start = html.index("button:hover,")
+    border_rule_body = html[border_rule_start:html.index("}", border_rule_start)]
+    assert "border-color:" in border_rule_body
+    # A bare "color:" declaration (not "border-color:", and not the word
+    # "color" inside the transition property list) must NOT be present here.
+    assert not re.search(r"(?<!-)color:\s*#", border_rule_body)
 
 
 def test_content_polish_css_styles_the_active_tab_indicator():

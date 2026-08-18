@@ -133,7 +133,14 @@ def build_landing_deliverables_html(tokens: dict) -> str:
     .pom-card/.pom-cidx/.pom-ctitle/.pom-cbody classes and pom-card-in
     keyframe (defined in that function's <style> block, always rendered
     first on the same screen by render_intro()) rather than redefining
-    them. Directly unit-testable -- see tests/test_landing_hero.py."""
+    them. Directly unit-testable -- see tests/test_landing_hero.py.
+
+    Opens with a ".pom-readout" mono eyebrow line (the same class
+    build_landing_hero_html() defines and uses for its own "calibration
+    sequence" line, always rendered first on the same screen) -- without
+    it this was the landing screen's only unlabeled content block, having
+    dropped the pre-existing "#### 🎯 What you get in ~2 minutes" markdown
+    heading with nothing replacing it."""
     deliverables = [
         ("⚠️", "Risk Register", "Prioritized risks with likelihood, impact &amp; mitigation — before a single line of code is written."),
         ("📊", "Effort Estimation", "PERT-based timeline with team capacity analysis and a confidence score (0–100)."),
@@ -181,6 +188,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
   }}
 }}
 </style>
+<div class="pom-readout">&gt; what you get in ~2 minutes</div>
 <div class="pom-deliverables">{deliverable_cards}</div>
 <div class="pom-stats">{stat_tiles}</div>
 """
