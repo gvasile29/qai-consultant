@@ -69,3 +69,28 @@ def test_cleanup_blocks_do_not_clear_output_intro_animated():
         fn_without_read_call = fn.replace('st.session_state.get("output_intro_animated")', "")
         assert '"output_intro_animated"' not in fn_without_read_call, \
             f"{fn_name}() must NOT clear output_intro_animated"
+
+
+def test_render_doc_review_uses_the_new_style_builders():
+    fn = extract_function(read_app_source(), "render_doc_review")
+    assert "build_output_eyebrow_html" in fn
+    assert "build_content_polish_css" in fn
+    assert "build_doc_review_input_tray_css" in fn
+
+
+def test_render_doc_review_wraps_intake_widgets_in_keyed_container():
+    fn = extract_function(read_app_source(), "render_doc_review")
+    assert 'st.container(key="doc-review-input")' in fn
+
+
+def test_render_doc_review_sets_doc_review_intro_animated():
+    fn = extract_function(read_app_source(), "render_doc_review")
+    assert "st.session_state.doc_review_intro_animated = True" in fn
+
+
+def test_doc_review_intro_animated_excluded_from_review_mode_state_keys():
+    source = read_app_source()
+    keys_block = re.search(r"REVIEW_MODE_STATE_KEYS = \[(.*?)\]", source, re.DOTALL)
+    assert keys_block, "REVIEW_MODE_STATE_KEYS list not found"
+    assert "doc_review_intro_animated" not in keys_block.group(1), \
+        "doc_review_intro_animated must NOT be added to REVIEW_MODE_STATE_KEYS"

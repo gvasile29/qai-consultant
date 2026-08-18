@@ -1184,6 +1184,12 @@ def render_doc_review():
     render_strategy()'s save/PDF conventions."""
     MAX_RUNS_PER_SESSION = 3  # mirrors render_strategy()'s per-session cap — narrative is an LLM call
 
+    from output_screen_style import build_content_polish_css, build_output_eyebrow_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
+
+    _doc_review_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(build_content_polish_css(_doc_review_tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(_doc_review_tokens, "document review sequence"), unsafe_allow_html=True)
     st.markdown("## 📝 Review an Existing QA Document")
     st.markdown(
         "Upload or paste a Test Plan, Test Strategy, or test case list for a "
@@ -1192,21 +1198,25 @@ def render_doc_review():
     st.markdown("---")
 
     if st.session_state.get("review_result") is None:
-        label = st.selectbox(
-            "Document type",
-            options=[label for label, _ in _REVIEW_DOC_TYPE_OPTIONS],
-            index=0,
-            key="review_doc_type_select",
-        )
-        doc_type = dict(_REVIEW_DOC_TYPE_OPTIONS)[label]
+        from output_screen_style import build_doc_review_input_tray_css
+        st.markdown(build_doc_review_input_tray_css(_doc_review_tokens), unsafe_allow_html=True)
 
-        uploaded = st.file_uploader(
-            "Upload a document (.md, .txt)", type=["md", "txt"], key="review_doc_uploader",
-        )
-        st.caption("...or paste the document text below")
-        pasted = st.text_area(
-            "Document text", key="review_doc_pasted_text", height=300, label_visibility="collapsed",
-        )
+        with st.container(key="doc-review-input"):
+            label = st.selectbox(
+                "Document type",
+                options=[label for label, _ in _REVIEW_DOC_TYPE_OPTIONS],
+                index=0,
+                key="review_doc_type_select",
+            )
+            doc_type = dict(_REVIEW_DOC_TYPE_OPTIONS)[label]
+
+            uploaded = st.file_uploader(
+                "Upload a document (.md, .txt)", type=["md", "txt"], key="review_doc_uploader",
+            )
+            st.caption("...or paste the document text below")
+            pasted = st.text_area(
+                "Document text", key="review_doc_pasted_text", height=300, label_visibility="collapsed",
+            )
 
         document_text = ""
         source_label = "Document"
@@ -1247,9 +1257,15 @@ def render_doc_review():
 
     from ledger_components import signal_ledger_html
 
+    _doc_review_animate_class = " animate" if not st.session_state.get("doc_review_intro_animated") else ""
+    st.session_state.doc_review_intro_animated = True
+
     st.markdown(f"**Detected document type:** `{result.doc_type}`")
     st.markdown(
-        signal_ledger_html("Overall Score", result.overall_score, sub=f"{result.doc_type} · 6-dimension rubric"),
+        '<div class="output-tiles{}">{}</div>'.format(
+            _doc_review_animate_class,
+            signal_ledger_html("Overall Score", result.overall_score, sub=f"{result.doc_type} · 6-dimension rubric"),
+        ),
         unsafe_allow_html=True,
     )
 
