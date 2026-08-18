@@ -392,35 +392,8 @@ def render_intro():
 
     st.markdown("---")
 
-    st.markdown("#### 🎯 What you get in ~2 minutes")
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        st.success(
-            "⚠️ **Risk Register**\n\n"
-            "Prioritized risks with likelihood, impact & mitigation — before a single line of code is written."
-        )
-    with d2:
-        st.success(
-            "📊 **Effort Estimation**\n\n"
-            "PERT-based timeline with team capacity analysis and a confidence score (0–100)."
-        )
-    with d3:
-        st.success(
-            "📋 **Test Strategy**\n\n"
-            "ISTQB-aligned approach tailored to your stack, methodology, and compliance requirements."
-        )
-    d4, = st.columns(1)
-    with d4:
-        st.success(
-            "📝 **Test Plan**\n\n"
-            "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."
-        )
-
-    e1, e2, e3, e4 = st.columns(4)
-    e1.metric("⏱️ Time to results", "~2 min", "vs. hours of manual work")
-    e2.metric("📚 Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors")
-    e3.metric("📄 Deliverables", "4 documents", "Risk · Effort · Strategy · Plan")
-    e4.metric("💰 Cost", "Free", "No sign-up required")
+    from landing_hero import build_landing_deliverables_html
+    st.markdown(build_landing_deliverables_html(_hero_tokens), unsafe_allow_html=True)
 
     st.markdown("---")
 

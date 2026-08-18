@@ -10,6 +10,7 @@ sys.path.insert(0, str(SRC_DIR))
 
 from theme import LIGHT_TOKENS, DARK_TOKENS  # noqa: E402
 from landing_hero import build_landing_hero_html  # noqa: E402
+from landing_hero import build_landing_deliverables_html  # noqa: E402
 
 
 def test_build_landing_hero_html_uses_the_given_tokens_not_a_hardcoded_theme():
@@ -73,3 +74,51 @@ def test_build_landing_hero_html_relies_on_theme_global_rule_for_duration():
     # still exists so this reliance stays valid.
     from theme import build_css
     assert "prefers-reduced-motion" in build_css(LIGHT_TOKENS)
+
+
+def test_build_landing_deliverables_html_uses_the_given_tokens_not_a_hardcoded_theme():
+    light_html = build_landing_deliverables_html(LIGHT_TOKENS)
+    dark_html = build_landing_deliverables_html(DARK_TOKENS)
+    assert LIGHT_TOKENS["ink"] in light_html
+    assert DARK_TOKENS["ink"] not in light_html
+    assert DARK_TOKENS["ink"] in dark_html
+    assert LIGHT_TOKENS["ink"] not in dark_html
+
+
+def test_build_landing_deliverables_html_contains_all_four_deliverable_titles():
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    for title in ["Risk Register", "Effort Estimation", "Test Strategy", "Test Plan"]:
+        assert title in html
+
+
+def test_build_landing_deliverables_html_contains_all_four_stat_labels():
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    for label in ["Time to results", "Standards", "Deliverables", "Cost"]:
+        assert label in html
+
+
+def test_build_landing_deliverables_html_does_not_redefine_the_pom_card_in_keyframe():
+    # Regression guard: must reuse the pom-card-in keyframe from
+    # build_landing_hero_html() (concatenated into the same document) rather
+    # than redefining it -- a silent duplicate would be easy to miss since
+    # CSS allows redeclaring the same @keyframes name without error.
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    assert "@keyframes pom-card-in" not in html
+
+
+def test_build_landing_deliverables_html_delay_rules_are_scoped_under_pom_deliverables():
+    # Regression guard: nth-child delay overrides must be scoped under
+    # .pom-deliverables, never a bare ".pom-card:nth-child(...)" rule, which
+    # would also match (and fight with) the "How it works" cards' own delay
+    # rules defined in build_landing_hero_html().
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    for line in html.splitlines():
+        if ".pom-card:nth-child" in line:
+            assert ".pom-deliverables" in line, \
+                f"Found a bare (unscoped) .pom-card:nth-child rule: {line!r}"
+
+
+def test_build_landing_deliverables_html_zeroes_animation_delay_for_reduced_motion():
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    assert "@media (prefers-reduced-motion: reduce)" in html
+    assert "animation-delay: 0s !important" in html
