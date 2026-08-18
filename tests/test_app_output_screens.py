@@ -51,6 +51,21 @@ def test_render_strategy_calls_render_stages_before_and_after_each_stage():
         assert f'_render_stages(active_key="{key}")' in fn
 
 
+def test_render_stages_distinguishes_failed_from_done():
+    # Regression guard: each stage's except handler sets its session-state
+    # key to "" (not None) on an LLM failure. _render_stages() must not
+    # treat that as "done" -- a bare `is not None` check would, since
+    # "" is not None is True, showing green success next to the stage's
+    # own red st.error() message during exactly the LLM-outage scenario
+    # the per-stage try/except exists to survive.
+    fn = extract_function(read_app_source(), "render_strategy")
+    assert '"done"' in fn
+    assert '"failed"' in fn
+    assert "if value:" in fn, \
+        "_render_stages() must branch on truthiness (`if value:`), not `is not None`, " \
+        "to tell a real result apart from a failed stage's \"\" sentinel"
+
+
 def test_render_strategy_sets_output_intro_animated():
     fn = extract_function(read_app_source(), "render_strategy")
     assert "st.session_state.output_intro_animated = True" in fn

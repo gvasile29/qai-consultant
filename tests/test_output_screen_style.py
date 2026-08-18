@@ -42,6 +42,20 @@ def test_stage_sequence_renders_all_stage_labels_with_correct_status_class():
     assert html.count('<div class="stage-item pending">') == 2
 
 
+def test_stage_sequence_renders_a_failed_stage_with_the_fail_token_not_pass():
+    # Regression guard: a stage whose LLM call failed must render visibly
+    # distinct from a genuinely completed one -- render_strategy()'s
+    # per-stage except handler sets the session-state key to "" (not None)
+    # on failure, and _render_stages() must map that to "failed", not
+    # "done", or the live status readout would show green success right
+    # next to its own red st.error message.
+    html = build_stage_sequence_html(LIGHT_TOKENS, [("Risk", "failed")])
+    assert '<div class="stage-item failed">' in html
+    assert '<div class="stage-item done">' not in html
+    assert ".stage-item.failed { color:" in html
+    assert LIGHT_TOKENS["fail"] in html
+
+
 def test_stage_sequence_defines_the_pulse_animation_for_active_dots():
     html = build_stage_sequence_html(LIGHT_TOKENS, [("Risk", "active")])
     assert "@keyframes stage-pulse" in html

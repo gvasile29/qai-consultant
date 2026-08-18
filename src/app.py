@@ -727,8 +727,14 @@ def render_strategy():
         ]
         stages = []
         for label, key in order:
-            if st.session_state.get(key) is not None:
+            value = st.session_state.get(key)
+            if value:
                 stages.append((label, "done"))
+            elif value is not None:
+                # Present but falsy ("") -- the per-stage except handler
+                # below sets this on an LLM failure, distinct from a stage
+                # that simply hasn't run yet (still None).
+                stages.append((label, "failed"))
             elif key == active_key:
                 stages.append((label, "active"))
             else:

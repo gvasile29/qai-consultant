@@ -52,12 +52,21 @@ def build_output_eyebrow_html(tokens: dict, label: str) -> str:
 
 def build_stage_sequence_html(tokens: dict, stages: list) -> str:
     """Pure function: token dict + an ordered list of (label, status)
-    tuples (status is "pending", "active", or "done") -> a horizontal
-    stage-status readout. Used only by render_strategy(). Not gated by any
-    session-state "seen" flag: it is a live status readout driven by
-    whichever stages are already in session_state, not a mount animation,
-    so it must render correctly every time it is called, regardless of how
-    many times the screen has been shown before."""
+    tuples (status is "pending", "active", "done", or "failed") -> a
+    horizontal stage-status readout. Used only by render_strategy(). Not
+    gated by any session-state "seen" flag: it is a live status readout
+    driven by whichever stages are already in session_state, not a mount
+    animation, so it must render correctly every time it is called,
+    regardless of how many times the screen has been shown before.
+
+    "failed" exists because render_strategy()'s per-stage try/except sets
+    a stage's session-state key to "" (not None) when its LLM call fails,
+    so the stage stays present-but-empty rather than reverting to unset --
+    the caller (_render_stages() in app.py) must distinguish that from a
+    real result and pass "failed", not "done", or this live status readout
+    would falsely show green success next to its own red st.error message,
+    exactly during the LLM-outage scenario the try/except exists to
+    survive (found in code review of v3.4.3's final diff)."""
     items = "".join(
         f'<div class="stage-item {status}"><span class="stage-dot"></span>{_html.escape(label)}</div>'
         for label, status in stages
@@ -72,6 +81,8 @@ def build_stage_sequence_html(tokens: dict, stages: list) -> str:
 .stage-item.active .stage-dot {{ background: {tokens['accent']}; animation: stage-pulse 1.2s ease-in-out infinite; }}
 .stage-item.done {{ color: {tokens['ink']}; border-color: {tokens['pass_']}; }}
 .stage-item.done .stage-dot {{ background: {tokens['pass_']}; }}
+.stage-item.failed {{ color: {tokens['ink']}; border-color: {tokens['fail']}; }}
+.stage-item.failed .stage-dot {{ background: {tokens['fail']}; }}
 @keyframes stage-pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.35; }} }}
 </style>
 <div class="stage-sequence">{items}</div>
