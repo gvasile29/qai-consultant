@@ -121,3 +121,74 @@ def build_landing_hero_html(tokens: dict) -> str:
   </div>
 </div>
 """
+
+
+def build_landing_deliverables_html(tokens: dict) -> str:
+    """Pure function: token dict -> the "What you get in ~2 minutes"
+    deliverable cards + stat tiles HTML block. A Phase-3 addendum (folded
+    into the Phase 3 spec at the user's request, though it's landing-screen
+    content) finishing what Phase 1 left native Streamlit. Continues
+    build_landing_hero_html()'s "How it works" cards' visual language and
+    animation-delay cadence (which ends at 2.0s) -- reuses the existing
+    .pom-card/.pom-cidx/.pom-ctitle/.pom-cbody classes and pom-card-in
+    keyframe (defined in that function's <style> block, always rendered
+    first on the same screen by render_intro()) rather than redefining
+    them. Directly unit-testable -- see tests/test_landing_hero.py.
+
+    Opens with a ".pom-readout" mono eyebrow line (the same class
+    build_landing_hero_html() defines and uses for its own "calibration
+    sequence" line, always rendered first on the same screen) -- without
+    it this was the landing screen's only unlabeled content block, having
+    dropped the pre-existing "#### 🎯 What you get in ~2 minutes" markdown
+    heading with nothing replacing it."""
+    deliverables = [
+        ("⚠️", "Risk Register", "Prioritized risks with likelihood, impact &amp; mitigation — before a single line of code is written."),
+        ("📊", "Effort Estimation", "PERT-based timeline with team capacity analysis and a confidence score (0–100)."),
+        ("📋", "Test Strategy", "ISTQB-aligned approach tailored to your stack, methodology, and compliance requirements."),
+        ("📝", "Test Plan", "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."),
+    ]
+    stats = [
+        ("Time to results", "~2 min", "vs. hours of manual work"),
+        ("Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors"),
+        ("Deliverables", "4 documents", "Risk · Effort · Strategy · Plan"),
+        ("Cost", "Free", "No sign-up required"),
+    ]
+    deliverable_cards = "".join(
+        f'<div class="pom-card"><div class="pom-cidx">{icon}</div>'
+        f'<div class="pom-ctitle">{title}</div><div class="pom-cbody">{body}</div></div>'
+        for icon, title, body in deliverables
+    )
+    deliverable_delay_rules = "\n".join(
+        f".pom-deliverables .pom-card:nth-child({i}) {{ animation-delay: {2.15 + (i - 1) * 0.15:.2f}s; }}"
+        for i in range(1, len(deliverables) + 1)
+    )
+    stat_tiles = "".join(
+        f'<div class="pom-stat"><div class="pom-slabel">{label}</div>'
+        f'<div class="pom-svalue">{value}</div><div class="pom-ssub">{sub}</div></div>'
+        for label, value, sub in stats
+    )
+    stat_delay_rules = "\n".join(
+        f".pom-stats .pom-stat:nth-child({i}) {{ animation-delay: {2.85 + (i - 1) * 0.1:.2f}s; }}"
+        for i in range(1, len(stats) + 1)
+    )
+    return f"""
+<style>
+.pom-deliverables {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; margin-bottom: 1.6rem; }}
+@media (max-width: 640px) {{ .pom-deliverables {{ grid-template-columns: 1fr; }} }}
+{deliverable_delay_rules}
+.pom-stats {{ display: flex; gap: 1.4rem; flex-wrap: wrap; }}
+.pom-stat {{ opacity: 0; animation: pom-card-in 0.5s ease-out both; }}
+{stat_delay_rules}
+.pom-stat .pom-slabel {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.25rem; }}
+.pom-stat .pom-svalue {{ font-family: 'Plex Mono', monospace; font-size: 1.1rem; font-weight: 500; color: {tokens['ink']}; }}
+.pom-stat .pom-ssub {{ font-family: 'Plex Sans', sans-serif; font-size: 0.72rem; color: {tokens['ink_dim']}; }}
+@media (prefers-reduced-motion: reduce) {{
+  .pom-deliverables .pom-card, .pom-stat {{
+    animation-delay: 0s !important;
+  }}
+}}
+</style>
+<div class="pom-readout">&gt; what you get in ~2 minutes</div>
+<div class="pom-deliverables">{deliverable_cards}</div>
+<div class="pom-stats">{stat_tiles}</div>
+"""
