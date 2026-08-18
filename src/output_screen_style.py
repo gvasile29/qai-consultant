@@ -155,7 +155,7 @@ def build_doc_review_input_tray_css(tokens: dict) -> str:
     return f"""
 <style>
 /* Deliberately kept byte-for-byte in sync with theme.py's .ledger-card
-   background/border/padding/margin block (build_css()) -- update both
+   background/border/padding/margin block (build_css()) -- edit both
    together if that ruleset ever changes. Not reused directly (see the
    docstring above: .ledger-card is scoped to the Phase-2 dialogue cards). */
 .st-key-doc-review-input {{
