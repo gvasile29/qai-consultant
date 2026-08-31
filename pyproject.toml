@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qai-consultant-mcp"
-version = "3.4.3"
+version = "3.4.4"
 description = "Local, keyless MCP server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, and test-results health analysis."
 readme = "README_MCP.md"
 requires-python = ">=3.10"
@@ -21,13 +21,122 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+# Full transitive lock, not just the 6 direct imports: exact-pinning only the
+# direct deps (v3.3.1) left every indirect one (scipy, scikit-learn, numpy,
+# transformers, ...) free to pick up a new upstream release between two
+# launches, forcing uv to re-resolve/reinstall on the next `uvx` start. That's
+# exactly what happened 2026-08-31 -- scikit-learn pulled in a scipy release
+# uv hadn't cached yet, and the 35MB download alone pushed a cold start past
+# Claude Desktop's ~60s initialize timeout, with the client's cancel-on-timeout
+# aborting the install mid-extraction so the wheel never even reached the
+# permanent cache -- every subsequent launch repeated the same failed download.
+# Generated via `uv pip compile pyproject.toml --universal --python-version
+# 3.10 --extra-index-url https://download.pytorch.org/whl/cpu`; regenerate the
+# same way (against the *previous* pinned set, so drift is deliberate) when a
+# direct dependency needs a version bump. `torch` sits in its normal
+# alphabetical spot below with no environment marker -- unlike scipy/numpy/etc.,
+# its per-platform build (`+cpu` vs. plain) is already selected via
+# [tool.uv.sources]'s scoped index, so the plain version pin is sufficient.
 dependencies = [
-    "mcp==1.28.1",
-    "langchain-community==0.4.2",
-    "sentence-transformers==2.7.0",
-    "platformdirs==4.11.0",
-    "torch==2.13.0",
+    "aiohappyeyeballs==2.7.1",
+    "aiohttp==3.14.3",
+    "aiosignal==1.4.0",
+    "annotated-types==0.8.0",
+    "anyio==4.14.2",
+    "async-timeout==4.0.3 ; python_full_version < '3.11'",
+    "attrs==26.1.0",
+    "certifi==2026.7.22",
+    "cffi==2.1.1 ; platform_python_implementation != 'PyPy'",
+    "charset-normalizer==3.5.1",
+    "click==8.5.0 ; sys_platform != 'emscripten'",
+    "cloudpickle==3.1.2",
+    "colorama==0.4.6 ; sys_platform == 'win32'",
+    "cryptography==50.0.1",
     "defusedxml==0.7.1",
+    "distro==1.9.0",
+    "exceptiongroup==1.3.1 ; python_full_version < '3.11'",
+    "filelock==3.32.4",
+    "frozenlist==1.8.0",
+    "fsspec==2026.7.0",
+    "greenlet==3.5.5 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'",
+    "h11==0.16.0",
+    "hf-xet==1.6.0 ; platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'",
+    "httpcore==1.0.9",
+    "httpx==0.28.1",
+    "httpx-sse==0.4.3",
+    "huggingface-hub==0.36.2",
+    "idna==3.19",
+    "jinja2==3.1.6",
+    "joblib==1.6.0",
+    "jsonpatch==1.33",
+    "jsonpointer==3.1.1",
+    "jsonschema==4.26.0",
+    "jsonschema-specifications==2025.9.1",
+    "langchain-classic==1.0.8",
+    "langchain-community==0.4.2",
+    "langchain-core==1.6.1",
+    "langchain-protocol==0.0.19",
+    "langchain-text-splitters==1.1.2",
+    "langsmith==0.11.2",
+    "markupsafe==3.0.3",
+    "mcp==1.28.1",
+    "mpmath==1.3.0",
+    "multidict==6.7.1",
+    "narwhals==2.25.0 ; python_full_version >= '3.11'",
+    "networkx==3.4.2 ; python_full_version < '3.11'",
+    "networkx==3.6.1 ; python_full_version >= '3.11'",
+    "numpy==2.2.6 ; python_full_version < '3.11'",
+    "numpy==2.4.6 ; python_full_version == '3.11.*'",
+    "numpy==2.5.2 ; python_full_version >= '3.12'",
+    "orjson==3.12.0 ; platform_python_implementation != 'PyPy'",
+    "packaging==26.3",
+    "pillow==12.3.0",
+    "platformdirs==4.11.0",
+    "propcache==0.5.2",
+    "pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'",
+    "pydantic==2.13.5",
+    "pydantic-core==2.46.5",
+    "pydantic-settings==2.15.0",
+    "pyjwt==2.13.0",
+    "python-dotenv==1.2.3",
+    "python-multipart==0.0.32",
+    "pywin32==312 ; sys_platform == 'win32'",
+    "pyyaml==6.0.3",
+    "referencing==0.37.0",
+    "regex==2026.8.31",
+    "requests==2.34.2",
+    "requests-toolbelt==1.0.0",
+    "rpds-py==0.30.0 ; python_full_version < '3.11'",
+    "rpds-py==2026.6.3 ; python_full_version >= '3.11'",
+    "safetensors==0.8.0",
+    "scikit-learn==1.7.2 ; python_full_version < '3.11'",
+    "scikit-learn==1.9.0 ; python_full_version >= '3.11'",
+    "scipy==1.15.3 ; python_full_version < '3.11'",
+    "scipy==1.17.1 ; python_full_version == '3.11.*'",
+    "scipy==1.18.1 ; python_full_version >= '3.12'",
+    "sentence-transformers==2.7.0",
+    "setuptools==84.0.0",
+    "sniffio==1.3.1",
+    "sqlalchemy==2.0.52",
+    "sse-starlette==3.4.8",
+    "starlette==1.6.0",
+    "sympy==1.14.0",
+    "tenacity==9.1.4",
+    "threadpoolctl==3.6.0",
+    "tokenizers==0.22.2",
+    "torch==2.13.0",
+    "tqdm==4.70.0",
+    "transformers==4.57.6",
+    "typing-extensions==4.16.0",
+    "typing-inspection==0.4.4",
+    "urllib3==2.7.0",
+    "uuid-utils==0.17.0",
+    "uvicorn==0.52.4 ; sys_platform != 'emscripten'",
+    "websockets==16.1.1 ; python_full_version < '3.11'",
+    "websockets==17.1 ; python_full_version >= '3.11'",
+    "xxhash==4.0.1",
+    "yarl==1.24.5",
+    "zstandard==0.25.0",
 ]
 
 [project.urls]
