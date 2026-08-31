@@ -3,6 +3,34 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.4.4] - 2026-08-31
+
+### Fixed
+- `qai-consultant-mcp` could once again silently fail to attach in Claude
+  Desktop, even on a machine that had connected successfully before — a
+  different trigger from the v3.1.5/v3.1.6/v3.3.1 incidents, but the same
+  underlying class of problem. Root cause: v3.3.1 exact-pinned only the 6
+  *direct* runtime dependencies; every dependency those pull in transitively
+  (scipy, scikit-learn, numpy, transformers, and ~85 others) stayed
+  unpinned. On 2026-08-31, `scikit-learn` (pulled in by `sentence-transformers`)
+  resolved to a scipy release `uv` hadn't cached yet; the resulting 35MB
+  download, stacked on the already-known ~20-25s embedding-import cost,
+  pushed a cold start past Claude Desktop's ~60s `initialize` timeout. Worse,
+  the client's cancel-on-timeout killed the install mid-extraction before the
+  wheel could be promoted into the permanent `uv` cache, so every subsequent
+  launch repeated the exact same failed download — a self-sustaining failure
+  loop that a simple retry or a Claude Desktop restart could not escape.
+  Fixed by exact-pinning the *entire* resolved dependency tree (~99 entries,
+  including per-Python-version variants for packages like numpy/scipy/
+  scikit-learn that need a different exact version on 3.10 vs. 3.11 vs. 3.12),
+  generated via `uv pip compile --universal` and embedded directly in
+  `pyproject.toml`'s `dependencies` — the only place a pin can reach
+  `uvx qai-consultant-mcp`, since a committed `uv.lock` never travels with the
+  published PyPI package. `tests/test_packaging.py`'s exact-pin guard now
+  accepts a trailing PEP 508 environment marker after the `==` pin, needed for
+  those per-Python-version entries. Closes the "residual, not closed" gap
+  flagged in the v3.3.1 entry below.
+
 ## [3.4.3] - 2026-08-18
 
 ### Changed

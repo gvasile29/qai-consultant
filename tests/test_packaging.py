@@ -63,6 +63,17 @@ def test_all_dependencies_are_exact_pinned():
     silent attach failure. See the MCP dependency-pinning gotcha in
     CLAUDE.md for the incident this guards against.
 
+    Since v3.4.4 the list is a full transitive lock (~99 entries, generated
+    via `uv pip compile --universal`), not just the 6 direct imports -- a
+    2026-08-31 incident showed an unpinned *transitive* dep (scipy, pulled
+    in by scikit-learn) can reintroduce the exact same failure even with
+    every direct dependency exact-pinned. A trailing PEP 508 environment
+    marker (`; python_full_version < '3.11'` etc.) is allowed after the
+    `==` pin -- some transitive deps genuinely need a different exact
+    version per Python version/platform (e.g. numpy/scipy/scikit-learn each
+    appear 2-3 times, once per supported Python minor version) -- but the
+    version itself must still be an exact `==` pin, never a range.
+
     Parsed as plain text/regex, not a TOML library, since CI's Python
     3.10 matrix entry has no stdlib `tomllib` and this repo doesn't
     otherwise depend on a TOML parser.
@@ -78,7 +89,7 @@ def test_all_dependencies_are_exact_pinned():
     ]
     assert entries, "Parsed dependencies list from pyproject.toml is empty"
 
-    pin_pattern = re.compile(r"^[A-Za-z0-9_.-]+==[\w.]+$")
+    pin_pattern = re.compile(r"^[A-Za-z0-9_.-]+==[\w.+]+(\s*;\s*.+)?$")
     unpinned = [entry for entry in entries if not pin_pattern.match(entry)]
     assert not unpinned, (
         f"These dependencies are not exact-pinned with '==': {unpinned}. "
