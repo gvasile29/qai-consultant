@@ -6,7 +6,7 @@ langchain-core==1.4.9
 langchain-community==0.4.2
 langchain-text-splitters==1.1.2
 sentence-transformers==5.2.0
-transformers==5.5.0
+transformers==5.10.1
 pypdf==6.14.2
 python-dotenv==1.2.2
 markdown==3.8.1

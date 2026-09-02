@@ -126,7 +126,7 @@ dependencies = [
     "tokenizers==0.22.2",
     "torch==2.13.0",
     "tqdm==4.70.0",
-    "transformers==4.57.6",
+    "transformers==5.10.1",
     "typing-extensions==4.16.0",
     "typing-inspection==0.4.4",
     "urllib3==2.7.0",
