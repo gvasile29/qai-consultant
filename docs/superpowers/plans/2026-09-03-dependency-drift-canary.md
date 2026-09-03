@@ -497,7 +497,9 @@ git commit -m "feat: add weekly dependency drift canary workflow"
 
 - [ ] **Step 5: After merging to master, trigger a manual dry run**
 
-Via the GitHub UI (Actions tab → "Dependency Drift Canary" → "Run workflow") or `gh workflow run dependency-drift-check.yml`. Confirm it completes green with no PR opened (the pins should still be current immediately after merge). This is the spec's required manual verification before relying on the weekly schedule — do not skip it.
+Via the GitHub UI (Actions tab → "Dependency Drift Canary" → "Run workflow") or `gh workflow run dependency-drift-check.yml`.
+
+**Known finding from Task 1's implementation (verified independently, not a bug in the script):** a live `uv pip compile` run against the current `pyproject.toml` already reports real drift on `torch` — the committed pin is a single `torch==2.13.0` with no marker, but a correct `--universal` resolution splits it into `torch==2.13.0 ; sys_platform == 'darwin'` and `torch==2.13.0+cpu ; sys_platform != 'darwin'`, because `[tool.uv.sources]` routes `torch` to an explicit index (`pytorch-cpu`) that has no macOS wheels. This pre-existing staleness predates this plan. So: **do not expect a silent no-op on this first dry run.** Expect the workflow to legitimately open a PR regenerating the `torch` pin (among the rest of the array) — this is the canary working correctly, catching a real, previously-undetected gap. Review that PR like any other output of this workflow (human-reviewed merge, per the Global Constraints — no auto-merge). If instead the run reports no drift at all, that's fine too (something may have changed upstream since this was written) — either outcome is an acceptable pass for this verification step; only a workflow *failure* (red job, not a PR) would indicate something is actually wrong with this task's implementation.
 
 ---
 
