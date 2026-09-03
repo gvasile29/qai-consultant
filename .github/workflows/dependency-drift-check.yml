@@ -53,7 +53,7 @@ jobs:
           python scripts/check_dependency_drift.py --write --compiled /tmp/compiled.txt
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          BRANCH="deps/drift-canary-$(date -u +%Y%m%d)"
+          BRANCH="deps/drift-canary-$(date -u +%Y%m%d-%H%M%S)"
           git checkout -b "$BRANCH"
           git add pyproject.toml
           git commit -m "chore: regenerate MCP dependency pins (drift canary)"

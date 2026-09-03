@@ -105,12 +105,15 @@ Three possible outcomes:
 - **Compile succeeds but output differs** from the committed
   `dependencies` array. The workflow creates a branch, writes the
   regenerated array back into `pyproject.toml`, commits, pushes, and
-  opens a PR via `gh pr create`. The repo's existing `ci.yml` runs
-  automatically against that PR (including
-  `test_all_dependencies_are_exact_pinned`) since it triggers on
-  `pull_request: branches: [main, master]` — this workflow does not
-  duplicate those checks. The PR requires normal human review/merge;
-  nothing here auto-merges.
+  opens a PR via `gh pr create`. The PR is opened using the default
+  `GITHUB_TOKEN`; GitHub Actions does not cascade new workflow runs
+  from `GITHUB_TOKEN`-authored events (a documented anti-recursion
+  restriction), so `ci.yml` does NOT auto-trigger on this PR. The PR
+  body includes an explicit note instructing the reviewer to close
+  and reopen the PR (or push an empty commit) to trigger CI before
+  merging — this workflow does not duplicate those checks itself, but
+  the human review step must not skip triggering them. The PR
+  requires normal human review/merge; nothing here auto-merges.
 - **Output matches exactly.** No-op: job succeeds quietly, no PR, no
   noise. Expected outcome most weeks.
 

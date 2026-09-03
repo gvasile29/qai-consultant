@@ -165,6 +165,36 @@ def test_main_write_mode_updates_pyproject_and_exits_zero(tmp_path, monkeypatch)
     assert "anyio==4.14.2" not in written
 
 
+def test_main_check_mode_refuses_partial_parse(tmp_path, monkeypatch, capsys):
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(SAMPLE_PYPROJECT, encoding="utf-8")
+    compiled_path = tmp_path / "compiled.txt"
+    # "celery[redis]==5.0.0" is a real PEP 508 extras-style requirement line
+    # that _COMPILED_LINE_RE cannot match -- it must not be silently dropped.
+    compiled_path.write_text(
+        "anyio==4.14.2\ncelery[redis]==5.0.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(drift, "PYPROJECT_PATH", pyproject_path)
+
+    exit_code = drift.main(["--check", "--compiled", str(compiled_path)])
+
+    assert exit_code == 1
+    stderr = capsys.readouterr().err
+    assert "1 of 2 requirement lines" in stderr
+    assert "could not be parsed" in stderr
+    # Verify pyproject.toml was not touched
+    assert pyproject_path.read_text(encoding="utf-8") == SAMPLE_PYPROJECT
+
+
+def test_real_pyproject_round_trips_byte_identically():
+    text = drift.PYPROJECT_PATH.read_text(encoding="utf-8")
+    entries = drift.parse_pyproject_dependencies(text)
+    assert len(entries) > 50
+    match = drift._DEPENDENCIES_BLOCK_RE.search(text)
+    assert drift.format_dependencies_block(entries) == "dependencies = [" + match.group(1) + "]"
+
+
 def test_main_write_mode_refuses_empty_compiled_input(tmp_path, monkeypatch, capsys):
     pyproject_path = tmp_path / "pyproject.toml"
     original_content = SAMPLE_PYPROJECT

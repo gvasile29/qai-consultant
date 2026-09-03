@@ -84,8 +84,16 @@ def diff_dependencies(current: list[str], compiled: list[str]) -> tuple[list[str
 
 
 def format_dependencies_block(entries: list[str]) -> str:
-    """Render entries into the same `dependencies = [...]` shape already in pyproject.toml."""
-    lines = ",\n".join(f'    "{entry}"' for entry in sorted(entries))
+    """Render entries into the same `dependencies = [...]` shape already in pyproject.toml.
+
+    Sorted by package name first (with the full entry as a tiebreaker), not a
+    plain lexicographic sort on the whole "name==version" string -- a plain
+    sort incorrectly orders hyphenated package names before their base name
+    (e.g. "httpx-sse" sorts before "httpx" because "-" < "=" in ASCII), which
+    doesn't match `uv pip compile`'s own name-first ordering used by the real
+    committed pyproject.toml.
+    """
+    lines = ",\n".join(f'    "{entry}"' for entry in sorted(entries, key=lambda e: (e.split("==")[0], e)))
     return f"dependencies = [\n{lines},\n]"
 
 
@@ -108,6 +116,21 @@ def main(argv: list[str] | None = None) -> int:
 
     current = parse_pyproject_dependencies(pyproject_text)
     compiled = parse_compiled_output(compiled_text)
+
+    raw_requirement_line_count = 0
+    for raw_line in compiled_text.splitlines():
+        if raw_line.split("#", 1)[0].strip():
+            raw_requirement_line_count += 1
+    if raw_requirement_line_count != len(compiled):
+        unparsed = raw_requirement_line_count - len(compiled)
+        print(
+            f"Error: {unparsed} of {raw_requirement_line_count} requirement lines in the "
+            "compiled output could not be parsed -- refusing to proceed, since a silent "
+            "drop here would corrupt pyproject.toml's dependency list.",
+            file=sys.stderr,
+        )
+        return 1
+
     only_current, only_compiled = diff_dependencies(current, compiled)
 
     if not only_current and not only_compiled:
