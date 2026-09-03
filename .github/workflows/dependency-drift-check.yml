@@ -1,0 +1,78 @@
+name: Dependency Drift Canary
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  drift-check:
+    name: Dependency Drift Canary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Compile dependencies fresh
+        run: |
+          set -o pipefail
+          uv pip compile pyproject.toml --universal --python-version 3.10 \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            -o /tmp/compiled.txt
+
+      - name: Check for drift
+        id: drift
+        run: |
+          set -o pipefail
+          if python scripts/check_dependency_drift.py --check --compiled /tmp/compiled.txt; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open pull request with regenerated pins
+        if: steps.drift.outputs.found == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          python scripts/check_dependency_drift.py --write --compiled /tmp/compiled.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="deps/drift-canary-$(date -u +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          git add pyproject.toml
+          git commit -m "chore: regenerate MCP dependency pins (drift canary)"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore: regenerate MCP dependency pins (drift canary)" \
+            --body "Automated weekly canary found the resolved dependency set no longer matches pyproject.toml's committed pins. Requires human review before merging -- see docs/superpowers/specs/2026-09-03-dependency-drift-canary-design.md." \
+            --base master \
+            --head "$BRANCH"
+
+      - name: Close stale Dependabot PRs touching pyproject.toml
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          for pr in $(gh pr list --author "app/dependabot" --state open --json number --jq '.[].number'); do
+            files=$(gh pr view "$pr" --json files --jq '.files[].path')
+            if echo "$files" | grep -qx "pyproject.toml"; then
+              gh pr close "$pr" --comment "Closing: pyproject.toml's [project] dependencies is a full exact-pinned transitive lock (~99 entries, see the v3.4.4 gotcha in CLAUDE.md). A single-package security bump can't safely edit one line of that array without recomputing the whole tree -- see docs/superpowers/specs/2026-09-03-dependency-drift-canary-design.md. The weekly Dependency Drift Canary workflow (.github/workflows/dependency-drift-check.yml) is the sole trusted mechanism for changing this file."
+            fi
+          done

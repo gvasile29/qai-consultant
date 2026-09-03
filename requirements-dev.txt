@@ -20,3 +20,8 @@ setuptools>=67.0
 # Browser automation for local UI testing (Streamlit app) — not a runtime
 # dependency, and not part of the published qai-consultant-mcp wheel.
 playwright==1.62.0
+
+# uv (v3.4.4+) -- runs the pin-regeneration command used both by
+# .github/workflows/dependency-drift-check.yml and by anyone manually
+# regenerating pyproject.toml's dependencies array per the comment above it.
+uv==0.11.28
