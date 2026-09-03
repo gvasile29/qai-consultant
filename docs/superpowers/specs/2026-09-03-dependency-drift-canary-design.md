@@ -126,18 +126,21 @@ automates what was previously a manual step (closing PR #84 by hand).
 
 **4. Comparison logic as a small, unit-testable script:**
 `scripts/check_dependency_drift.py` — parses the current `dependencies`
-array out of `pyproject.toml` via `tomllib`, normalizes the `uv pip
-compile` output into the same `(name, version, marker)` shape, and diffs
-the two. Two modes: default (`--check`) diffs and exits non-zero with the
-regenerated list printed if they differ, touching nothing; `--write`
-overwrites `pyproject.toml`'s `dependencies` array in place with the
-freshly compiled list, formatted the same way the existing entries are.
-The workflow runs `--check` first, and only invokes `--write` (followed
-by branch/commit/push/PR) when a diff was found. Kept dependency-free
-(stdlib `tomllib` only) so it's testable without network access,
-following the same "tier-1-style" determinism already used in `evals/`.
-The GitHub Actions workflow calls this script; it does not reimplement
-the comparison inline in YAML/bash.
+array out of `pyproject.toml` via regex/text splitting (the same
+approach `tests/test_packaging.py::test_all_dependencies_are_exact_pinned`
+already uses, deliberately not a TOML library, since this repo's CI
+matrix includes Python 3.10 which has no stdlib `tomllib`), normalizes
+the `uv pip compile` output into the same `(name, version, marker)`
+shape, and diffs the two. Two modes: default (`--check`) diffs and exits
+non-zero with the regenerated list printed if they differ, touching
+nothing; `--write` overwrites `pyproject.toml`'s `dependencies` array in
+place with the freshly compiled list, formatted the same way the
+existing entries are. The workflow runs `--check` first, and only
+invokes `--write` (followed by branch/commit/push/PR) when a diff was
+found. Kept dependency-free (stdlib `re`/`pathlib` only) so it's
+testable without network access, following the same "tier-1-style"
+determinism already used in `evals/`. The GitHub Actions workflow calls
+this script; it does not reimplement the comparison inline in YAML/bash.
 
 **5. Documentation (no version bump, no release):**
 This change does not publish a new `qai-consultant-mcp` version — it
