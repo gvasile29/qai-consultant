@@ -121,6 +121,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  + {entry}")
 
     if args.write:
+        if not compiled:
+            print(
+                "Error: No dependencies parsed from compiled output. "
+                "The compiled file may be empty, malformed, or the parser does not recognize its format. "
+                "Refusing to write an empty dependencies array to pyproject.toml.",
+                file=sys.stderr,
+            )
+            return 1
         new_text = write_dependencies(pyproject_text, compiled)
         PYPROJECT_PATH.write_text(new_text, encoding="utf-8")
         print(f"Wrote {len(compiled)} dependencies to {PYPROJECT_PATH}")

@@ -163,3 +163,21 @@ def test_main_write_mode_updates_pyproject_and_exits_zero(tmp_path, monkeypatch)
     written = pyproject_path.read_text(encoding="utf-8")
     assert "anyio==4.15.0" in written
     assert "anyio==4.14.2" not in written
+
+
+def test_main_write_mode_refuses_empty_compiled_input(tmp_path, monkeypatch, capsys):
+    pyproject_path = tmp_path / "pyproject.toml"
+    original_content = SAMPLE_PYPROJECT
+    pyproject_path.write_text(original_content, encoding="utf-8")
+    compiled_path = tmp_path / "compiled.txt"
+    compiled_path.write_text("", encoding="utf-8")  # Empty file
+    monkeypatch.setattr(drift, "PYPROJECT_PATH", pyproject_path)
+
+    exit_code = drift.main(["--write", "--compiled", str(compiled_path)])
+
+    assert exit_code != 0
+    stderr = capsys.readouterr().err.lower()
+    assert "empty" in stderr or "no dependencies" in stderr
+    # Verify pyproject.toml was not corrupted
+    written = pyproject_path.read_text(encoding="utf-8")
+    assert written == original_content
