@@ -60,7 +60,7 @@ jobs:
           git push origin "$BRANCH"
           gh pr create \
             --title "chore: regenerate MCP dependency pins (drift canary)" \
-            --body "Automated weekly canary found the resolved dependency set no longer matches pyproject.toml's committed pins. Requires human review before merging -- see docs/superpowers/specs/2026-09-03-dependency-drift-canary-design.md." \
+            --body "Automated weekly canary found the resolved dependency set no longer matches pyproject.toml's committed pins. Requires human review before merging -- see docs/superpowers/specs/2026-09-03-dependency-drift-canary-design.md. Note: this PR was opened using the default GITHUB_TOKEN, so GitHub Actions did not auto-trigger ci.yml on it (a known GitHub Actions restriction on GITHUB_TOKEN-authored events). Close and reopen this PR (or push an empty commit) to trigger CI before merging." \
             --base master \
             --head "$BRANCH"
 
