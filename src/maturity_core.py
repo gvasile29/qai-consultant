@@ -149,10 +149,10 @@ _TMMI_SEVERITY = {
 }
 
 
-def _score_area(lower_text: str, checks: list, req_id_present: bool) -> tuple:
+def _score_area(lower_text: str, checks: list, req_id_present: Optional[bool]) -> tuple:
     """One process area's score + findings. `req_id_present` folds in the
     requirement-traceability signal for test_design_and_execution only —
-    callers pass False for areas where it doesn't apply."""
+    callers pass None for areas where it doesn't apply."""
     results = {}
     for name, keywords in checks:
         results[name] = any(k in lower_text for k in keywords)
