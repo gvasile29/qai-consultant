@@ -266,6 +266,11 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
         help="Attach JUnit XML/CSV test execution results to ground the Risk Register "
              "in the normal generation flow.",
     )
+    parser.add_argument(
+        "--maturity", metavar="PATH",
+        help="Assess QA process maturity from a text description or pasted document "
+             "(deterministic TMMi + conditional EU AI Act score), then exit.",
+    )
     return parser.parse_args(argv)
 
 
@@ -389,6 +394,109 @@ def run_review_mode(agent: QAIAgent, path: str, doc_type: str) -> None:
     console.print(f"\n[bold green]💾 Quality Review saved to:[/bold green] [cyan]{output_path}[/cyan]")
 
 
+def run_maturity_mode(agent: QAIAgent, path: str) -> None:
+    """`--maturity PATH`: deterministic TMMi + conditional EU AI Act score
+    via rich tables (maturity_core.assess_maturity(), no LLM), then an
+    optional narrative assessment streamed and saved via
+    maturity_generator.py's conventions — the same save path the interactive
+    flow uses."""
+    from maturity_core import assess_maturity, MIN_CONTENT_CHARS
+    from maturity_generator import (
+        MATURITY_SYSTEM_PROMPT, build_maturity_prompt,
+        build_maturity_report_markdown, save_maturity_report,
+    )
+
+    doc_path = Path(path)
+    if not doc_path.exists():
+        console.print(f"[bold red]❌ File not found:[/bold red] {path}")
+        sys.exit(1)
+
+    text = doc_path.read_text(encoding="utf-8", errors="ignore")
+    result = assess_maturity(text)
+
+    if result.status == "insufficient_content":
+        console.print(
+            f"[yellow]⚠️  Description is too short to assess "
+            f"({result.stats.get('char_count', 0)} characters after cleanup — "
+            f"need at least {MIN_CONTENT_CHARS}).[/yellow]"
+        )
+        return
+
+    console.print(Panel(
+        f"[bold]QA Maturity Assessment[/bold]\n[dim]{doc_path.name} — "
+        f"indicative TMMi level: {result.indicative_tmmi_level}[/dim]",
+        border_style="cyan",
+    ))
+    console.print(f"[dim]{result.disclaimer}[/dim]\n")
+
+    tmmi_table = Table(title="TMMi Process Area Scores", border_style="cyan", show_header=True)
+    tmmi_table.add_column("Process Area", style="bold cyan")
+    tmmi_table.add_column("Score", style="white")
+    for dim, score in result.tmmi_dimension_scores.items():
+        tmmi_table.add_row(dim.replace("_", " ").title(), f"{score}/100")
+    console.print(tmmi_table)
+
+    if result.ai_act_relevant:
+        ai_table = Table(title="EU AI Act Readiness (Articles 9-15)", border_style="cyan", show_header=True)
+        ai_table.add_column("Article Area", style="bold cyan")
+        ai_table.add_column("Score", style="white")
+        for dim, score in result.ai_act_dimension_scores.items():
+            ai_table.add_row(dim.replace("_", " ").title(), f"{score}/100")
+        console.print(ai_table)
+
+    if result.findings:
+        severity_style = {"critical": "bold red", "major": "yellow", "minor": "dim"}
+        findings_table = Table(title="Findings", border_style="yellow", show_header=True)
+        findings_table.add_column("Severity", style="bold")
+        findings_table.add_column("Framework/Dimension")
+        findings_table.add_column("Message")
+        for finding in result.findings:
+            style = severity_style.get(finding.severity, "white")
+            findings_table.add_row(
+                f"[{style}]{finding.severity}[/{style}]",
+                f"{finding.framework}/{finding.dimension.replace('_', ' ').title()}",
+                finding.message,
+            )
+        console.print(findings_table)
+    else:
+        console.print("[bold green]✅ No findings — every mechanical check in the rubric passed.[/bold green]")
+
+    narrative = ""
+    generate_narrative = Prompt.ask(
+        "\n[bold]Generate a narrative assessment grounded in the QA knowledge base?[/bold]",
+        choices=["yes", "no"], default="yes",
+    )
+    if generate_narrative == "yes":
+        queries, seen = [], set()
+        for finding in result.findings:
+            for q in finding.citation_queries:
+                if q not in seen:
+                    seen.add(q)
+                    queries.append(q)
+
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+            progress.add_task("⚡ Retrieving grounding sources...", total=None)
+            chunks = []
+            for q in queries[:5]:
+                chunks.extend(agent.retrieve_knowledge(q, k=1))
+            if not chunks:
+                chunks = agent.retrieve_knowledge("TMMi test process maturity assessment", k=5)
+        knowledge_context = agent.format_knowledge_context(chunks)
+        prompt = build_maturity_prompt(result, knowledge_context)
+
+        console.print(Panel("[bold cyan]🤖 Generating Narrative Assessment...[/bold cyan]", border_style="cyan"))
+        buffer = []
+        with Live(console=console, refresh_per_second=8) as live:
+            for chunk in agent.ask_streaming(prompt, system_prompt=MATURITY_SYSTEM_PROMPT):
+                buffer.append(chunk)
+                live.update(Text("".join(buffer)))
+        narrative = clean_markdown_html("".join(buffer))
+
+    report_md = build_maturity_report_markdown(result, narrative)
+    output_path = save_maturity_report(report_md, doc_path.stem)
+    console.print(f"\n[bold green]💾 Maturity Assessment saved to:[/bold green] [cyan]{output_path}[/cyan]")
+
+
 def load_results_summary(paths: list):
     """`--results PATH [PATH ...]`: parse JUnit XML (run_id = filename stem)
     / CSV files into a results_core.ResultsAnalysis + its deterministic
@@ -441,6 +549,12 @@ def main():
         agent = _load_agent()
         console.print("[bold green]✅ Knowledge base ready![/bold green]\n")
         run_review_mode(agent, args.review, args.doc_type)
+        return
+
+    if args.maturity:
+        agent = _load_agent()
+        console.print("[bold green]✅ Knowledge base ready![/bold green]\n")
+        run_maturity_mode(agent, args.maturity)
         return
 
     print_intro()

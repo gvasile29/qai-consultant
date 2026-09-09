@@ -163,3 +163,38 @@ def test_generate_strategy_accepts_results_summary_parameter():
     sig = inspect.signature(cli.generate_strategy)
     assert "results_summary" in sig.parameters
     assert sig.parameters["results_summary"].default is None
+
+
+# ── parse_args() — maturity flag ─────────────────────────────────────────────────
+
+def test_parse_args_maturity_default_is_none():
+    args = cli.parse_args([])
+    assert args.maturity is None
+
+
+def test_parse_args_maturity_with_path():
+    args = cli.parse_args(["--maturity", "description.txt"])
+    assert args.maturity == "description.txt"
+
+
+# ── run_maturity_mode(): early-exit paths ────────────────────────────────────────
+
+def test_run_maturity_mode_file_not_found_exits():
+    with pytest.raises(SystemExit):
+        cli.run_maturity_mode(MagicMock(), "Z:/does/not/exist.txt")
+
+
+def test_run_maturity_mode_insufficient_content_returns_without_prompting(monkeypatch):
+    tmp_dir = Path(tempfile.mkdtemp())
+    try:
+        doc_path = tmp_dir / "short.txt"
+        doc_path.write_text("Too short.", encoding="utf-8")
+
+        def _fail_if_called(*args, **kwargs):
+            raise AssertionError("Prompt.ask must not be called for insufficient_content")
+
+        monkeypatch.setattr(cli.Prompt, "ask", _fail_if_called)
+
+        cli.run_maturity_mode(MagicMock(), str(doc_path))  # must not raise
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
