@@ -1,0 +1,17 @@
+Our team maintains a documented test policy and test strategy defining
+our test objectives, with risk-based prioritization as our generic test
+approach. Every release has a test plan with estimates, a schedule, and
+risk-based testing. We track defects in a defect log and report status
+against the plan, taking corrective action when needed. Test design
+follows structured test design techniques with clear entry criteria and
+exit criteria; requirements are tracked as REQ-101, REQ-102, REQ-103. We
+run everything in a dedicated test environment that is representative of
+production.
+
+We have an independent test team led by a test manager, with defined
+roles and responsibilities. New testers go through a formal training
+program and onboarding. A master test plan integrates test activities
+from the requirements phase onward. Beyond functional checks we run
+performance test, security test, and usability test cycles. Every change
+goes through a peer review, including requirements review and design
+review.

@@ -1,0 +1,5 @@
+{"id": "level1_no_process", "kind": "description", "file": "maturity/level1_no_process.txt", "expect_max_level": 1}
+{"id": "level3_strong", "kind": "description", "file": "maturity/level3_strong.txt", "expect_min_level": 3}
+{"id": "insufficient_short_text", "kind": "description", "text": "Too short.", "expect_status": "insufficient_content"}
+{"id": "ai_relevant", "kind": "description", "text": "We are building a machine learning model for loan screening. The model is trained on historical applicant data with documented risk management processes covering the full lifecycle from data collection through deployment and monitoring. We maintain continuous oversight and have implemented safeguards against bias and discrimination.", "expect_ai_act_relevant": true}
+{"id": "non_ai", "kind": "description", "text": "We test a standard e-commerce checkout flow with unit tests covering the payment form validation, integration tests for the checkout workflow across multiple browsers, and end-to-end tests simulating real customer purchase scenarios across several development sprints with continuous integration.", "expect_ai_act_relevant": false}

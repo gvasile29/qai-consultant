@@ -48,6 +48,16 @@ def main(argv: list[str]) -> int:
         print(f"[results_integrity] tier errored (did not run): {type(exc).__name__}: {exc}")
         results_ok = False
 
+    from . import maturity_integrity
+    print("\n══ maturity_integrity (deterministic, keyless) ══")
+    try:
+        maturity_outcomes = maturity_integrity.run_all()
+        print(maturity_integrity.format_table(maturity_outcomes))
+        maturity_ok = all(o.passed for o in maturity_outcomes)
+    except Exception as exc:  # noqa: BLE001 — same rationale as estimate_integrity above
+        print(f"[maturity_integrity] tier errored (did not run): {type(exc).__name__}: {exc}")
+        maturity_ok = False
+
     rag_ok = True
     local_index_ok = True
     if not det_only:
@@ -72,11 +82,12 @@ def main(argv: list[str]) -> int:
             print(f"\n[local_index_parity] tier errored (did not run): {type(exc).__name__}: {exc}")
             local_index_ok = False
 
-    overall = det_ok and review_ok and results_ok and rag_ok and local_index_ok
+    overall = det_ok and review_ok and results_ok and maturity_ok and rag_ok and local_index_ok
     print(f"\nRelease gate: {'PASS' if overall else 'FAIL'} "
           f"(deterministic {'pass' if det_ok else 'FAIL'}"
           f", review {'pass' if review_ok else 'FAIL'}"
           f", results {'pass' if results_ok else 'FAIL'}"
+          f", maturity {'pass' if maturity_ok else 'FAIL'}"
           + ("" if det_only else f", rag {'pass' if rag_ok else 'FAIL'}"
                                   f", local_index_parity {'pass' if local_index_ok else 'FAIL'}") + ")")
     return 0 if overall else 1
