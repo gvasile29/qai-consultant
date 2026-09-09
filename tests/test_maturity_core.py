@@ -113,3 +113,55 @@ def test_assess_maturity_is_deterministic():
     first = assess_maturity(_LEVEL3_STRONG)
     second = assess_maturity(_LEVEL3_STRONG)
     assert first == second
+
+
+_AI_RELEVANT_TEXT = """
+We are building a machine learning model that screens loan applications.
+The model is trained on historical applicant data. We have a documented
+risk management process covering the model's full lifecycle, and our
+training data governance process checks for dataset bias. Technical
+documentation captures design specifications and validation reports. The
+system has automatic logging for traceability. Instructions for use state
+known limitations and declared accuracy. A human reviewer can override
+any decision (human oversight). We test robustness against adversarial
+inputs and monitor for model drift.
+"""
+
+_NON_AI_TEXT = "We test a standard e-commerce checkout flow with unit and integration tests. " * 5
+
+
+def test_ai_act_dimension_absent_for_non_ai_project():
+    result = assess_maturity(_NON_AI_TEXT)
+    assert result.ai_act_relevant is False
+    assert result.ai_act_dimension_scores == {}
+    assert not any(f.framework == "eu_ai_act" for f in result.findings)
+
+
+def test_ai_act_dimension_scored_for_ai_project():
+    result = assess_maturity(_AI_RELEVANT_TEXT)
+    assert result.ai_act_relevant is True
+    assert set(result.ai_act_dimension_scores.keys()) == {
+        "risk_management", "data_governance", "technical_documentation",
+        "record_keeping", "transparency_instructions", "human_oversight",
+        "accuracy_robustness_security",
+    }
+
+
+def test_ai_act_findings_carry_citation_queries_and_severity():
+    sparse_ai_text = "We are building an AI system using a neural network model. " * 5
+    result = assess_maturity(sparse_ai_text)
+    assert result.ai_act_relevant is True
+    ai_findings = [f for f in result.findings if f.framework == "eu_ai_act"]
+    assert ai_findings
+    for finding in ai_findings:
+        assert finding.citation_queries
+        assert finding.severity in ("critical", "major")
+        assert finding.level is None
+
+
+def test_ai_act_risk_management_and_human_oversight_are_critical():
+    sparse_ai_text = "We are building an AI system using a neural network model. " * 5
+    result = assess_maturity(sparse_ai_text)
+    by_dim = {f.dimension: f.severity for f in result.findings if f.framework == "eu_ai_act"}
+    assert by_dim.get("risk_management") == "critical"
+    assert by_dim.get("human_oversight") == "critical"

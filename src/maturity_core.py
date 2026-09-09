@@ -212,6 +212,66 @@ def _indicative_level(tmmi_scores: dict) -> int:
     return 3
 
 
+# ── EU AI Act Articles 9-15 Readiness Checks ──────────────────────────────
+
+_AI_RELEVANCE_RE = re.compile(
+    r"\b(ai|artificial intelligence|machine learning|neural network|"
+    r"llm|large language model|deep learning|generative ai|ml model)\b",
+    re.IGNORECASE,
+)
+
+# article -> (dimension_key, severity, keywords, citation_query)
+_AI_ACT_CHECKS = [
+    ("risk_management", "critical",
+     ["risk management system", "risk management process", "continuous risk", "iterative risk"],
+     "EU AI Act Article 9 risk management system"),
+    ("data_governance", "major",
+     ["training data", "data governance", "dataset bias", "data quality", "representative dataset"],
+     "EU AI Act Article 10 data and data governance"),
+    ("technical_documentation", "major",
+     ["technical documentation", "annex iv", "validation report", "design specification"],
+     "EU AI Act Article 11 technical documentation"),
+    ("record_keeping", "major",
+     ["logging", "audit log", "automatic logging", "record-keeping", "traceability of the system's operation"],
+     "EU AI Act Article 12 record-keeping logging"),
+    ("transparency_instructions", "major",
+     ["instructions for use", "known limitations", "declared accuracy", "foreseeable misuse"],
+     "EU AI Act Article 13 transparency instructions for deployers"),
+    ("human_oversight", "critical",
+     ["human oversight", "human-in-the-loop", "human in the loop", "override", "human intervention"],
+     "EU AI Act Article 14 human oversight"),
+    ("accuracy_robustness_security", "major",
+     ["accuracy metric", "robustness", "adversarial", "data poisoning", "model drift"],
+     "EU AI Act Article 15 accuracy robustness cybersecurity"),
+]
+
+
+def _is_ai_act_relevant(lower_text: str) -> bool:
+    return bool(_AI_RELEVANCE_RE.search(lower_text))
+
+
+def _score_ai_act(lower_text: str) -> tuple:
+    """Returns (dimension_scores: dict, findings: list[MaturityFinding]).
+    Only called when _is_ai_act_relevant() is True."""
+    scores = {}
+    findings = []
+    for dimension_key, severity, keywords, citation_query in _AI_ACT_CHECKS:
+        present = any(k in lower_text for k in keywords)
+        scores[dimension_key] = 100 if present else 0
+        if not present:
+            article_ref = citation_query.split("EU AI Act ")[1]  # e.g. "Article 9 risk management system"
+            findings.append(MaturityFinding(
+                framework="eu_ai_act",
+                dimension=dimension_key,
+                level=None,
+                severity=severity,
+                message=f"No evidence found for {dimension_key.replace('_', ' ')} ({article_ref}).",
+                evidence=dimension_key,
+                citation_queries=[citation_query],
+            ))
+    return scores, findings
+
+
 def assess_maturity(text: str) -> MaturityResult:
     """Deterministically assess QA process maturity from a free-text
     description or pasted document. No LLM anywhere in this call path."""
@@ -238,14 +298,19 @@ def assess_maturity(text: str) -> MaturityResult:
     tmmi_scores, tmmi_findings = _score_tmmi(cleaned, lower_text)
     indicative_level = _indicative_level(tmmi_scores)
 
+    ai_act_relevant = _is_ai_act_relevant(lower_text)
+    ai_act_scores, ai_act_findings = ({}, [])
+    if ai_act_relevant:
+        ai_act_scores, ai_act_findings = _score_ai_act(lower_text)
+
     word_count = len(cleaned.split())
     return MaturityResult(
         status="ok",
         indicative_tmmi_level=indicative_level,
         tmmi_dimension_scores=tmmi_scores,
-        ai_act_relevant=False,
-        ai_act_dimension_scores={},
-        findings=tmmi_findings,
+        ai_act_relevant=ai_act_relevant,
+        ai_act_dimension_scores=ai_act_scores,
+        findings=tmmi_findings + ai_act_findings,
         disclaimer=_DISCLAIMER,
-        stats={"char_count": len(cleaned), "word_count": word_count, "ai_act_relevant": False},
+        stats={"char_count": len(cleaned), "word_count": word_count, "ai_act_relevant": ai_act_relevant},
     )
