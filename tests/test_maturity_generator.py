@@ -28,6 +28,8 @@ _SAMPLE_RESULT = MaturityResult(
     tmmi_dimension_scores={"test_policy_and_strategy": 100, "peer_reviews": 0},
     ai_act_relevant=True,
     ai_act_dimension_scores={"risk_management": 0, "human_oversight": 100},
+    ai_act_note="Risk-tier classification (whether this system is legally 'high-risk') "
+                "is a determination this tool does not make.",
     findings=[
         MaturityFinding(
             framework="tmmi", dimension="peer_reviews", level=3, severity="minor",
@@ -106,6 +108,17 @@ def test_build_maturity_report_markdown_includes_ai_act_section_when_relevant():
 def test_build_maturity_report_markdown_omits_ai_act_section_when_not_relevant():
     md = build_maturity_report_markdown(_NO_FINDINGS_RESULT, "")
     assert "EU AI Act Readiness" not in md
+
+
+def test_build_maturity_report_markdown_includes_ai_act_note_when_relevant():
+    md = build_maturity_report_markdown(_SAMPLE_RESULT, "")
+    assert _SAMPLE_RESULT.ai_act_note in md
+
+
+def test_build_maturity_report_markdown_omits_ai_act_note_when_not_relevant():
+    assert _NO_FINDINGS_RESULT.ai_act_note == ""
+    md = build_maturity_report_markdown(_NO_FINDINGS_RESULT, "")
+    assert "legally 'high-risk'" not in md
 
 
 def test_build_maturity_report_markdown_appends_narrative_when_given():

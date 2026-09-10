@@ -1498,6 +1498,7 @@ def render_maturity_assessment():
 
     if result.ai_act_relevant:
         st.markdown("### EU AI Act Readiness (Articles 9-15)")
+        st.caption(result.ai_act_note)
         ai_cols = st.columns(len(result.ai_act_dimension_scores))
         for col, (dim, score) in zip(ai_cols, result.ai_act_dimension_scores.items()):
             with col:

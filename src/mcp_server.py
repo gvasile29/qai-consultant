@@ -310,9 +310,14 @@ def assess_qa_maturity(project_description: str) -> dict:
     indicative_tmmi_level=0 with empty findings rather than an error. Each
     finding carries kb_citations resolved from the knowledge base for its
     citation queries — a finding with no resolvable source is returned with
-    an empty kb_citations list rather than a fabricated one. Returns
-    {indicative_tmmi_level, tmmi_dimension_scores, ai_act_relevant,
-    ai_act_dimension_scores, findings, disclaimer, stats, kb_version}."""
+    an empty kb_citations list rather than a fabricated one. When
+    ai_act_relevant=true, ai_act_note carries a fixed caveat that risk-tier
+    classification (whether the system is legally "high-risk") is a
+    determination this tool does not make — the user/team must confirm
+    that independently; ai_act_note is empty when ai_act_relevant=false.
+    Returns {indicative_tmmi_level, tmmi_dimension_scores, ai_act_relevant,
+    ai_act_dimension_scores, ai_act_note, findings, disclaimer, stats,
+    kb_version}."""
     start = time.monotonic()
 
     result = maturity_core.assess_maturity(project_description)
@@ -353,6 +358,7 @@ def assess_qa_maturity(project_description: str) -> dict:
         "tmmi_dimension_scores": result.tmmi_dimension_scores,
         "ai_act_relevant": result.ai_act_relevant,
         "ai_act_dimension_scores": result.ai_act_dimension_scores,
+        "ai_act_note": result.ai_act_note,
         "findings": findings,
         "disclaimer": result.disclaimer,
         "stats": result.stats,

@@ -184,6 +184,27 @@ def check_determinism(assess_maturity) -> tuple[Finding, ...]:
     return ()
 
 
+def check_negation_not_counted_as_evidence(assess_maturity) -> tuple[Finding, ...]:
+    """A description that explicitly denies having a process element (e.g.
+    "we have no test policy") must not have that denial scored as evidence
+    of the element's presence — guards against naive substring keyword
+    matching inverting the ranking for exactly the input shape this tool
+    most invites (a team describing what they lack)."""
+    case = _cases_by_id().get("level1_explicit_denial")
+    if not case:
+        return (Finding("negation_not_counted_as_evidence",
+                         "level1_explicit_denial case in maturity_golden.jsonl", "missing"),)
+
+    result = assess_maturity(_case_text(case))
+    if result.indicative_tmmi_level != 1:
+        return (Finding(
+            case="level1_explicit_denial",
+            expected="indicative_tmmi_level == 1 (negated keywords must not count as evidence)",
+            actual=f"indicative_tmmi_level={result.indicative_tmmi_level}",
+        ),)
+    return ()
+
+
 def check_insufficient_content_handling(assess_maturity) -> tuple[Finding, ...]:
     """Content under the minimum length must return
     status='insufficient_content' with level 0 — never an exception or a
@@ -209,6 +230,7 @@ def run_all() -> list[CheckOutcome]:
         CheckOutcome("no_level_skip", check_no_level_skip(assess_maturity)),
         CheckOutcome("ai_act_gating", check_ai_act_gating(assess_maturity)),
         CheckOutcome("determinism", check_determinism(assess_maturity)),
+        CheckOutcome("negation_not_counted_as_evidence", check_negation_not_counted_as_evidence(assess_maturity)),
         CheckOutcome("insufficient_content_handling", check_insufficient_content_handling(assess_maturity)),
     ]
 

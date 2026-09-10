@@ -44,3 +44,9 @@ def test_generate_another_strategy_cleanup_includes_maturity_reset():
     import inspect
     source = inspect.getsource(app.render_strategy)
     assert "_reset_maturity_mode_state()" in source
+
+
+def test_render_maturity_assessment_surfaces_ai_act_note():
+    import inspect
+    source = inspect.getsource(app.render_maturity_assessment)
+    assert "ai_act_note" in source

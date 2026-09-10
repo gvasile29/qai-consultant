@@ -443,6 +443,7 @@ def run_maturity_mode(agent: QAIAgent, path: str) -> None:
         for dim, score in result.ai_act_dimension_scores.items():
             ai_table.add_row(dim.replace("_", " ").title(), f"{score}/100")
         console.print(ai_table)
+        console.print(f"[dim]{result.ai_act_note}[/dim]\n")
 
     if result.findings:
         severity_style = {"critical": "bold red", "major": "yellow", "minor": "dim"}

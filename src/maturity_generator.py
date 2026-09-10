@@ -116,6 +116,8 @@ def build_maturity_report_markdown(result: MaturityResult, narrative: str = "") 
         lines.append("")
         lines.append("## EU AI Act Readiness (Articles 9-15)")
         lines.append("")
+        lines.append(f"> {result.ai_act_note}")
+        lines.append("")
         lines.append("| Article Area | Score |")
         lines.append("|---|---|")
         for dim, score in result.ai_act_dimension_scores.items():

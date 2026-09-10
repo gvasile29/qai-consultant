@@ -165,3 +165,36 @@ def test_ai_act_risk_management_and_human_oversight_are_critical():
     by_dim = {f.dimension: f.severity for f in result.findings if f.framework == "eu_ai_act"}
     assert by_dim.get("risk_management") == "critical"
     assert by_dim.get("human_oversight") == "critical"
+
+
+def test_ai_act_note_present_when_relevant_and_empty_when_not():
+    ai_result = assess_maturity(_AI_RELEVANT_TEXT)
+    assert ai_result.ai_act_relevant is True
+    assert ai_result.ai_act_note != ""
+    from maturity_core import _AI_ACT_NOTE  # noqa: PLC0415
+    assert ai_result.ai_act_note == _AI_ACT_NOTE
+
+    non_ai_result = assess_maturity(_NON_AI_TEXT)
+    assert non_ai_result.ai_act_relevant is False
+    assert non_ai_result.ai_act_note == ""
+
+
+_EXPLICIT_DENIAL_TEXT = (
+    "We have no test policy and no test strategy. There is no test plan, "
+    "no test environment, no defect log, no entry criteria or exit "
+    "criteria, no test design technique, no risk-based testing, no "
+    "schedule, no test objective, and no test approach documented "
+    "anywhere at all in this organisation whatsoever today."
+)
+
+
+def test_negated_keywords_are_not_counted_as_evidence():
+    result = assess_maturity(_EXPLICIT_DENIAL_TEXT)
+    assert result.indicative_tmmi_level == 1
+
+    level2_areas = [
+        "test_policy_and_strategy", "test_planning", "test_monitoring_and_control",
+        "test_design_and_execution", "test_environment",
+    ]
+    level2_avg = sum(result.tmmi_dimension_scores[a] for a in level2_areas) / len(level2_areas)
+    assert level2_avg < 60

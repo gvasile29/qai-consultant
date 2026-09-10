@@ -628,3 +628,4 @@ def test_assess_qa_maturity_ai_act_scored_for_ai_project():
         "record_keeping", "transparency_instructions", "human_oversight",
         "accuracy_robustness_security",
     }
+    assert "ai_act_note" in result and result["ai_act_note"]

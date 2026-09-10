@@ -69,6 +69,7 @@ class MaturityResult:
     tmmi_dimension_scores: dict = field(default_factory=dict)
     ai_act_relevant: bool = False
     ai_act_dimension_scores: dict = field(default_factory=dict)
+    ai_act_note: str = ""
     findings: list = field(default_factory=list)
     disclaimer: str = ""
     stats: dict = field(default_factory=dict)
@@ -149,13 +150,31 @@ _TMMI_SEVERITY = {
 }
 
 
+_NEGATION_WINDOW_CHARS = 40  # generous enough to catch e.g. "nobody has ever written a test plan"
+_NEGATORS = ("no ", "not ", "never", "without", "lack of", "n't ", "nobody", "none of")
+
+
+def _keyword_present_without_negation(text: str, keyword: str) -> bool:
+    """True if `keyword` occurs in `text` at least once without a negator
+    (e.g. "no ", "not ", "never", "without", "lack of", "n't ", "nobody",
+    "none of") immediately before it. A description that explicitly denies
+    having something (e.g. "we have no test plan") must not score that
+    keyword as evidence just because it appears as a substring."""
+    for match in re.finditer(re.escape(keyword), text):
+        window_start = max(0, match.start() - _NEGATION_WINDOW_CHARS)
+        window = text[window_start:match.start()]
+        if not any(neg in window for neg in _NEGATORS):
+            return True
+    return False
+
+
 def _score_area(lower_text: str, checks: list, req_id_present: Optional[bool]) -> tuple:
     """One process area's score + findings. `req_id_present` folds in the
     requirement-traceability signal for test_design_and_execution only —
     callers pass None for areas where it doesn't apply."""
     results = {}
     for name, keywords in checks:
-        results[name] = any(k in lower_text for k in keywords)
+        results[name] = any(_keyword_present_without_negation(lower_text, k) for k in keywords)
     if req_id_present is not None:
         results["requirement_traceability"] = req_id_present
     score = round(100 * sum(results.values()) / len(results)) if results else 0
@@ -287,6 +306,7 @@ def assess_maturity(text: str) -> MaturityResult:
             tmmi_dimension_scores={},
             ai_act_relevant=False,
             ai_act_dimension_scores={},
+            ai_act_note="",
             findings=[],
             disclaimer=_DISCLAIMER,
             stats={"char_count": len(cleaned), "raw_char_count": raw_len,
@@ -300,8 +320,10 @@ def assess_maturity(text: str) -> MaturityResult:
 
     ai_act_relevant = _is_ai_act_relevant(lower_text)
     ai_act_scores, ai_act_findings = ({}, [])
+    ai_act_note = ""
     if ai_act_relevant:
         ai_act_scores, ai_act_findings = _score_ai_act(lower_text)
+        ai_act_note = _AI_ACT_NOTE
 
     word_count = len(cleaned.split())
     return MaturityResult(
@@ -310,6 +332,7 @@ def assess_maturity(text: str) -> MaturityResult:
         tmmi_dimension_scores=tmmi_scores,
         ai_act_relevant=ai_act_relevant,
         ai_act_dimension_scores=ai_act_scores,
+        ai_act_note=ai_act_note,
         findings=tmmi_findings + ai_act_findings,
         disclaimer=_DISCLAIMER,
         stats={"char_count": len(cleaned), "word_count": word_count, "ai_act_relevant": ai_act_relevant},

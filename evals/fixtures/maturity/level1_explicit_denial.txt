@@ -1,0 +1,5 @@
+We have no test policy and no test strategy. There is no test plan, no
+test environment, no defect log, no entry criteria or exit criteria, no
+test design technique, no risk-based testing, no schedule, no test
+objective, and no test approach documented anywhere at all in this
+organisation whatsoever today.
