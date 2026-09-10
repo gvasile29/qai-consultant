@@ -18,8 +18,6 @@ The lens that shapes every decision below: **the client LLM is stronger than our
 
 Explicitly NOT exposed: `ask()`, `ask_streaming()`, full document generation, the feedback loop. Those stay in Streamlit/CLI for users without an MCP client.
 
-## 2. Deferred: QA maturity audit tool
+## 2. Shipped: QA maturity audit tool
 
-`assess_qa_maturity(project_description, focus_areas=None)`: retrieval over `evaluation_audit/` and `standards/eu_ai_act/` (v2.6 KB pillar) + a deterministic TMMi-inspired scoring rubric; returns gap summary JSON with cited sources. The v3.1 plan scoped only F1 (`review_qa_document`) and F2 (`analyze_test_results`) in detail and left this tool's rubric undefined beyond the one-line spec above, so it was deliberately deferred rather than building an under-specified rubric from a single sentence — not dropped, just unscheduled. When it lands, it should share the rubric/citation-format infrastructure F1/F2 already established (dimension-weight normalization, `citation_queries` resolved via the caller's index, never-raising error contract) rather than inventing a second pattern.
-
-Acceptance: rubric fully deterministic (same input, same score); every gap cites a KB source.
+`assess_qa_maturity` shipped in v3.5.0 — see CLAUDE.md's Roadmap entry for that version for what was actually built. The rubric (TMMi process areas + a conditional EU AI Act Articles 9-15 dimension) and the full design rationale live in `docs/superpowers/specs/2026-09-09-assess-qa-maturity-design.md`.

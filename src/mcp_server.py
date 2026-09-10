@@ -6,10 +6,13 @@ no Streamlit. See MCP_PLAN.md section 1 ("the MCP lens") for why: the
 client LLM (Claude Code, Claude Desktop, claude.ai) is stronger than this
 project's internal mistral-small, so this server never generates text —
 it exposes what the client cannot do alone: standards-grounded knowledge
-retrieval (retrieve_qa_knowledge, list_kb_sources) and deterministic QA
-effort estimation (estimate_qa_effort), plus MCP prompts (the 11-question
-interview + document structures, src/prompts.py) that instruct the client
-to ground its own generation in those tools rather than call a second LLM.
+retrieval (retrieve_qa_knowledge, list_kb_sources), deterministic QA
+effort estimation (estimate_qa_effort), deterministic QA document review
+(review_qa_document), deterministic test-results health analysis
+(analyze_test_results), and deterministic QA process maturity assessment
+(assess_qa_maturity), plus MCP prompts (the 11-question interview +
+document structures, src/prompts.py) that instruct the client to ground
+its own generation in those tools rather than call a second LLM.
 
 Run directly: `python src/mcp_server.py`
 Packaged entry point (step 8): `qai-consultant-mcp`
@@ -35,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # `python src/mcp_serv
 
 from mcp.server.fastmcp import FastMCP
 
+import maturity_core
 import results_core
 import review_core
 import telemetry
@@ -56,9 +60,11 @@ INSTRUCTIONS = (
     "ground your own analysis in the knowledge base, estimate_qa_effort for a "
     "deterministic PERT-based effort calculation, review_qa_document for a "
     "rubric-scored review of an existing Test Plan/Strategy/test case list, "
-    "and analyze_test_results for flaky/ever-failing/slowest/failure-cluster "
-    "metrics from JUnit XML or CSV — in every case, write your own narrative "
-    "around the deterministic numbers/findings returned."
+    "analyze_test_results for flaky/ever-failing/slowest/failure-cluster "
+    "metrics from JUnit XML or CSV, and assess_qa_maturity for a TMMi/EU AI "
+    "Act indicative maturity assessment from a free-text project/process "
+    "description — in every case, write your own narrative around the "
+    "deterministic numbers/findings returned."
 )
 
 mcp = FastMCP("qai-consultant-mcp", instructions=INSTRUCTIONS)
@@ -279,6 +285,82 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
         "overall_score": result.overall_score,
         "dimension_scores": result.dimension_scores,
         "findings": findings,
+        "stats": result.stats,
+        "kb_version": index.kb_version,
+    }
+
+
+# ── Tool: assess_qa_maturity ──────────────────────────────────────────────────
+
+@mcp.tool()
+def assess_qa_maturity(project_description: str) -> dict:
+    """Deterministically assess QA process maturity from a free-text project/
+    process description (or a pasted existing Test Strategy/Risk Register) —
+    no LLM anywhere in this call path; write your own narrative from the
+    returned findings. Scores 10 TMMi process areas (Level 2 Managed + Level 3
+    Defined) and returns an indicative_tmmi_level (1-3 — NEVER higher; Levels
+    4-5 require quantitative evidence a text description cannot substantiate,
+    per TMMi's own no-skip rule — always read the returned `disclaimer` and
+    never claim a certified TMMi level yourself). When the description signals
+    an AI/ML system, also scores 7 EU AI Act Articles 9-15 readiness checks
+    (ai_act_relevant=true, ai_act_dimension_scores populated); otherwise that
+    dimension is omitted entirely (ai_act_relevant=false, empty dict) rather
+    than scored as a false gap. Descriptions under ~200 characters (after
+    stripping this app's own AI-disclosure front matter/footer) return
+    indicative_tmmi_level=0 with empty findings rather than an error. Each
+    finding carries kb_citations resolved from the knowledge base for its
+    citation queries — a finding with no resolvable source is returned with
+    an empty kb_citations list rather than a fabricated one. When
+    ai_act_relevant=true, ai_act_note carries a fixed caveat that risk-tier
+    classification (whether the system is legally "high-risk") is a
+    determination this tool does not make — the user/team must confirm
+    that independently; ai_act_note is empty when ai_act_relevant=false.
+    Returns {indicative_tmmi_level, tmmi_dimension_scores, ai_act_relevant,
+    ai_act_dimension_scores, ai_act_note, findings, disclaimer, stats,
+    kb_version}."""
+    start = time.monotonic()
+
+    result = maturity_core.assess_maturity(project_description)
+    index = _get_index()
+
+    findings = []
+    for finding in result.findings:
+        kb_citations: list[dict] = []
+        for query in finding.citation_queries:
+            search_result = index.search(query, k=2)
+            if "error" not in search_result:
+                kb_citations.extend(
+                    {"source": c["source"], "category": c["category"], "score": c["score"]}
+                    for c in search_result["chunks"]
+                )
+        findings.append({
+            "framework": finding.framework,
+            "dimension": finding.dimension,
+            "level": finding.level,
+            "severity": finding.severity,
+            "message": finding.message,
+            "evidence": finding.evidence,
+            "kb_citations": kb_citations,
+        })
+
+    duration_ms = (time.monotonic() - start) * 1000
+    telemetry.track_tool_called(
+        "assess_qa_maturity", success=True, duration_ms=duration_ms,
+        extra={
+            "indicative_tmmi_level": result.indicative_tmmi_level,
+            "ai_act_relevant": result.ai_act_relevant,
+            "finding_count": len(findings),
+        },
+    )
+
+    return {
+        "indicative_tmmi_level": result.indicative_tmmi_level,
+        "tmmi_dimension_scores": result.tmmi_dimension_scores,
+        "ai_act_relevant": result.ai_act_relevant,
+        "ai_act_dimension_scores": result.ai_act_dimension_scores,
+        "ai_act_note": result.ai_act_note,
+        "findings": findings,
+        "disclaimer": result.disclaimer,
         "stats": result.stats,
         "kb_version": index.kb_version,
     }

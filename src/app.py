@@ -38,6 +38,13 @@ from results_core import (
     parse_results_csv,
     summarize_for_prompt,
 )
+from maturity_core import MIN_CONTENT_CHARS as MATURITY_MIN_CONTENT_CHARS, assess_maturity
+from maturity_generator import (
+    MATURITY_SYSTEM_PROMPT,
+    build_maturity_prompt,
+    build_maturity_report_markdown,
+    save_maturity_report,
+)
 from visit_counter import get_and_increment_visit_count
 
 setup_logging()
@@ -118,7 +125,7 @@ def init_session_state():
     if "test_plan_pdf_bytes" not in st.session_state:
         st.session_state.test_plan_pdf_bytes = None
     if "current_step" not in st.session_state:
-        st.session_state.current_step = "intro"  # intro | dialogue | review | strategy | doc_review
+        st.session_state.current_step = "intro"  # intro | dialogue | review | strategy | doc_review | maturity
     if "run_count" not in st.session_state:
         st.session_state.run_count = 0
     if "review_input_text" not in st.session_state:
@@ -157,6 +164,24 @@ def _reset_review_mode_state():
     st.session_state.pop("review_doc_uploader", None)
     st.session_state.pop("review_doc_pasted_text", None)
     st.session_state.pop("review_doc_type_select", None)
+
+
+# Session-state keys owned by the "Assess QA Maturity" mode — same shared-
+# list convention as REVIEW_MODE_STATE_KEYS (see CLAUDE.md's session-state
+# cleanup gotcha).
+MATURITY_MODE_STATE_KEYS = [
+    "maturity_input_text", "maturity_source_label", "maturity_result",
+    "maturity_narrative", "maturity_narrative_sources", "maturity_output_path",
+    "maturity_pdf_bytes",
+]
+
+
+def _reset_maturity_mode_state():
+    for key in MATURITY_MODE_STATE_KEYS:
+        if key in st.session_state:
+            del st.session_state[key]
+    st.session_state.pop("maturity_uploader", None)
+    st.session_state.pop("maturity_pasted_text", None)
 
 
 # ── Load Agent ─────────────────────────────────────────────────────────────────
@@ -272,6 +297,9 @@ def render_sidebar():
             st.markdown(load_changelog())
         with st.expander("🔌 Use QAI in your AI tools (MCP)"):
             st.markdown(MCP_ANNOUNCEMENT_BODY)
+        if st.button("📈 Assess QA Maturity", use_container_width=True):
+            st.session_state.current_step = "maturity"
+            st.rerun()
         st.divider()
 
         st.markdown("### How it works")
@@ -300,6 +328,7 @@ def render_sidebar():
                 if key in st.session_state:
                     del st.session_state[key]
             _reset_review_mode_state()
+            _reset_maturity_mode_state()
             for q in QUESTIONS:
                 st.session_state.pop(f"input_{q['key']}", None)
             st.session_state.pop("input_additional_context", None)
@@ -1093,6 +1122,7 @@ def render_strategy():
             if key in st.session_state:
                 del st.session_state[key]
         _reset_review_mode_state()
+        _reset_maturity_mode_state()
         for q in QUESTIONS:
             st.session_state.pop(f"input_{q['key']}", None)
         st.session_state.pop("input_additional_context", None)
@@ -1372,6 +1402,218 @@ def render_doc_review():
         st.rerun()
 
 
+def render_maturity_assessment():
+    """v3.5: QA Process Maturity Assessment. Step 1 (deterministic, instant)
+    scores a free-text process description or pasted document via
+    maturity_core.assess_maturity() — no LLM call. Step 2 (button) writes an
+    LLM narrative around those already-computed findings and saves an
+    Article-50(2)-marked report, mirroring render_doc_review()'s save/PDF
+    conventions."""
+    MAX_RUNS_PER_SESSION = 3  # mirrors render_doc_review()'s per-session cap
+
+    from output_screen_style import build_content_polish_css, build_output_eyebrow_html
+    from theme import DARK_TOKENS, LIGHT_TOKENS
+
+    _maturity_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(build_content_polish_css(_maturity_tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(_maturity_tokens, "maturity assessment sequence"), unsafe_allow_html=True)
+    st.markdown("## 📈 Assess QA Maturity")
+    st.markdown(
+        "Describe your team's testing process (policy, planning, tracking, environment, "
+        "training, reviews, ...) — or paste an existing Test Strategy/Risk Register — for "
+        "a deterministic, TMMi-grounded process maturity signal. If the description mentions "
+        "an AI/ML system, EU AI Act Articles 9-15 readiness is also assessed."
+    )
+    st.markdown("---")
+
+    if st.session_state.get("maturity_result") is None:
+        from output_screen_style import build_doc_review_input_tray_css
+        st.markdown(build_doc_review_input_tray_css(_maturity_tokens), unsafe_allow_html=True)
+
+        with st.container(key="maturity-input"):
+            uploaded = st.file_uploader(
+                "Upload a description or document (.md, .txt)", type=["md", "txt"], key="maturity_uploader",
+            )
+            st.caption("...or paste your process description below")
+            pasted = st.text_area(
+                "Process description", key="maturity_pasted_text", height=300, label_visibility="collapsed",
+            )
+
+        description_text = ""
+        source_label = "Assessment"
+        if uploaded is not None:
+            description_text = uploaded.read().decode("utf-8", errors="ignore")
+            source_label = Path(uploaded.name).stem
+        elif pasted.strip():
+            description_text = pasted
+
+        if st.button(
+            "🔍 Assess Maturity", use_container_width=True, type="primary",
+            disabled=not description_text.strip(),
+        ):
+            st.session_state.maturity_input_text = description_text
+            st.session_state.maturity_source_label = source_label
+            st.session_state.maturity_result = assess_maturity(description_text)
+            st.rerun()
+
+        if not description_text.strip():
+            st.info("Upload a file or paste a description above, then click **Assess Maturity**.")
+
+        if st.button("← Back to Home", key="maturity_back_to_home_pre"):
+            st.session_state.current_step = "intro"
+            st.rerun()
+        return
+
+    result = st.session_state.maturity_result
+
+    if result.status == "insufficient_content":
+        st.warning(
+            f"⚠️ Description is too short to assess ({result.stats.get('char_count', 0)} "
+            f"characters after cleanup — need at least {MATURITY_MIN_CONTENT_CHARS})."
+        )
+        if st.button("← Try another description", use_container_width=True):
+            _reset_maturity_mode_state()
+            st.rerun()
+        return
+
+    from ledger_components import signal_ledger_html
+
+    _maturity_animate_class = " animate" if not st.session_state.get("maturity_intro_animated") else ""
+    st.session_state.maturity_intro_animated = True
+
+    st.markdown(
+        '<div class="output-tiles{}">{}</div>'.format(
+            _maturity_animate_class,
+            signal_ledger_html("Indicative TMMi Level", result.indicative_tmmi_level, sub="1-3 · never 4-5"),
+        ),
+        unsafe_allow_html=True,
+    )
+    st.caption(result.disclaimer)
+
+    st.markdown("### TMMi Process Area Scores")
+    tmmi_cols = st.columns(len(result.tmmi_dimension_scores))
+    for col, (dim, score) in zip(tmmi_cols, result.tmmi_dimension_scores.items()):
+        with col:
+            st.markdown(signal_ledger_html(dim.replace("_", " ").title(), score), unsafe_allow_html=True)
+
+    if result.ai_act_relevant:
+        st.markdown("### EU AI Act Readiness (Articles 9-15)")
+        st.caption(result.ai_act_note)
+        ai_cols = st.columns(len(result.ai_act_dimension_scores))
+        for col, (dim, score) in zip(ai_cols, result.ai_act_dimension_scores.items()):
+            with col:
+                st.markdown(signal_ledger_html(dim.replace("_", " ").title(), score), unsafe_allow_html=True)
+
+    st.markdown("### Findings")
+    if not result.findings:
+        st.success("No findings — every mechanical check in the rubric passed.")
+    else:
+        _severity_icon = {"critical": "🔴", "major": "🟠", "minor": "🟡"}
+        for finding in result.findings:
+            icon = _severity_icon.get(finding.severity, "⚪")
+            title = f"{icon} [{finding.framework}/{finding.dimension.replace('_', ' ').title()}] {finding.message}"
+            with st.expander(title):
+                st.markdown(f"**Severity:** {finding.severity}")
+                st.markdown(f"**Evidence:** {finding.evidence}")
+
+    st.markdown("---")
+
+    # Step 2: LLM narrative — an LLM call, so it consumes run_count like render_doc_review().
+    if st.session_state.get("maturity_narrative") is None:
+        if st.session_state.get("run_count", 0) >= MAX_RUNS_PER_SESSION:
+            st.warning(
+                f"⚠️ You've used all {MAX_RUNS_PER_SESSION} free runs for this session. "
+                "Refresh the page to start a new session."
+            )
+        elif st.button("🤖 Generate narrative assessment", use_container_width=True, type="primary"):
+            st.session_state.run_count += 1
+            agent = st.session_state.get("agent")
+
+            queries = []
+            seen_queries = set()
+            for finding in result.findings:
+                for q in finding.citation_queries:
+                    if q not in seen_queries:
+                        seen_queries.add(q)
+                        queries.append(q)
+
+            with st.spinner("⚡ Retrieving grounding sources..."):
+                chunks = []
+                for q in queries[:5]:
+                    chunks.extend(agent.retrieve_knowledge(q, k=1))
+                if not chunks:
+                    chunks = agent.retrieve_knowledge("TMMi test process maturity assessment", k=5)
+            knowledge_context = agent.format_knowledge_context(chunks)
+
+            prompt = build_maturity_prompt(result, knowledge_context)
+            try:
+                narrative = clean_markdown_html(st.write_stream(
+                    agent.ask_streaming(prompt, system_prompt=MATURITY_SYSTEM_PROMPT)
+                ))
+            except (StopException, RerunException):
+                raise
+            except Exception as exc:
+                logger.error("Maturity narrative generation failed: %s", exc)
+                st.error(f"❌ Narrative generation failed: {exc}")
+                narrative = ""
+
+            st.session_state.maturity_narrative = narrative
+            st.session_state.maturity_narrative_sources = list({
+                f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
+                for c in chunks
+            })
+            st.rerun()
+    else:
+        if st.session_state.maturity_narrative:
+            st.markdown("### 🤖 Narrative Assessment")
+            st.markdown(st.session_state.maturity_narrative)
+            with st.expander("📚 Knowledge Sources Used"):
+                for source in st.session_state.get("maturity_narrative_sources", []):
+                    st.markdown(f'<div class="source-item">• {source}</div>', unsafe_allow_html=True)
+
+        if st.session_state.get("maturity_pdf_bytes") is None:
+            report_md = build_maturity_report_markdown(result, st.session_state.maturity_narrative or "")
+            st.session_state.maturity_output_path = save_maturity_report(
+                report_md, st.session_state.get("maturity_source_label") or "Assessment",
+            )
+            _ai_pdf_meta = pdf_meta_html(MISTRAL_MODEL)
+            _ai_pdf_icon = pdf_icon_html()
+            st.session_state.maturity_pdf_bytes = markdown_to_pdf(
+                with_ai_footer(report_md), "QA Maturity Assessment", _ai_pdf_meta, _ai_pdf_icon,
+            )
+
+        report_md = build_maturity_report_markdown(result, st.session_state.maturity_narrative or "")
+        st.markdown("---")
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                label="⬇️ Download (.md)",
+                data=with_ai_footer(report_md),
+                file_name="maturity_assessment.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with dl_col2:
+            pdf_bytes = st.session_state.maturity_pdf_bytes
+            st.download_button(
+                label="⬇️ Download (.pdf)",
+                data=pdf_bytes or b"",
+                file_name="maturity_assessment.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                disabled=pdf_bytes is None,
+            )
+
+    st.markdown("###")
+    if st.button("🔄 Assess Another Description", use_container_width=True):
+        _reset_maturity_mode_state()
+        st.rerun()
+    if st.button("← Back to Home"):
+        _reset_maturity_mode_state()
+        st.session_state.current_step = "intro"
+        st.rerun()
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     init_session_state()
@@ -1442,6 +1684,8 @@ def main():
         render_strategy()
     elif step == "doc_review":
         render_doc_review()
+    elif step == "maturity":
+        render_maturity_assessment()
 
 
 if __name__ == "__main__":

@@ -3,6 +3,15 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.0] - 2026-09-09
+
+### Added
+- **QA Maturity Assessment** (`assess_qa_maturity`) — a deterministic, dependency-free process-maturity signal, closing the gap left open when this tool was deferred in v3.1 (see `MCP_PLAN.md` §2). Scores 10 TMMi process areas (Level 2 Managed + Level 3 Defined) from a free-text process description or a pasted existing document, and returns an *informal, indicative* TMMi level (1-3 — never a certified 4 or 5, per TMMi's own no-skip rule). When the description signals an AI/ML system, also scores 7 EU AI Act Articles 9-15 readiness checks; otherwise that dimension is omitted rather than falsely scored. Available as:
+  - an MCP tool (`assess_qa_maturity`, deterministic-only, no LLM)
+  - a Streamlit mode ("📈 Assess QA Maturity", with an LLM narrative + PDF/.md download, mirroring Document Review)
+  - a CLI flag (`--maturity PATH`)
+- New tier-1 eval `maturity_integrity` (level ordering, no-skip rule, EU AI Act gating, determinism, insufficient-content handling), wired into the existing `evals-det` CI gate.
+
 ## [3.4.4] - 2026-08-31
 
 ### Fixed
