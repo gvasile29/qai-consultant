@@ -200,19 +200,21 @@ A release gate that treats the app like a model under test ("are the numbers and
 
 ```bash
 python -m evals.run                  # everything
-python -m evals.run --det            # tier 1 only (keyless, no LLM) — 3 modules
+python -m evals.run --det            # tier 1 only (keyless, no LLM) — 4 modules
 python -m evals.estimate_integrity   # tier 1: estimate checks standalone
 python -m evals.review_integrity     # tier 1: v3.1 F1 rubric checks standalone
 python -m evals.results_integrity    # tier 1: v3.1 F2 results-analysis checks standalone
+python -m evals.maturity_integrity   # tier 1: v3.5 maturity checks standalone
 python -m evals.rag                  # tier 2 standalone
 ```
 
-**Tier 1 (deterministic, keyless, CI-safe — 3 modules, all in the "tier-1-style" family):**
+**Tier 1 (deterministic, keyless, CI-safe — 4 modules, all in the "tier-1-style" family):**
 - `estimate_integrity`: runs the *real shipped* `InputValidator` / `EffortEstimator` (stubs only the heavy `agent` module) on golden inputs. 5 metrics: `duration_bounds`, `team_restatement_invariance`, `name_display_fidelity`, `confidence_magnitude_sanity`, `no_fabricated_versions`.
 - `review_integrity` (v3.1): runs the real shipped `review_core.review_document()` (no stub needed — dependency-free). 4 metrics: `score_ordering`, `dimension_attribution`, `determinism`, `insufficient_content_handling`.
 - `results_integrity` (v3.1): runs the real shipped `results_core.analyze()`/parsers (no stub needed). 4 metrics: `flaky_and_ever_failing_boundaries`, `cluster_count`, `malformed_input_never_crashes`, `csv_xml_parity`.
+- `maturity_integrity` (v3.5): runs the real shipped `maturity_core.assess_maturity()` (no stub needed — dependency-free). 5 metrics: `level_ordering`, `no_level_skip`, `ai_act_gating`, `determinism`, `insufficient_content_handling`.
 
-No LLM, no API keys in any of the three; a red row names a real defect in the shipped logic.
+No LLM, no API keys in any of the four; a red row names a real defect in the shipped logic.
 
 **Tier 2 — `rag` (classical RAG metrics, fully local):** builds an in-memory cosine index over `knowledge_base/*.md` with the app's own embedding model (`all-MiniLM-L6-v2`, same `langchain_community` import as `src/agent.py`) — no Pinecone, no keys. 5 metrics. Keyless: `context_recall@k` + `context_precision_mrr` (reuse the `expects` labels). Need a generated answer, so they go through the app's own `LLMClient` (`judge.py`) — the production Mistral model: `faithfulness` + `answer_relevance` (LLM-judged) and `source_attribution` (regex over `[Source N]` citations). They need `MISTRAL_API_KEY`; judged metrics SKIP, never fail, when the keys are absent or the provider is unreachable, and SKIP below a half-of-cases quorum.
 
@@ -221,6 +223,7 @@ No LLM, no API keys in any of the three; a red row names a real defect in the sh
 | `estimate_integrity.py` | Tier 1 checks + runner; `golden.jsonl` = cases, `captured_test_plan.md` = fixture for the version check |
 | `review_integrity.py` | (v3.1) Tier 1 checks + runner; `review_golden.jsonl` = cases, `fixtures/review/*.md` = document fixtures (strong/weak/vague-measurability) |
 | `results_integrity.py` | (v3.1) Tier 1 checks + runner; `results_golden.jsonl` = cases, `fixtures/results/*.xml`/`.csv` = JUnit/CSV fixtures (3-run flaky/ever-failing set, failure-cluster set, malformed XML, XML/CSV parity pair) |
+| `maturity_integrity.py` | (v3.5) Tier 1 checks + runner; `maturity_golden.jsonl` = cases, `fixtures/maturity/*.txt` = description fixtures |
 | `rag.py` | Tier 2 metrics + local index; `rag_golden.jsonl` = (query → expected source) cases |
 | `local_index_parity.py` | Tier 2, keyless but not dependency-free (needs the embedding stack): reruns `rag.py`'s Context Recall@k / MRR metrics against the real `src/local_index.LocalIndex` (chunked 1000/200, what the MCP server actually serves) instead of `rag.py`'s coarser doc-level 4000-char index, so a chunking/category/cache regression that only shows up at chunk granularity doesn't slip past the doc-level eval. `python -m evals.local_index_parity` |
 | `judge.py` | LLM judge/generator for the judged metrics, via the app's `LLMClient` (production Mistral) |
