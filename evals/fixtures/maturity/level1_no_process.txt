@@ -1,0 +1,4 @@
+We write some code and then people click around the app to see if it
+works before we ship it. Nobody has ever written a test plan or tracked
+defects anywhere. If something breaks in production we fix it and move
+on. There is no test environment separate from production.

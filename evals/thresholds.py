@@ -42,6 +42,11 @@ JUDGE_MAX_WORKERS = 3         # concurrent judged cases — capped low to stay u
 # deliberately weak one — matches V3.1_PLAN.md's acceptance criterion (section 6).
 REVIEW_SCORE_ORDERING_DELTA_MIN = 20
 
+# ── maturity_integrity (v3.5 — src/maturity_core.py TMMi + EU AI Act rubric) ──
+# A strongly-evidenced Level 2+3 description must reach at least this indicative
+# level; a no-process description must never exceed Level 1.
+MATURITY_LEVEL_ORDERING_MIN_LEVEL = 3
+
 # ── local_index_parity (v3.0 — the MCP server's served LocalIndex vs the eval index) ──
 # Same rag_golden.jsonl, same retrieval depth, but against the real chunked (1000/200)
 # index the MCP server serves, not evals/rag.py's coarser doc-level (4000-char) index.

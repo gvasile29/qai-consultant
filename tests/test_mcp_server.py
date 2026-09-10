@@ -64,12 +64,12 @@ async def _get_prompt(name: str) -> str:
 
 # ── Tool registration ────────────────────────────────────────────────────────────
 
-def test_all_five_tools_registered():
+def test_all_six_tools_registered():
     tools = _run(_list_tools())
     names = {t.name for t in tools}
     assert names == {
         "retrieve_qa_knowledge", "list_kb_sources", "estimate_qa_effort",
-        "review_qa_document", "analyze_test_results",
+        "review_qa_document", "analyze_test_results", "assess_qa_maturity",
     }
 
 
@@ -549,3 +549,83 @@ def test_main_exits_nonzero_if_warmup_search_fails(monkeypatch):
     with pytest.raises(SystemExit) as exc_info:
         mcp_server.main()
     assert exc_info.value.code == 1
+
+
+_LEVEL2_PROCESS_TEXT = """
+Our team maintains a documented test policy and test strategy defining our
+test objectives. Every release has a test plan with estimates, a schedule,
+and risk-based prioritization. We track defects in a defect log and report
+status against the plan, taking corrective action when we fall behind. Test
+design follows structured test design techniques with clear entry criteria
+and exit criteria; requirements are tracked as REQ-101, REQ-102. We run
+everything in a dedicated test environment that is representative of
+production.
+"""
+
+
+def test_assess_qa_maturity_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "assess_qa_maturity")
+    props = tool.inputSchema["properties"]
+    assert set(props.keys()) == {"project_description"}
+
+
+def test_assess_qa_maturity_happy_path_shape():
+    result = _run(_call_tool("assess_qa_maturity", {
+        "project_description": _LEVEL2_PROCESS_TEXT,
+    }))
+    assert "error" not in result
+    assert result["indicative_tmmi_level"] in (1, 2, 3)
+    assert set(result["tmmi_dimension_scores"].keys()) == {
+        "test_policy_and_strategy", "test_planning", "test_monitoring_and_control",
+        "test_design_and_execution", "test_environment",
+        "test_organization", "test_training_program", "test_lifecycle_and_integration",
+        "non_functional_testing", "peer_reviews",
+    }
+    assert isinstance(result["findings"], list)
+    assert "disclaimer" in result and result["disclaimer"]
+    assert "kb_version" in result
+
+
+def test_assess_qa_maturity_findings_carry_kb_citations_list():
+    result = _run(_call_tool("assess_qa_maturity", {
+        "project_description": "We write some code and click around to test it. " * 20,
+    }))
+    assert result["findings"], "expected findings on a weak process description"
+    for finding in result["findings"]:
+        assert set(finding.keys()) == {
+            "framework", "dimension", "level", "severity", "message", "evidence", "kb_citations",
+        }
+        assert isinstance(finding["kb_citations"], list)
+        for citation in finding["kb_citations"]:
+            assert set(citation.keys()) == {"source", "category", "score"}
+
+
+def test_assess_qa_maturity_insufficient_content_is_not_an_error():
+    result = _run(_call_tool("assess_qa_maturity", {"project_description": "Too short."}))
+    assert "error" not in result
+    assert result["indicative_tmmi_level"] == 0
+    assert result["findings"] == []
+
+
+def test_assess_qa_maturity_ai_act_omitted_for_non_ai_project():
+    result = _run(_call_tool("assess_qa_maturity", {
+        "project_description": "We test a standard e-commerce checkout flow. " * 20,
+    }))
+    assert result["ai_act_relevant"] is False
+    assert result["ai_act_dimension_scores"] == {}
+
+
+def test_assess_qa_maturity_ai_act_scored_for_ai_project():
+    ai_text = (
+        "We are building a machine learning model for loan screening, trained on "
+        "historical applicant data, with a documented risk management process. " * 3
+    )
+    result = _run(_call_tool("assess_qa_maturity", {"project_description": ai_text}))
+    assert result["ai_act_relevant"] is True
+    assert set(result["ai_act_dimension_scores"].keys()) == {
+        "risk_management", "data_governance", "technical_documentation",
+        "record_keeping", "transparency_instructions", "human_oversight",
+        "accuracy_robustness_security",
+    }
+    assert "ai_act_note" in result and result["ai_act_note"]

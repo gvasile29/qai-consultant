@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.4.4-green.svg)
+![Version](https://img.shields.io/badge/version-3.5.0-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -229,6 +229,7 @@ claude mcp add qai-consultant -- uvx qai-consultant-mcp
 | `estimate_qa_effort` | Deterministic PERT-based effort estimate (no LLM narrative — you write your own from the numbers) |
 | `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829 dimensions, with findings + KB citations |
 | `analyze_test_results` | Deterministic health metrics from JUnit XML/CSV test execution data — flaky tests, ever-failing tests, slowest tests, failure clustering |
+| `assess_qa_maturity` | Deterministic indicative TMMi process-maturity level (1-3, never a certified 4-5) from a free-text description, plus a conditional EU AI Act Articles 9-15 readiness score when the input signals an AI/ML system |
 
 **Prompts:** `qa_project_interview` (the same 11-question intake this app uses), `risk_register_structure`, `test_strategy_structure`, `test_plan_structure` — each grounds the client's generation in `retrieve_qa_knowledge` with `[Source N]` citations.
 
@@ -280,6 +281,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.4.2** ✅ Interactive flow redesign (Phase 2 of 3 — see the CHANGELOG): the Project Discovery dialogue, review screen, and sidebar now share the landing page's "Power-On Sequence" visual language (animated progress bar, one-time entrance-animated summary tiles, hover feedback)
 - **v3.4.3** ✅ Output screens redesign (Phase 3 of 3, completing the "Power-On Sequence" redesign — see the CHANGELOG): the Test Strategy results view and the document review screen now share the same visual language (live 4-stage sequence status, entrance-animated score tiles, hover feedback), plus a "What you get in ~2 minutes" addendum on the landing screen
 - **v3.4.4** ✅ Fix — `qai-consultant-mcp` could again fail to attach in Claude Desktop, this time from an *unpinned transitive* dependency (scipy, via scikit-learn) picking up a fresh release mid-cache-miss; the entire resolved dependency tree (~99 entries) is now exact-pinned, not just the 6 direct imports
+- **v3.5.0** ✅ QA Maturity Assessment (`assess_qa_maturity`) — deterministic TMMi process-maturity signal (10 process areas, indicative level 1-3) plus a conditional EU AI Act Articles 9-15 readiness score for AI/ML projects; available in the web app ("📈 Assess QA Maturity"), CLI (`--maturity`), and the MCP server (`assess_qa_maturity`)
 - **v4.0** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---
