@@ -3,6 +3,25 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.1] - 2026-09-15
+
+### Fixed
+- QA Maturity Assessment's deterministic scoring missed evidence described in
+  paraphrased wording rather than the exact keyword the rubric expected —
+  found via a live browser QA pass on the deployed app. Two concrete gaps
+  fixed in `maturity_core.py`: `requirement_traceability` only recognized a
+  ticket-ID pattern (`REQ-123`, `JIRA-42`, ...), missing a prose description
+  like "traceability from requirements to test cases and defects"; and Test
+  Monitoring and Control's `progress_tracking` check only matched "defect
+  tracking"/"status report", missing phrasing like "weekly triage of
+  defects" or "pass rate". Also tightened the narrative-generation prompt so
+  it stops recommending "establish X" for a whole process area when that
+  area already has partial evidence (score > 0) — it now names the specific
+  missing check instead. This release also marks the first time the v3.5.0
+  QA Maturity Assessment tool (`assess_qa_maturity`) reaches the published
+  MCP package — the previous release cut v3.5.0 in the repo but never
+  completed the PyPI publish step.
+
 ## [3.5.0] - 2026-09-09
 
 ### Added
