@@ -91,6 +91,15 @@ def test_maturity_system_prompt_forbids_rescoring():
     assert "never invent" in MATURITY_SYSTEM_PROMPT.lower() or "never change" in MATURITY_SYSTEM_PROMPT.lower()
 
 
+def test_build_maturity_prompt_forbids_recommending_partially_evidenced_areas_from_scratch():
+    """Found via live browser QA: the narrative recommended 'establish a test
+    policy and strategy' for an area that already had partial evidence
+    (score > 0) — the prompt must steer the LLM to name the specific missing
+    check instead of the whole process area."""
+    prompt = build_maturity_prompt(_SAMPLE_RESULT, "")
+    assert "specific missing element" in prompt.lower() or "missing check" in prompt.lower()
+
+
 # ── build_maturity_report_markdown ───────────────────────────────────────────
 
 def test_build_maturity_report_markdown_includes_level_and_disclaimer():

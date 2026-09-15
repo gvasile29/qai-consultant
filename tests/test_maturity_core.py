@@ -198,3 +198,41 @@ def test_negated_keywords_are_not_counted_as_evidence():
     ]
     level2_avg = sum(result.tmmi_dimension_scores[a] for a in level2_areas) / len(level2_areas)
     assert level2_avg < 60
+
+
+def test_progress_tracking_recognizes_defect_triage_and_pass_rate_paraphrase():
+    """Found via live browser QA: a description covering coverage/pass-rate
+    per sprint plus a weekly defect triage was scored 0/100 for Test
+    Monitoring and Control because the keyword list only recognized
+    "defect tracking"/"status report", not semantically equivalent
+    phrasing."""
+    text = (
+        "We track test coverage and pass rate every sprint, and hold a "
+        "weekly triage of defects to catch regressions early in each "
+        "release cycle. " * 4
+    )
+    result = assess_maturity(text)
+    progress_tracking_findings = [
+        f for f in result.findings
+        if f.dimension == "test_monitoring_and_control" and f.evidence == "progress_tracking"
+    ]
+    assert not progress_tracking_findings
+
+
+def test_requirement_traceability_recognizes_prose_description_without_ticket_ids():
+    """Found via live browser QA: a prose description of requirement
+    traceability ("traceability from requirements to test cases and
+    defects") was scored as no evidence, because the only signal recognized
+    was a ticket-ID regex (REQ-101, JIRA-42, ...), not a description of the
+    practice itself."""
+    text = (
+        "We maintain full traceability from requirements to test cases and "
+        "defects, with structured test design techniques and clear entry "
+        "criteria and exit criteria throughout the project. " * 4
+    )
+    result = assess_maturity(text)
+    traceability_findings = [
+        f for f in result.findings
+        if f.dimension == "test_design_and_execution" and f.evidence == "requirement_traceability"
+    ]
+    assert not traceability_findings

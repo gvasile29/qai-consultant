@@ -81,7 +81,11 @@ Bullet points on the process areas that scored well.
 
 ## Priority Gaps
 For each Critical and Major finding: explain why it matters (reference the standards in the
-knowledge base where relevant) and give a concrete, actionable next step.
+knowledge base where relevant) and give a concrete, actionable next step. A finding names the one
+missing check within a process area (see its "evidence" field) — a process area can score partial
+credit when some of its checks passed. Never phrase a recommendation as "establish X" for a whole
+process area if any of its other checks passed (i.e. the area's score above is > 0); instead name
+the specific missing element the finding describes.
 
 ## Minor Improvements
 Briefly list the Minor findings with suggested next steps.

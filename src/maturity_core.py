@@ -107,7 +107,8 @@ _TMMI_CHECKS = {
             ("risk_based_prioritization", ["risk-based prioritization", "prioritized by risk", "risk-based testing"]),
         ],
         "test_monitoring_and_control": [
-            ("progress_tracking", ["defect log", "defect tracking", "status report", "progress report"]),
+            ("progress_tracking", ["defect log", "defect tracking", "status report", "progress report",
+                                    "defect triage", "triage of defects", "pass rate"]),
             ("corrective_action", ["corrective action", "tracked against plan", "monitored against the plan", "report status"]),
         ],
         "test_design_and_execution": [
@@ -168,6 +169,24 @@ def _keyword_present_without_negation(text: str, keyword: str) -> bool:
     return False
 
 
+_TRACEABILITY_PHRASES = [
+    "requirement traceability", "traceability from requirements",
+    "traceable to requirements", "linked to requirements",
+    "requirements to test cases", "traced to test cases",
+]
+
+
+def _requirement_traceability_signal(text: str, lower_text: str) -> bool:
+    """True if requirement traceability is evidenced either by an explicit
+    ticket-ID pattern (REQ-101, JIRA-42, ...) or by a prose description of
+    the practice — a ticket-ID regex alone missed paraphrases like
+    "traceability from requirements to test cases and defects" (found via
+    live browser QA, not by any prompt requirement)."""
+    if _REQ_ID_RE.search(text):
+        return True
+    return any(_keyword_present_without_negation(lower_text, phrase) for phrase in _TRACEABILITY_PHRASES)
+
+
 def _score_area(lower_text: str, checks: list, req_id_present: Optional[bool]) -> tuple:
     """One process area's score + findings. `req_id_present` folds in the
     requirement-traceability signal for test_design_and_execution only —
@@ -185,7 +204,7 @@ def _score_tmmi(text: str, lower_text: str) -> tuple:
     """Returns (dimension_scores: dict, findings: list[MaturityFinding])."""
     scores = {}
     findings = []
-    req_id_present = bool(_REQ_ID_RE.search(text))
+    req_id_present = _requirement_traceability_signal(text, lower_text)
 
     for level, areas in _TMMI_CHECKS.items():
         for area_key, checks in areas.items():
