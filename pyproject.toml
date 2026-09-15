@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qai-consultant-mcp"
-version = "3.5.1"
+version = "3.5.2"
 description = "Local, keyless MCP server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, test-results health analysis, and QA process maturity assessment."
 readme = "README_MCP.md"
 requires-python = ">=3.10"
@@ -31,12 +31,16 @@ classifiers = [
 # aborting the install mid-extraction so the wheel never even reached the
 # permanent cache -- every subsequent launch repeated the same failed download.
 # Generated via `uv pip compile pyproject.toml --universal --python-version
-# 3.10 --extra-index-url https://download.pytorch.org/whl/cpu`; regenerate the
-# same way (against the *previous* pinned set, so drift is deliberate) when a
-# direct dependency needs a version bump. `torch` sits in its normal
-# alphabetical spot below with no environment marker -- unlike scipy/numpy/etc.,
-# its per-platform build (`+cpu` vs. plain) is already selected via
-# [tool.uv.sources]'s scoped index, so the plain version pin is sufficient.
+# 3.10`; regenerate the same way (against the *previous* pinned set, so drift
+# is deliberate) when a direct dependency needs a version bump. Do NOT add
+# `--extra-index-url https://download.pytorch.org/whl/cpu` to that command —
+# see the v3.5.1 incident note near the (removed) `[tool.uv.sources]` block
+# further down this file: a CPU-index-scoped torch pin resolves fine for this
+# project's own tooling
+# but breaks every real `uvx qai-consultant-mcp` consumer, since PyPI-consumer
+# resolution never sees this file's `[tool.uv.*]` config. `torch` is pinned
+# plain (`torch==2.13.0`, no environment marker) so it resolves identically
+# for local dev and for real consumers.
 dependencies = [
     "aiohappyeyeballs==2.7.1",
     "aiohttp==3.14.3",
@@ -124,8 +128,7 @@ dependencies = [
     "tenacity==9.1.4",
     "threadpoolctl==3.6.0",
     "tokenizers==0.22.2",
-    "torch==2.13.0 ; sys_platform == 'darwin'",
-    "torch==2.13.0+cpu ; sys_platform != 'darwin'",
+    "torch==2.13.0",
     "tqdm==4.70.0",
     "transformers==4.57.6",
     "typing-extensions==4.16.0",
@@ -150,20 +153,28 @@ qai-consultant-mcp = "mcp_server:main"
 [tool.mypy]
 ignore_missing_imports = true
 
-# ── uv: pin torch to the CPU wheel index, scoped ONLY to torch ──────────────────
-# (see MCP_PLAN.md section 6's "Decided 2026-07-15" note.) Unlike requirements.txt's
-# uv.toml (index-strategy = "unsafe-best-match", applied globally because plain
-# requirements.txt has no per-package index syntax), this pyproject.toml CAN scope
-# the extra index to exactly the one package that needs it — so `uv` never queries
-# download.pytorch.org for anything else, and can't repeat the "requests pinned to
-# an old version mirrored there" resolution deadlock that bit requirements.txt.
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
+# ── uv: NO scoped torch index here — see the v3.5.1 incident note below ─────────
+# A `[tool.uv.sources]`/`[[tool.uv.index]]` scoped-index block used to live here
+# (MCP_PLAN.md section 6's "Decided 2026-07-15" note), routing `torch` to
+# download.pytorch.org's CPU-only wheel index. DO NOT re-add it: `[tool.uv.*]`
+# config is a *project-local* uv setting — it applies when `uv` resolves this
+# repo's own pyproject.toml directly (`uv sync`, `uv run`, or the drift-canary's
+# `uv pip compile pyproject.toml ...`), but it is NOT distributed as part of the
+# built wheel/sdist metadata, so a real end user's `uvx qai-consultant-mcp` (which
+# only ever resolves against plain PyPI, having never seen this repo's
+# pyproject.toml) cannot see it. The 2026-09 drift-canary regeneration (`c45bf21`)
+# correctly resolved `torch==2.13.0+cpu` *for this project's own compile step*,
+# baked that version string into `dependencies` below, and published it as
+# `qai-consultant-mcp==3.5.1` — which then failed to resolve for every real
+# `uvx`/`pip install` consumer with "no version of torch==2.13.0+cpu", since
+# plain PyPI never mirrors that CPU-tagged local version. Caught post-publish via
+# a real `uvx --from qai-consultant-mcp==3.5.1 ...` smoke test from a neutral
+# directory (not run before that release — see the Gotchas entry in CLAUDE.md);
+# fixed by reverting to a plain `torch==2.13.0` pin below, which resolves
+# identically for both local project tooling and real consumers. If CPU-only
+# torch is ever worth pursuing again, it needs a mechanism that survives being
+# published to PyPI (e.g. a documented `--extra-index-url` in the install
+# instructions), not project-local `[tool.uv.sources]` scoping.
 
 # ── setuptools: flat modules from src/, no nested package ───────────────────────
 # Matches these modules' existing bare `from x import y` style (no package prefix) —

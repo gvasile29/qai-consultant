@@ -3,6 +3,32 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.2] - 2026-09-15
+
+### Fixed
+- `qai-consultant-mcp==3.5.1` (published earlier the same day) could not be
+  installed by any real `uvx`/`pip` consumer — `uv`/`pip` reported "no
+  version of torch==2.13.0+cpu" and refused to resolve the package at all.
+  Root cause: the weekly Dependency Drift Canary's automated pin
+  regeneration correctly resolved `torch` against this repo's own scoped
+  `[tool.uv.sources]` PyTorch-CPU index (a project-local `uv` setting) and
+  baked the resulting `torch==2.13.0+cpu` pin into the published package's
+  dependency list — but that `[tool.uv.*]` config is never distributed to a
+  downstream consumer's `uvx qai-consultant-mcp`, which only ever resolves
+  against plain PyPI. Plain PyPI has no `+cpu`-tagged torch build, so every
+  fresh install failed outright, immediately, for every platform except
+  macOS. Caught within minutes of the 3.5.1 publish via a real
+  `uvx --from qai-consultant-mcp==3.5.1 ...` smoke test run from a neutral
+  directory (not run before 3.5.1's publish). **3.5.1 has been yanked on
+  PyPI** (still installable if explicitly pinned, but no longer selected by
+  a plain `uvx qai-consultant-mcp`/`pip install qai-consultant-mcp`).
+  Fixed by reverting `torch` to a plain `torch==2.13.0` pin (matching the
+  last known-working 3.4.4) and removing the `[tool.uv.sources]`/
+  `[[tool.uv.index]]` scoped-index block entirely, so the pin resolves
+  identically for local project tooling and for real consumers — closing
+  the gap for good rather than just for this one pin. See the new
+  `CLAUDE.md` gotcha for the full incident writeup.
+
 ## [3.5.1] - 2026-09-15
 
 ### Fixed
