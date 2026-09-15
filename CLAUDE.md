@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 QAI Consultant is a Python-based AI agent that acts as a senior QA Architect. It collects project context via a structured 11-question dialogue, then generates Test Strategies grounded in ISTQB, OWASP, IEEE, and ISO standards using a cloud LLM (Mistral API, with OpenRouter fallback) and RAG over a Pinecone vector knowledge base.
 
 **Deployed:** https://quality-ai-consultant.streamlit.app
-**Latest GitHub release:** [v3.3.1](https://github.com/gvasile29/qai-consultant/releases/tag/v3.3.1) (2026-07-30, tagged on `master`). `src/version.py`/`CHANGELOG.md` are ahead of the tag history at v3.4.1 — v3.4/v3.4.1 (and v2.0.0–v2.5.0) shipped without an individual tag/release; treat `version.py` as the source of truth for "what's actually on `master`", not the latest tag.
+**Latest GitHub release:** [v3.5.2](https://github.com/gvasile29/qai-consultant/releases/tag/v3.5.2) (2026-09-15, tagged on `master`). v3.4/v3.4.1 (and v2.0.0–v2.5.0) shipped without an individual tag/release; v3.5.0/v3.5.1 never got a tag or GitHub release either (v3.5.0's PyPI publish step was skipped entirely, and v3.5.1 was published then yanked the same day for being unresolvable — see the Gotchas entry on the `[tool.uv.sources]` incident). Treat `version.py` as the source of truth for "what's actually on `master`", not the latest tag, when in doubt.
 
 ## Development Commands
 
