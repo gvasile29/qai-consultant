@@ -11,7 +11,7 @@ pypdf==6.14.2
 python-dotenv==1.2.2
 markdown==3.8.1
 xhtml2pdf>=0.2.11
-nltk==3.10.0
+nltk==3.10.3
 rich==13.7.1
 streamlit==1.59.1
 mistralai>=1.2.0
