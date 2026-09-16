@@ -52,7 +52,7 @@ Thumbs.db
 
 # Claude Code internal files (settings.local.json, scheduled_tasks.lock are
 # machine-local; skills/ are repo dev tools and stay tracked)
-CLAUDE.md
+# CLAUDE.md is temporarily tracked for the dependency-drift-canary implementation
 .claude/*
 !.claude/skills/
 
@@ -67,3 +67,6 @@ marketing/
 
 # Brainstorming visual-companion session files (mockups, transient state)
 .superpowers/
+
+# Training materials (personal, not for public repo)
+training/
