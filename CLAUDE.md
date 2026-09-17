@@ -34,6 +34,8 @@ MCP browser tools (claude-in-chrome, Playwright MCP) are still the right choice 
 
 Playwright is installed (`playwright==1.62.0`, pinned in `requirements-dev.txt`) with the Chromium browser binary already downloaded locally — no setup needed before writing a script.
 
+**Process scale for visual/CSS-only changes:** the 3-phase "Power-On Sequence" redesign (v3.4.1-v3.4.3) used `superpowers:subagent-driven-development` with an independent implementer + reviewer per task, plus a separate final whole-branch review, for each phase. That level of process is proportionate for a multi-task redesign spanning several screens, but it is not the default for a small, single-screen, cosmetic-only CSS/styling change with no logic, security, or data-handling surface — those can go through the normal direct-implementation workflow (write the change, verify visually per the section above, commit) without a dedicated multi-agent review pass. Reserve the heavier process for changes that touch application logic, security-sensitive code, or anything with a real behavioral surface to get wrong.
+
 Required environment variables (`.env` or Streamlit Cloud secrets):
 ```
 MISTRAL_API_KEY=...
