@@ -186,10 +186,21 @@ threading hazard is the same shape.
 - `evals/local_index_parity.py` needs no code change — it already exercises the
   real `LocalIndex` end-to-end. Its pass/fail against `thresholds.py`'s existing
   `LOCAL_INDEX_RECALL_AT_K_MIN`/`LOCAL_INDEX_MRR_MIN` floors (0.8/0.7) is the
-  permanent regression gate for retrieval quality — already proven to pass at
-  0.91/0.86 in the spike, and it runs in the `evals-det` CI job on every PR.
+  retrieval-quality regression check — already proven to pass at 0.91/0.86 in
+  the spike. **Correction (caught by a parallel audit fork while this spec was
+  in review): `evals/run.py`'s `--det` mode explicitly skips both `rag` and
+  `local_index_parity` (`if not det_only:` gates them) — CI's `evals-det` job
+  runs `python -m evals.run --det`, so this check does NOT currently run in
+  CI. It's a manual/local gate only (`python -m evals.local_index_parity`),
+  same as `evals/rag.py`. This is a genuine, separate gap (tracked by the
+  CI/evals-simplification plan, `docs/superpowers/plans/
+  2026-09-17-ci-evals-simplification.md`, which restructures `evals/run.py`)
+  — not something this plan should fix itself, to avoid two independent plans
+  editing the same CI wiring. Whichever plan lands first should leave a note
+  for the other.
 - `requirements-dev.txt` gets `fastembed` added (pinned to the version verified
-  during implementation) so both the above run for real in CI, not skipped.
+  during implementation) so both the above run for real locally/in dev, not
+  skipped for missing the embedding stack.
 
 ## Error Handling
 
