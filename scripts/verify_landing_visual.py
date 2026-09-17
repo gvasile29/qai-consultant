@@ -13,7 +13,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-URL = "http://localhost:8501"
+from verify_visual_common import URL, full_screenshot
+
+VIEWPORT = {"width": 1280, "height": 900}
 
 
 def main() -> int:
@@ -21,14 +23,14 @@ def main() -> int:
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        page = browser.new_page(viewport=VIEWPORT)
         page.goto(URL, timeout=30000, wait_until="networkidle")
         # "networkidle" only tracks HTTP -- Streamlit renders the actual DOM
         # over a websocket after that, so wait for the hero itself before
         # timing the entrance animations against it.
         page.wait_for_selector(".pom-hero", timeout=30000)
         page.wait_for_timeout(2500)  # let the one-shot entrance animations finish
-        page.screenshot(path=str(out_dir / "landing_normal_motion.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "landing_normal_motion.png"), VIEWPORT)
         fill_width = page.eval_on_selector(
             ".pom-gauge.strategy .pom-gfill", "el => getComputedStyle(el).width"
         )
@@ -36,11 +38,11 @@ def main() -> int:
         browser.close()
 
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+        page = browser.new_page(viewport=VIEWPORT, reduced_motion="reduce")
         page.goto(URL, timeout=30000, wait_until="networkidle")
         page.wait_for_selector(".pom-hero", timeout=30000)
         page.wait_for_timeout(300)  # should already be at resting state almost immediately
-        page.screenshot(path=str(out_dir / "landing_reduced_motion.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "landing_reduced_motion.png"), VIEWPORT)
         fill_width_reduced = page.eval_on_selector(
             ".pom-gauge.strategy .pom-gfill", "el => getComputedStyle(el).width"
         )

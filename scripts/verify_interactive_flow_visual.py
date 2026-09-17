@@ -14,21 +14,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-URL = "http://localhost:8501"
+from verify_visual_common import URL, full_screenshot, reveal
 
-
-def _reveal(page, locator, max_scrolls=40, step=1200, pause=100):
-    """Streamlit lazy-mounts elements far below the fold (IntersectionObserver-
-    gated rendering -- confirmed by inspecting document.querySelectorAll('button')
-    before/after scrolling: the intro screen's "Start" button and the dialogue
-    form's submit button are absent from the DOM entirely until scrolled near
-    view, not just off-screen). Scroll incrementally until `locator` is
-    attached before interacting with it; a no-op if it's already present."""
-    for _ in range(max_scrolls):
-        if locator.count() > 0:
-            return
-        page.mouse.wheel(0, step)
-        page.wait_for_timeout(pause)
+VIEWPORT = {"width": 1280, "height": 1400}
 
 
 def main() -> int:
@@ -36,16 +24,16 @@ def main() -> int:
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1280, "height": 1400})
+        page = browser.new_page(viewport=VIEWPORT)
         page.goto(URL, timeout=30000, wait_until="networkidle")
         page.wait_for_timeout(1500)
 
         start_btn = page.get_by_role("button", name="Start — Generate a Test Strategy")
-        _reveal(page, start_btn)
+        reveal(page, start_btn)
         start_btn.click(timeout=10000)
         page.wait_for_selector(".dialogue-progress-track", timeout=15000)
         page.wait_for_timeout(500)
-        page.screenshot(path=str(out_dir / "dialogue_empty.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "dialogue_empty.png"), VIEWPORT)
         fill_width = page.eval_on_selector(
             ".dialogue-progress-fill", "el => getComputedStyle(el).width"
         )
@@ -64,7 +52,7 @@ def main() -> int:
             ".dialogue-progress-fill", "el => getComputedStyle(el).width"
         )
         print(f"Dialogue progress fill after template applied (expect > 0px, wider): {fill_width_after}")
-        page.screenshot(path=str(out_dir / "dialogue_filled.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "dialogue_filled.png"), VIEWPORT)
 
         # Hover CSS (`.ledger-card:hover` and build_sidebar_polish_css()'s
         # sidebar button hover) previously had zero visual verification --
@@ -73,15 +61,15 @@ def main() -> int:
         first_card = page.locator(".ledger-card").first
         first_card.hover()
         page.wait_for_timeout(300)
-        page.screenshot(path=str(out_dir / "dialogue_card_hover.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "dialogue_card_hover.png"), VIEWPORT)
 
         start_over_btn = page.get_by_role("button", name="🔄 Start Over")
         start_over_btn.hover()
         page.wait_for_timeout(300)
-        page.screenshot(path=str(out_dir / "sidebar_button_hover.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "sidebar_button_hover.png"), VIEWPORT)
 
         submit_btn = page.get_by_role("button", name="✅ Review & Generate Strategy")
-        _reveal(page, submit_btn)
+        reveal(page, submit_btn)
         submit_btn.click(timeout=10000)
         page.wait_for_selector(".review-grid", timeout=15000)
         # interactive_flow_style.py sets animation-delay = i * 0.05s for i in
@@ -90,7 +78,7 @@ def main() -> int:
         # after .review-grid mounts. Wait past that with margin, or the
         # screenshot can catch the last tile still mid-fade.
         page.wait_for_timeout(1000)
-        page.screenshot(path=str(out_dir / "review_first_visit.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "review_first_visit.png"), VIEWPORT)
         first_visit_class = page.eval_on_selector(".review-grid", "el => el.className")
         print(f"Review grid class on first visit (expect contains 'animate'): {first_visit_class}")
 
@@ -105,17 +93,17 @@ def main() -> int:
         page.wait_for_timeout(1000)
         second_render_class = page.eval_on_selector(".review-grid", "el => el.className")
         print(f"Review grid class after editing additional context (expect NOT contains 'animate'): {second_render_class}")
-        page.screenshot(path=str(out_dir / "review_after_edit.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "review_after_edit.png"), VIEWPORT)
 
         browser.close()
 
         # Reduced-motion pass on the review screen.
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1280, "height": 1400}, reduced_motion="reduce")
+        page = browser.new_page(viewport=VIEWPORT, reduced_motion="reduce")
         page.goto(URL, timeout=30000, wait_until="networkidle")
         page.wait_for_timeout(1000)
         start_btn = page.get_by_role("button", name="Start — Generate a Test Strategy")
-        _reveal(page, start_btn)
+        reveal(page, start_btn)
         start_btn.click(timeout=10000)
         page.wait_for_selector(".dialogue-progress-track", timeout=15000)
         page.locator('[data-testid="stSelectbox"]').first.click()
@@ -131,11 +119,11 @@ def main() -> int:
         # enough for the fields to be applied before the next click).
         page.wait_for_timeout(800)
         submit_btn = page.get_by_role("button", name="✅ Review & Generate Strategy")
-        _reveal(page, submit_btn)
+        reveal(page, submit_btn)
         submit_btn.click(timeout=10000)
         page.wait_for_selector(".review-grid", timeout=15000)
         page.wait_for_timeout(200)  # reduced motion should already be at rest almost immediately
-        page.screenshot(path=str(out_dir / "review_reduced_motion.png"), full_page=True)
+        full_screenshot(page, str(out_dir / "review_reduced_motion.png"), VIEWPORT)
         browser.close()
 
     print(f"Screenshots saved to: {out_dir}")

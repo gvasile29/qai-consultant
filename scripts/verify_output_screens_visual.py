@@ -17,43 +17,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import sync_playwright
 
-URL = "http://localhost:8501"
+from verify_visual_common import URL, full_screenshot
+
 VIEWPORT = {"width": 1280, "height": 1400}
-
-
-def full_screenshot(page: Page, path: str) -> None:
-    """Streamlit's [data-testid="stMain"] and [data-testid="stSidebarContent"]
-    scroll independently of the document -- stApp/stAppViewContainer are
-    height:100vh + overflow:hidden, and stMain/stSidebarContent are each
-    overflow-y:auto with their own clientHeight capped at the viewport.
-    Plain page.screenshot(full_page=True) only captures document scroll
-    height, which Streamlit pins to exactly the viewport height, so it
-    silently crops anything below the fold in either region (confirmed via
-    a live DOM probe: stMain.scrollHeight=1736 vs clientHeight=1400 on the
-    real Risk Register tab). Fix: measure the true content height, grow the
-    viewport to fit it (stApp's 100vh math then gives every region enough
-    room to render without internal scrolling), screenshot, then restore the
-    original viewport so subsequent interactions see consistent geometry."""
-    needed = page.evaluate(
-        """
-        () => {
-            const main = document.querySelector('[data-testid="stMain"]');
-            const sidebar = document.querySelector('[data-testid="stSidebarContent"]');
-            return Math.max(
-                main ? main.scrollHeight : 0,
-                sidebar ? sidebar.scrollHeight : 0,
-                window.innerHeight,
-            );
-        }
-        """
-    )
-    page.set_viewport_size({"width": VIEWPORT["width"], "height": needed + 40})
-    page.wait_for_timeout(150)
-    page.screenshot(path=path, full_page=True)
-    page.set_viewport_size(VIEWPORT)
-    page.wait_for_timeout(150)
 
 
 def main() -> int:
@@ -74,7 +42,7 @@ def main() -> int:
         # a 2.85s base) + its 0.5s duration = finishes at 3.65s -- pad well
         # past that so the screenshot isn't taken mid-animation.
         page.wait_for_timeout(4200)
-        full_screenshot(page, str(out_dir / "landing_deliverables.png"))
+        full_screenshot(page, str(out_dir / "landing_deliverables.png"), VIEWPORT)
 
         # ── 2. render_strategy(): full real generation ──────────────────
         page.get_by_role("button", name="Start — Generate a Test Strategy").click(timeout=10000)
@@ -94,7 +62,7 @@ def main() -> int:
         # still verifies the indicator renders correctly.
         try:
             page.wait_for_selector(".stage-item.active", timeout=15000)
-            full_screenshot(page, str(out_dir / "strategy_stage_active.png"))
+            full_screenshot(page, str(out_dir / "strategy_stage_active.png"), VIEWPORT)
             print("Caught a mid-generation 'active' stage screenshot.")
         except Exception:
             print("Did not catch a mid-generation 'active' stage in time (non-fatal) — "
@@ -108,11 +76,11 @@ def main() -> int:
             '[data-testid="stTab"][aria-selected="true"] p', "el => getComputedStyle(el).color"
         )
         print(f"Active tab label color (expect the accent color, not default black/red): {active_tab_color}")
-        full_screenshot(page, str(out_dir / "strategy_tab1_risk.png"))
+        full_screenshot(page, str(out_dir / "strategy_tab1_risk.png"), VIEWPORT)
 
         page.get_by_role("tab", name="📊 Effort Estimation").click(timeout=10000)
         page.wait_for_timeout(300)
-        full_screenshot(page, str(out_dir / "strategy_tab2_effort.png"))
+        full_screenshot(page, str(out_dir / "strategy_tab2_effort.png"), VIEWPORT)
 
         # Hover check: a download button's border should change to the accent color.
         # Streamlit keeps all 4 tabs' download buttons mounted in the DOM (only the
@@ -135,7 +103,7 @@ def main() -> int:
         page.wait_for_timeout(1000)
         page.get_by_role("button", name="Review an existing QA document instead").click(timeout=10000)
         page.wait_for_selector(".st-key-doc-review-input", timeout=15000)
-        full_screenshot(page, str(out_dir / "doc_review_input_tray.png"))
+        full_screenshot(page, str(out_dir / "doc_review_input_tray.png"), VIEWPORT)
 
         page.locator("textarea").last.fill(
             "# Test Plan\n\nScope: checkout flow.\nEntry criteria: build passes CI.\n"
@@ -152,7 +120,7 @@ def main() -> int:
         page.get_by_role("button", name="🔍 Review Document").click(timeout=10000)
         page.wait_for_selector(".output-tiles", timeout=15000)
         page.wait_for_timeout(500)  # let the entrance finish
-        full_screenshot(page, str(out_dir / "doc_review_results.png"))
+        full_screenshot(page, str(out_dir / "doc_review_results.png"), VIEWPORT)
         browser.close()
 
         # ── 4. Reduced-motion pass (landing + doc-review only — cheap to
@@ -169,7 +137,7 @@ def main() -> int:
         # the actual landing content instead of a fixed short timeout.
         page.wait_for_selector(".pom-stats", timeout=30000)
         page.wait_for_timeout(300)
-        full_screenshot(page, str(out_dir / "landing_deliverables_reduced_motion.png"))
+        full_screenshot(page, str(out_dir / "landing_deliverables_reduced_motion.png"), VIEWPORT)
         page.get_by_role("button", name="Review an existing QA document instead").click(timeout=10000)
         page.wait_for_selector(".st-key-doc-review-input", timeout=15000)
         page.locator("textarea").last.fill("# Test Plan\n\nScope: checkout flow.\n" * 20)
@@ -178,7 +146,7 @@ def main() -> int:
         page.get_by_role("button", name="🔍 Review Document").click(timeout=10000)
         page.wait_for_selector(".output-tiles", timeout=15000)
         page.wait_for_timeout(150)
-        full_screenshot(page, str(out_dir / "doc_review_results_reduced_motion.png"))
+        full_screenshot(page, str(out_dir / "doc_review_results_reduced_motion.png"), VIEWPORT)
         browser.close()
 
     print(f"Screenshots saved to: {out_dir}")
