@@ -42,6 +42,7 @@ sys.path.insert(0, str(SRC_DIR))
 
 from dialogue import ProjectContext
 from effort_estimator import EffortEstimator, EstimationData, BASELINE_QA_PERCENT
+import effort_core
 
 
 @pytest.fixture(scope="module")
@@ -175,8 +176,8 @@ def test_save_includes_ai_generated_footer(tmp_path):
 
 def test_parse_duration_2years():
     """'2 years' parses to 460 working days (2 * 230)."""
-    est = make_dummy_estimator()
-    days = est._parse_duration("2 years")
+    est = make_dummy_estimator()  # noqa: F841
+    days = effort_core.parse_duration("2 years")
     assert days == 460, f"Expected 460, got {days}"
     print("  PASS: '2 years' -> 460 working days")
 
@@ -186,32 +187,32 @@ def test_parse_duration_18months():
     NOTE: strings containing 'year' (e.g. 'model year') trigger the year
     branch; use a clean month-only string to test the month path.
     """
-    est = make_dummy_estimator()
-    days = est._parse_duration("18 months")
+    est = make_dummy_estimator()  # noqa: F841
+    days = effort_core.parse_duration("18 months")
     assert days == 378, f"Expected 378, got {days}"
     print("  PASS: '18 months' -> 378 working days")
 
 
 def test_parse_duration_6weeks():
     """'6 weeks' parses to 30 working days (6 * 5)."""
-    est = make_dummy_estimator()
-    days = est._parse_duration("6 weeks")
+    est = make_dummy_estimator()  # noqa: F841
+    days = effort_core.parse_duration("6 weeks")
     assert days == 30, f"Expected 30, got {days}"
     print("  PASS: '6 weeks' -> 30 working days")
 
 
 def test_parse_team_size_2():
     """'2' parses to 2."""
-    est = make_dummy_estimator()
-    size = est._parse_team_size("2")
+    est = make_dummy_estimator()  # noqa: F841
+    size = effort_core.parse_team_size("2")
     assert size == 2, f"Expected 2, got {size}"
     print("  PASS: '2' -> team size 2")
 
 
 def test_parse_team_size_range():
     """'5 developers' parses to 5."""
-    est = make_dummy_estimator()
-    size = est._parse_team_size("5 developers")
+    est = make_dummy_estimator()  # noqa: F841
+    size = effort_core.parse_team_size("5 developers")
     assert size == 5, f"Expected 5, got {size}"
     print("  PASS: '5 developers' -> team size 5")
 
@@ -310,9 +311,9 @@ def test_narrative_prompt_omits_additional_context_when_empty():
 
 def test_detect_project_type_embedded():
     """'automotive embedded system' detects as 'embedded'."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
     assert data.project_type_detected == "embedded", \
         f"Expected 'embedded', got '{data.project_type_detected}'"
     print("  PASS: 'automotive embedded system' -> project_type_detected = 'embedded'")
@@ -320,9 +321,9 @@ def test_detect_project_type_embedded():
 
 def test_detect_methodology_vmodel():
     """'V-model' detects as 'v-model'."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
     assert data.methodology_detected == "v-model", \
         f"Expected 'v-model', got '{data.methodology_detected}'"
     print("  PASS: 'V-model' -> methodology_detected = 'v-model'")
@@ -339,11 +340,11 @@ def test_baseline_embedded_vmodel():
 
 def test_multiplier_iso26262_asil_b():
     """ISO 26262 ASIL B compliance adds +20% multiplier."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
 
     asil_b = [r for r, p in data.multipliers if "asil b" in r.lower()]
     assert asil_b, "ISO 26262 ASIL B multiplier not applied"
@@ -354,11 +355,11 @@ def test_multiplier_iso26262_asil_b():
 
 def test_multiplier_aspice_level2():
     """A-SPICE level 2 compliance adds +20% multiplier."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
 
     aspice = [(r, p) for r, p in data.multipliers if "a-spice" in r.lower()]
     assert aspice, "A-SPICE multiplier not applied"
@@ -370,11 +371,11 @@ def test_multiplier_aspice_level2():
 
 def test_multiplier_no_automation():
     """'No existing automation' adds +20% multiplier."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
 
     no_auto = [(r, p) for r, p in data.multipliers if "automation" in r.lower() and "greenfield" in r.lower()]
     assert no_auto, "No-automation multiplier not applied"
@@ -385,11 +386,11 @@ def test_multiplier_no_automation():
 
 def test_multiplier_small_qa_team():
     """QA team size <=2 adds +10% multiplier."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
 
     small_team = [(r, p) for r, p in data.multipliers if "small qa team" in r.lower()]
     assert small_team, "Small QA team multiplier not applied"
@@ -400,11 +401,11 @@ def test_multiplier_small_qa_team():
 
 def test_multiplier_external_integrations():
     """'third-party' risk adds +12% external integrations multiplier."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
 
     integrations = [(r, p) for r, p in data.multipliers if "integration" in r.lower()]
     assert integrations, "External integrations multiplier not applied"
@@ -415,11 +416,11 @@ def test_multiplier_external_integrations():
 
 def test_total_multiplier_82pct():
     """BMW ECU context total multiplier = 82% (20+20+20+10+12)."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
 
     assert data.total_multiplier == EXPECTED_TOTAL_MULTIPLIER, \
         f"Expected total multiplier {EXPECTED_TOTAL_MULTIPLIER}%, got {data.total_multiplier}%"
@@ -432,12 +433,12 @@ def test_total_multiplier_82pct():
 
 def test_pert_formula():
     """PERT formula: E = (O + 4*M + P) / 6 verified for each activity."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
-    est._pert_breakdown(data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.pert_breakdown(data)
 
     failures = []
     for act in data.pert_activities:
@@ -452,12 +453,12 @@ def test_pert_formula():
 
 def test_pert_nine_activities():
     """When total_multiplier > 0, PERT produces 9 activities (Automation Framework Setup included)."""
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
-    est._pert_breakdown(data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.pert_breakdown(data)
 
     assert data.total_multiplier > 0, "Precondition: total_multiplier must be > 0"
     assert len(data.pert_activities) == 9, \
@@ -480,16 +481,16 @@ def test_confidence_level_medium():
       Factor 4 (82% multiplier): 2 pts
       Total ≈ 59 → "Medium"
     """
-    est = make_dummy_estimator()
+    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
-    est._detect_project_type(BMW_EFFORT_CONTEXT, data)
-    est._calculate_baseline(BMW_EFFORT_CONTEXT, data)
-    est._apply_multipliers(BMW_EFFORT_CONTEXT, data)
-    est._pert_breakdown(data)
-    est._team_capacity(BMW_EFFORT_CONTEXT, data)
-    est._risk_buffer("", data)
-    est._calculate_data_quality(BMW_EFFORT_CONTEXT, data)
-    est._finalize(data)
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.pert_breakdown(data)
+    effort_core.team_capacity(BMW_EFFORT_CONTEXT, data)
+    effort_core.risk_buffer("", data)
+    effort_core.calculate_data_quality(BMW_EFFORT_CONTEXT, data)
+    effort_core.finalize(data)
 
     assert len(data.multipliers) >= 5, \
         f"Precondition: need >= 5 multipliers, got {len(data.multipliers)}"

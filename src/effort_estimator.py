@@ -29,7 +29,6 @@ from agent import MISTRAL_MODEL, QAIAgent
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 
-import effort_core
 from effort_core import (
     ACTIVITY_BREAKDOWN,
     BASELINE_QA_PERCENT,
@@ -55,39 +54,6 @@ class EffortEstimator:
         data = compute_estimation(context, risk_register)
         report = self._generate_report(context, data)
         return report, data
-
-    # ── Deterministic pipeline — thin delegating wrappers ──────────────────────
-    # The actual logic lives in effort_core.py (no agent/LLM dependency, so it's
-    # importable from the MCP server path). Kept here as instance methods, rather
-    # than removed, purely for backward compatibility: existing tests call these
-    # directly (e.g. est._detect_project_type(context, data)).
-
-    def _detect_project_type(self, context: ProjectContext, data: EstimationData):
-        return effort_core.detect_project_type(context, data)
-
-    def _calculate_baseline(self, context: ProjectContext, data: EstimationData):
-        return effort_core.calculate_baseline(context, data)
-
-    def _apply_multipliers(self, context: ProjectContext, data: EstimationData):
-        return effort_core.apply_multipliers(context, data)
-
-    def _pert_breakdown(self, data: EstimationData):
-        return effort_core.pert_breakdown(data)
-
-    def _team_capacity(self, context: ProjectContext, data: EstimationData):
-        return effort_core.team_capacity(context, data)
-
-    def _risk_buffer(self, risk_register: str, data: EstimationData):
-        return effort_core.risk_buffer(risk_register, data)
-
-    def _calculate_data_quality(self, context: ProjectContext, data: EstimationData):
-        return effort_core.calculate_data_quality(context, data)
-
-    def _finalize(self, data: EstimationData):
-        return effort_core.finalize(data)
-
-    def _calculate_confidence(self, data: EstimationData) -> str:
-        return effort_core.calculate_confidence(data)
 
     # ── Report Generation ──────────────────────────────────────────────────────
 
@@ -272,14 +238,6 @@ Write the following sections (keep each concise — 3-5 sentences max):
         if match:
             return match.group(1).strip()
         return None
-
-    # ── Helpers — thin delegating wrappers (logic in effort_core.py) ───────────
-
-    def _parse_duration(self, timeline: str) -> int:
-        return effort_core.parse_duration(timeline)
-
-    def _parse_team_size(self, team_str: str) -> int:
-        return effort_core.parse_team_size(team_str)
 
     def save(self, report: str, context: ProjectContext, output_dir: Optional[Path] = None) -> Path:
         """Save the Effort Estimation Report to a markdown file."""
