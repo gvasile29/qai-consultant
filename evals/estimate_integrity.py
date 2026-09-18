@@ -1,5 +1,6 @@
 """Estimate-integrity gate: deterministic checks over QAI Consultant's real shipped
-functions (``InputValidator``, ``EffortEstimator``) — nothing re-implemented. Issues
+functions (``InputValidator``, ``EffortEstimator``, ``effort_core``) — nothing
+re-implemented. Issues
 surface as failing checks, not prose; a green table means inputs round-trip honestly.
 Keyless and instant (no LLM, no keys), so it drops straight into CI.
 
@@ -47,10 +48,11 @@ def _load_target():
     stub.MISTRAL_MODEL = "mistral-small-latest"
     sys.modules["agent"] = stub
 
+    import effort_core  # noqa: PLC0415
     from dialogue import InputValidator, ProjectContext  # noqa: PLC0415
     from effort_estimator import EffortEstimator  # noqa: PLC0415
 
-    return InputValidator, ProjectContext, EffortEstimator
+    return InputValidator, ProjectContext, EffortEstimator, effort_core
 
 
 # ── Result types ──────────────────────────────────────────────────────────────────
@@ -92,12 +94,12 @@ def _golden() -> list[dict]:
 
 # ── Checks ───────────────────────────────────────────────────────────────────────
 
-def check_duration_bounds(est) -> tuple[Finding, ...]:
+def check_duration_bounds(effort_core) -> tuple[Finding, ...]:
     """Every parsed timeline must land in a plausible range. A 4-digit year must
     not be read as a duration."""
     out: list[Finding] = []
     for case in (c for c in _golden() if c.get("kind") == "duration" and {"id", "input"} <= c.keys()):
-        days = est._parse_duration(case["input"])
+        days = effort_core.parse_duration(case["input"])
         if not (T.DURATION_MIN_DAYS <= days <= T.DURATION_MAX_DAYS):
             out.append(Finding(
                 case=f'{case["id"]}: "{case["input"]}"',
@@ -107,14 +109,14 @@ def check_duration_bounds(est) -> tuple[Finding, ...]:
     return tuple(out)
 
 
-def check_team_restatement_invariance(est) -> tuple[Finding, ...]:
+def check_team_restatement_invariance(effort_core) -> tuple[Finding, ...]:
     """Headcount must be invariant to restatement: 'A + B, or C' describes the same
     team two ways and must not sum to A+B+C."""
     out: list[Finding] = []
     for case in (c for c in _golden()
                  if c.get("kind") == "team_invariance" and {"id", "base", "restated"} <= c.keys()):
-        base = est._parse_team_size(case["base"])
-        restated = est._parse_team_size(case["restated"])
+        base = effort_core.parse_team_size(case["base"])
+        restated = effort_core.parse_team_size(case["restated"])
         if abs(restated - base) > T.TEAM_RESTATEMENT_DELTA_MAX:
             out.append(Finding(
                 case=f'{case["id"]}: "{case["restated"]}"',
@@ -225,12 +227,11 @@ def run_all() -> list[CheckOutcome]:
     # leaving the real `agent` shadowed by the stub.
     prev_agent = sys.modules.get("agent")
     try:
-        iv_cls, ctx_cls, est_cls = _load_target()  # installs the stub — inside try so the
-        iv = iv_cls()                               # finally restore runs even if this raises
-        est = est_cls.__new__(est_cls)  # pure-method calls; no agent needed
+        iv_cls, ctx_cls, est_cls, effort_core = _load_target()  # installs the stub — inside
+        iv = iv_cls()                                             # try so finally still runs
         return [
-            CheckOutcome("duration_bounds", check_duration_bounds(est)),
-            CheckOutcome("team_restatement_invariance", check_team_restatement_invariance(est)),
+            CheckOutcome("duration_bounds", check_duration_bounds(effort_core)),
+            CheckOutcome("team_restatement_invariance", check_team_restatement_invariance(effort_core)),
             CheckOutcome("name_display_fidelity", check_name_display_fidelity(iv)),
             CheckOutcome("confidence_magnitude_sanity", check_confidence_magnitude_sanity(ctx_cls, est_cls)),
             CheckOutcome("no_fabricated_versions", check_no_fabricated_versions()),
