@@ -736,7 +736,7 @@ def render_strategy():
         )
         st.stop()
 
-    from output_screen_style import build_content_polish_css, build_output_eyebrow_html, build_stage_sequence_html
+    from components import build_content_polish_css, build_output_eyebrow_html, build_stage_sequence_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _strategy_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
@@ -1193,7 +1193,7 @@ def render_doc_review():
     render_strategy()'s save/PDF conventions."""
     MAX_RUNS_PER_SESSION = 3  # mirrors render_strategy()'s per-session cap — narrative is an LLM call
 
-    from output_screen_style import build_content_polish_css, build_output_eyebrow_html
+    from components import build_content_polish_css, build_output_eyebrow_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _doc_review_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
@@ -1207,7 +1207,7 @@ def render_doc_review():
     st.markdown("---")
 
     if st.session_state.get("review_result") is None:
-        from output_screen_style import build_doc_review_input_tray_css
+        from components import build_doc_review_input_tray_css
         st.markdown(build_doc_review_input_tray_css(_doc_review_tokens), unsafe_allow_html=True)
 
         with st.container(key="doc-review-input"):
@@ -1411,7 +1411,7 @@ def render_maturity_assessment():
     conventions."""
     MAX_RUNS_PER_SESSION = 3  # mirrors render_doc_review()'s per-session cap
 
-    from output_screen_style import build_content_polish_css, build_output_eyebrow_html
+    from components import build_content_polish_css, build_output_eyebrow_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _maturity_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
@@ -1427,7 +1427,7 @@ def render_maturity_assessment():
     st.markdown("---")
 
     if st.session_state.get("maturity_result") is None:
-        from output_screen_style import build_doc_review_input_tray_css
+        from components import build_doc_review_input_tray_css
         st.markdown(build_doc_review_input_tray_css(_maturity_tokens), unsafe_allow_html=True)
 
         with st.container(key="maturity-input"):
