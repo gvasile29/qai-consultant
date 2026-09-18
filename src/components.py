@@ -239,3 +239,96 @@ def build_landing_deliverables_html(tokens: dict) -> str:
 <div class="pom-deliverables">{deliverable_cards}</div>
 <div class="pom-stats">{stat_tiles}</div>
 """
+
+
+# ── Dialogue & Sidebar: interactive-flow styling (Phase 2) ─────────────────
+# The dialogue and review screens rerun on user interaction (template
+# selection, "Additional context" edits) -- unlike the landing screen
+# (rendered once per session). Mount-triggered CSS keyframe animations
+# would replay every time, which is why the dialogue screen below gets NO
+# entrance animation (only a CSS *transition* on the progress bar, which
+# is expected to re-fire on every value change), and the review screen's
+# one-shot entrance is controlled entirely by the caller-supplied
+# `animate` flag (app.py derives it from a session_state "seen" flag).
+# The sidebar gets no entrance animation either -- it persists across
+# every screen and rerun in the app.
+#
+# .ledger-card's base rule lives in theme.py; the :hover rule below
+# composes with it safely regardless of <style> tag load order (an
+# additive pseudo-class selector, not an override) -- this is the only
+# place in this file that styles a theme.py-owned class.
+
+def build_dialogue_header_html(tokens: dict, answered: int, total: int) -> str:
+    """Pure function: token dict + progress counts -> dialogue header HTML
+    (eyebrow label + animated-width progress bar) plus the .ledger-card
+    hover rule."""
+    pct = round((answered / total) * 100) if total else 0
+    return f"""
+<style>
+.ledger-card:hover {{ border-color: {tokens['accent']}; box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out; }}
+.dialogue-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.4rem; }}
+.dialogue-progress-track {{ height: 6px; background: {tokens['surface_2']}; border-radius: 3px; overflow: hidden; margin: 0.6rem 0 1.2rem; }}
+.dialogue-progress-fill {{ height: 100%; background: {tokens['accent']}; transition: width 0.4s ease-out; }}
+</style>
+<div class="dialogue-eyebrow">&gt; project discovery sequence: {answered}/{total} instruments calibrated</div>
+<div class="dialogue-progress-track"><div class="dialogue-progress-fill" style="width: {pct}%;"></div></div>
+"""
+
+
+def build_review_summary_html(tokens: dict, context, animate: bool) -> str:
+    """Pure function: token dict + a duck-typed project-context object
+    (any object exposing project_name, project_type, tech_stack,
+    methodology, timeline, team_qa_size, team_dev_size, known_risks,
+    existing_automation, compliance_requirements) + whether to play the
+    one-shot entrance -> review summary tiles HTML. All field values are
+    HTML-escaped."""
+    fields = [
+        ("Project Name", context.project_name),
+        ("Project Type", context.project_type),
+        ("Tech Stack", context.tech_stack),
+        ("Methodology", context.methodology),
+        ("Timeline", context.timeline),
+        ("QA Team Size", context.team_qa_size),
+        ("Dev Team Size", context.team_dev_size),
+        ("Known Risks", context.known_risks),
+        ("Existing Automation", context.existing_automation),
+        ("Compliance", context.compliance_requirements),
+    ]
+    animate_class = " animate" if animate else ""
+    delay_rules = "\n".join(
+        f".review-grid.animate .review-tile:nth-child({i}) {{ animation-delay: {i * 0.05:.2f}s; }}"
+        for i in range(1, len(fields) + 1)
+    )
+    tiles = "".join(
+        f'<div class="review-tile"><div class="rt-label">{_html.escape(label)}</div>'
+        f'<div class="rt-value">{_html.escape(value)}</div></div>'
+        for label, value in fields
+    )
+    return f"""
+<style>
+.review-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.7rem; margin-bottom: 1rem; }}
+@media (max-width: 640px) {{ .review-grid {{ grid-template-columns: 1fr; }} }}
+.review-tile {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-radius: 8px; padding: 0.8rem 1rem; }}
+.review-tile .rt-label {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.3rem; }}
+.review-tile .rt-value {{ font-family: 'Plex Sans', sans-serif; font-size: 0.92rem; color: {tokens['ink']}; word-break: break-word; }}
+@keyframes review-tile-in {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+.review-grid.animate .review-tile {{ opacity: 0; animation: review-tile-in 0.4s ease-out forwards; }}
+{delay_rules}
+@media (prefers-reduced-motion: reduce) {{
+    .review-grid.animate .review-tile {{ animation-delay: 0s !important; }}
+}}
+</style>
+<div class="review-grid{animate_class}">{tiles}</div>
+"""
+
+
+def build_sidebar_polish_css(tokens: dict) -> str:
+    """Pure function: token dict -> sidebar hover-state CSS only -- no
+    entrance animations, since the sidebar persists across every screen
+    and rerun in the app."""
+    return f"""
+<style>
+[data-testid="stSidebar"] button:hover {{ border-color: {tokens['accent']}; color: {tokens['accent']}; transition: border-color 0.15s ease-out, color 0.15s ease-out; }}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {{ color: {tokens['accent']}; transition: color 0.15s ease-out; }}
+</style>
+"""

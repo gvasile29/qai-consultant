@@ -275,7 +275,7 @@ and [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers).
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
-        from interactive_flow_style import build_sidebar_polish_css
+        from components import build_sidebar_polish_css
         from theme import DARK_TOKENS, LIGHT_TOKENS
 
         _sidebar_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
@@ -482,7 +482,7 @@ def render_dialogue():
     total = len(QUESTIONS)
     answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
 
-    from interactive_flow_style import build_dialogue_header_html
+    from components import build_dialogue_header_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _dialogue_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
@@ -583,7 +583,7 @@ def render_review():
 
     context = st.session_state.dialogue.get_context()
 
-    from interactive_flow_style import build_review_summary_html
+    from components import build_review_summary_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _review_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
