@@ -132,7 +132,6 @@ def test_spread_below_1_gives_40pts():
     # O=90, E=100, P=100 → spread = (100-90)/100 = 0.1 < 1.0 → Factor 1 = 40
     # Isolation: gap=-100 (Factor 2=0), quality=0 (Factor 3=0), mult=100 (Factor 4=0)
     data = make_confidence_data(o=90, e=100, p=100, gap=-100, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 40, \
         f"spread=0.1 → expected 40 pts from Factor 1 only, got {data.confidence_score}"
@@ -146,7 +145,6 @@ def test_spread_1_5_gives_30pts():
     """
     # O=50, E=100, P=200 → spread = 150/100 = 1.5 → int(40 - 0.5*20) = 30
     data = make_confidence_data(o=50, e=100, p=200, gap=-100, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 30, \
         f"spread=1.5 → expected 30 pts from Factor 1 only, got {data.confidence_score}"
@@ -160,7 +158,6 @@ def test_spread_2_5_gives_12pts():
     """
     # O=50, E=100, P=300 → spread = 250/100 = 2.5 → int(20 - 0.5*15) = 12
     data = make_confidence_data(o=50, e=100, p=300, gap=-100, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 12, \
         f"spread=2.5 → expected 12 pts from Factor 1 only, got {data.confidence_score}"
@@ -171,7 +168,6 @@ def test_spread_3_or_more_gives_0pts():
     """spread_ratio ≥ 3.0 → +0 pts from Factor 1."""
     # O=50, E=100, P=350 → spread = 300/100 = 3.0 → 0 pts
     data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 0, \
         f"spread=3.0 → expected 0 pts from Factor 1 only, got {data.confidence_score}"
@@ -184,7 +180,6 @@ def test_gap_ratio_large_surplus_gives_30pts():
     """gap_ratio ≥ 0.3 (comfortable surplus) → +30 pts from Factor 2."""
     # spread=3.0 (Factor 1=0), gap=30 → gap_ratio=0.3 → +30 pts, quality=0, mult=100
     data = make_confidence_data(o=50, e=100, p=350, gap=30, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 30, \
         f"gap_ratio=0.3 → expected 30 pts from Factor 2 only, got {data.confidence_score}"
@@ -198,7 +193,6 @@ def test_gap_ratio_0_15_gives_22pts():
     """
     # spread=3.0 (Factor 1=0), gap=15 → gap_ratio=0.15 → 22 pts, quality=0, mult=100
     data = make_confidence_data(o=50, e=100, p=350, gap=15, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 22, \
         f"gap_ratio=0.15 → expected 22 pts from Factor 2 only, got {data.confidence_score}"
@@ -212,7 +206,6 @@ def test_gap_ratio_minus_0_15_gives_7pts():
     """
     # spread=3.0 (Factor 1=0), gap=-15 → gap_ratio=-0.15 → 7 pts, quality=0, mult=100
     data = make_confidence_data(o=50, e=100, p=350, gap=-15, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 7, \
         f"gap_ratio=-0.15 → expected 7 pts from Factor 2 only, got {data.confidence_score}"
@@ -227,7 +220,6 @@ def test_gap_ratio_at_minus_0_3_gives_0pts():
     """
     # spread=3.0 (Factor 1=0), gap=-30 → gap_ratio=-0.3 → 0 pts, quality=0, mult=100
     data = make_confidence_data(o=50, e=100, p=350, gap=-30, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 0, \
         f"gap_ratio=-0.3 → expected 0 pts from Factor 2 only, got {data.confidence_score}"
@@ -245,7 +237,6 @@ def test_data_quality_all_specific_gives_20pts():
         compliance_requirements="GDPR",
         existing_automation="Full CI/CD with Selenium and JUnit",
     )
-    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
     effort_core.calculate_data_quality(ctx, data)
     assert data.data_quality_score == 20, \
@@ -262,7 +253,6 @@ def test_data_quality_3_specific_2_vague_gives_16pts():
         compliance_requirements="GDPR",        # specific → 4 pts
         existing_automation="Full CI/CD with Selenium and JUnit",  # specific → 4 pts
     )
-    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
     effort_core.calculate_data_quality(ctx, data)
     assert data.data_quality_score == 16, \
@@ -279,7 +269,6 @@ def test_data_quality_all_empty_gives_0pts():
         compliance_requirements="",
         existing_automation="",
     )
-    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
     effort_core.calculate_data_quality(ctx, data)
     assert data.data_quality_score == 0, \
@@ -296,7 +285,6 @@ def test_multiplier_0pct_gives_10pts():
     """
     # spread=3.0, gap=-100 (both zero), quality=0 → isolate Factor 4
     data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=0)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 10, \
         f"mult=0% → expected 10 pts from Factor 4 only, got {data.confidence_score}"
@@ -309,7 +297,6 @@ def test_multiplier_50pct_gives_5pts():
     Formula: max(0, 10 - int(50 / 10)) = max(0, 10 - 5) = 5
     """
     data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=50)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 5, \
         f"mult=50% → expected 5 pts from Factor 4 only, got {data.confidence_score}"
@@ -322,7 +309,6 @@ def test_multiplier_100pct_gives_0pts():
     Formula: max(0, 10 - int(100 / 10)) = max(0, 10 - 10) = 0
     """
     data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 0, \
         f"mult=100% → expected 0 pts from Factor 4 only, got {data.confidence_score}"
@@ -335,7 +321,6 @@ def test_score_100_is_high():
     """Maximum possible score (100) → 'High' confidence."""
     # spread<1.0 (→40) + gap_ratio≥0.3 (→30) + quality=20 + mult=0% (→10) = 100
     data = make_confidence_data(o=90, e=100, p=100, gap=50, quality=20, mult=0)
-    est = make_dummy_estimator()  # noqa: F841
     label = effort_core.calculate_confidence(data)
     assert label == "High", f"score=100 → expected 'High', got '{label}'"
     assert data.confidence_score == 100, \
@@ -351,7 +336,6 @@ def test_score_70_is_high():
     # O=90, E=100, P=100 → spread=0.1 → 40; gap=0 → gap_ratio=0 → int(15+0)=15
     # quality=10; mult=50 → max(0,10-5)=5
     data = make_confidence_data(o=90, e=100, p=100, gap=0, quality=10, mult=50)
-    est = make_dummy_estimator()  # noqa: F841
     label = effort_core.calculate_confidence(data)
     assert label == "High", f"score=70 → expected 'High', got '{label}'"
     assert data.confidence_score == 70, \
@@ -368,7 +352,6 @@ def test_score_40_is_medium():
     # gap=-15 → gap_ratio=-0.15 → int(15-7.5)=7
     # quality=2; mult=90 → max(0,10-9)=1
     data = make_confidence_data(o=50, e=100, p=200, gap=-15, quality=2, mult=90)
-    est = make_dummy_estimator()  # noqa: F841
     label = effort_core.calculate_confidence(data)
     assert label == "Medium", f"score=40 → expected 'Medium', got '{label}'"
     assert data.confidence_score == 40, \
@@ -383,7 +366,6 @@ def test_score_39_is_low():
     """
     # Same as score=40 except mult=100 → Factor 4 = 0 (saves 1 pt)
     data = make_confidence_data(o=50, e=100, p=200, gap=-15, quality=2, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     label = effort_core.calculate_confidence(data)
     assert label == "Low", f"score=39 → expected 'Low', got '{label}'"
     assert data.confidence_score == 39, \
@@ -395,7 +377,6 @@ def test_score_0_is_low():
     """Minimum possible score (0) → 'Low' confidence."""
     # spread=3.0 (→0) + gap_ratio=-1.0 (→0) + quality=0 + mult=100% (→0) = 0
     data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=100)
-    est = make_dummy_estimator()  # noqa: F841
     label = effort_core.calculate_confidence(data)
     assert label == "Low", f"score=0 → expected 'Low', got '{label}'"
     assert data.confidence_score == 0, \
@@ -429,7 +410,6 @@ def test_bmw_ecu_scenario_is_low():
         quality=4,   # vague timeline + automation fields → 4 pts
         mult=82,     # ASIL B(20)+A-SPICE(20)+no-auto(20)+small-team(10)+integrations(12) → 2 pts
     )
-    est = make_dummy_estimator()  # noqa: F841
     label = effort_core.calculate_confidence(data)
 
     assert label == "Low", \
@@ -464,7 +444,6 @@ def test_simple_webapp_scenario_is_high():
         quality=20, # all 5 fields specific → 20 pts
         mult=0,     # no compliance/complexity → 10 pts
     )
-    est = make_dummy_estimator()  # noqa: F841
     label = effort_core.calculate_confidence(data)
 
     assert label == "High", \
@@ -486,7 +465,6 @@ def test_data_quality_score_stored_in_estimation_data():
         compliance_requirements="GDPR",
         existing_automation="Full CI/CD",
     )
-    est = make_dummy_estimator()  # noqa: F841
     data = EstimationData()
 
     # Verify default value
@@ -508,7 +486,6 @@ def test_confidence_score_stored_in_estimation_data():
     """_calculate_confidence() stores raw score in data.confidence_score (int, 0-100)."""
     # Use a known configuration: should produce exactly score=100
     data = make_confidence_data(o=90, e=100, p=100, gap=50, quality=20, mult=0)
-    est = make_dummy_estimator()  # noqa: F841
 
     # Before calling: default value
     assert isinstance(data.confidence_score, int), \
