@@ -413,7 +413,7 @@ EXAMPLE_TEST_PLAN = """
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
-    from landing_hero import build_landing_hero_html
+    from components import build_landing_hero_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _hero_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
@@ -421,7 +421,7 @@ def render_intro():
 
     st.markdown("---")
 
-    from landing_hero import build_landing_deliverables_html
+    from components import build_landing_deliverables_html
     st.markdown(build_landing_deliverables_html(_hero_tokens), unsafe_allow_html=True)
 
     st.markdown("---")
