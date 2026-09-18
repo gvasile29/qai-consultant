@@ -1,25 +1,38 @@
 """
-QAI Consultant -- Signal Ledger / Risk Ledger HTML builders.
+QAI Consultant -- reusable Streamlit HTML/CSS components.
 
-Builds the HTML strings for the Calibration Bench's signature reusable
-device (a heat-tier score/severity readout) and the Risk Register table.
-Callers pass the result to st.markdown(html, unsafe_allow_html=True) --
-this module has no Streamlit dependency itself, so it's directly
-unit-testable (see tests/test_ledger_components.py).
+Consolidates four previously separate modules (ledger_components.py,
+landing_hero.py, interactive_flow_style.py, output_screen_style.py) that
+were split by which "Power-On Sequence" redesign PR touched them, not by
+functional boundary -- see
+docs/superpowers/plans/2026-09-17-architecture-cleanup.md. All functions
+are pure (a token dict plus plain arguments -> an HTML string); callers
+render the result via st.markdown(html, unsafe_allow_html=True). No
+Streamlit dependency in this module itself, so every function here is
+directly unit-testable without a Streamlit runtime -- see
+tests/test_components.py.
 
-All user-supplied text (labels, descriptions) is HTML-escaped -- this
-renders LLM-generated and user-uploaded content, so unescaped interpolation
-would be a stored-XSS path via unsafe_allow_html=True.
+All user-supplied text (labels, descriptions, project-context field
+values) is HTML-escaped via html.escape() before interpolation -- this
+renders LLM-generated and user-uploaded content, so unescaped
+interpolation would be a stored-XSS path via unsafe_allow_html=True.
+
+theme.py is NOT modified by anything here and stays a separate file (it
+owns tokens + base CSS, including the shared .ledger-card base rule);
+functions below only ever add scoped CSS additions (e.g.
+.ledger-card:hover) that compose safely with theme.py's rules regardless
+of <style> tag load order.
 """
 import html as _html
 
 from risk_ledger import severity_tier
 
 
+# ── Ledger: score/severity HTML (Signal Ledger, Risk Ledger table) ─────────
+
 def score_tier(score: int) -> str:
     """Map a 0-100 score to a Signal Ledger tier. >=80 pass, 50-79 hold,
-    <50 fail -- the same thresholds used app-wide (see this plan's Global
-    Constraints)."""
+    <50 fail -- the same thresholds used app-wide."""
     if score >= 80:
         return "pass"
     if score >= 50:

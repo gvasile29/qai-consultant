@@ -632,7 +632,7 @@ def render_review():
 
         analysis = st.session_state.get("results_analysis")
         if analysis is not None:
-            from ledger_components import signal_ledger_html
+            from components import signal_ledger_html
 
             pass_rate_pct = round(analysis.overall_pass_rate * 100)
             m1, m2, m3, m4 = st.columns(4)
@@ -981,7 +981,7 @@ def render_strategy():
 
     with tab1:
         from risk_ledger import parse_risk_matrix
-        from ledger_components import risk_ledger_table_html
+        from components import risk_ledger_table_html
 
         risk_rows = parse_risk_matrix(st.session_state.risk_register)
         if risk_rows:
@@ -1016,7 +1016,7 @@ def render_strategy():
             )
 
     with tab2:
-        from ledger_components import signal_ledger_html
+        from components import signal_ledger_html
 
         effort_data = st.session_state.get("effort_data")
         if effort_data is not None:
@@ -1264,7 +1264,7 @@ def render_doc_review():
             st.rerun()
         return
 
-    from ledger_components import signal_ledger_html
+    from components import signal_ledger_html
 
     _doc_review_animate_class = " animate" if not st.session_state.get("doc_review_intro_animated") else ""
     st.session_state.doc_review_intro_animated = True
@@ -1476,7 +1476,7 @@ def render_maturity_assessment():
             st.rerun()
         return
 
-    from ledger_components import signal_ledger_html
+    from components import signal_ledger_html
 
     _maturity_animate_class = " animate" if not st.session_state.get("maturity_intro_animated") else ""
     st.session_state.maturity_intro_animated = True

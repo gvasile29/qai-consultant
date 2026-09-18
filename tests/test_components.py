@@ -1,4 +1,4 @@
-"""Tests for src/ledger_components.py -- Signal Ledger / Risk Ledger HTML builders.
+"""Tests for src/components.py's Ledger section -- Signal Ledger / Risk Ledger HTML builders.
 
 These build HTML strings only (no Streamlit runtime needed to test them --
 st.markdown() is the caller's job, not this module's).
@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from ledger_components import (  # noqa: E402
+from components import (  # noqa: E402
     risk_ledger_table_html,
     score_tier,
     signal_ledger_html,

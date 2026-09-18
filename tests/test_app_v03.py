@@ -447,7 +447,7 @@ def test_both_documents_generated_and_stored(agent):
 
 def test_risk_ledger_table_renders_for_well_formed_risk_register():
     from risk_ledger import parse_risk_matrix
-    from ledger_components import risk_ledger_table_html
+    from components import risk_ledger_table_html
 
     sample = """## Risk Matrix Overview
 
@@ -464,7 +464,7 @@ def test_risk_ledger_table_renders_for_well_formed_risk_register():
 
 def test_risk_ledger_table_is_skipped_gracefully_for_freeform_risk_register():
     from risk_ledger import parse_risk_matrix
-    from ledger_components import risk_ledger_table_html
+    from components import risk_ledger_table_html
 
     rows = parse_risk_matrix("Just some prose the LLM wrote, no table.")
     assert rows == []
@@ -472,7 +472,7 @@ def test_risk_ledger_table_is_skipped_gracefully_for_freeform_risk_register():
 
 
 def test_effort_data_confidence_renders_as_signal_ledger():
-    from ledger_components import signal_ledger_html
+    from components import signal_ledger_html
 
     html = signal_ledger_html("Confidence", 72, sub="Medium confidence")
     assert "72" in html
@@ -480,7 +480,7 @@ def test_effort_data_confidence_renders_as_signal_ledger():
 
 
 def test_review_dimension_scores_render_as_signal_ledgers():
-    from ledger_components import signal_ledger_html
+    from components import signal_ledger_html
 
     dimension_scores = {"structure_completeness": 92, "traceability": 70, "measurability": 45}
     for dim, score in dimension_scores.items():
@@ -489,14 +489,14 @@ def test_review_dimension_scores_render_as_signal_ledgers():
         assert str(score) in html
     # Sanity: the three thresholds actually land in different tiers, proving
     # the display isn't silently uniform.
-    from ledger_components import score_tier
+    from components import score_tier
     assert score_tier(92) == "pass"
     assert score_tier(70) == "hold"
     assert score_tier(45) == "fail"
 
 
 def test_results_analysis_flaky_count_tier_is_inverted():
-    from ledger_components import signal_ledger_html
+    from components import signal_ledger_html
 
     # Zero flaky tests is good news -> pass tier, not score_tier(0) == "fail".
     html_zero = signal_ledger_html("Flaky Tests", 0, tier="pass")
