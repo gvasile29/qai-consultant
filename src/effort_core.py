@@ -8,9 +8,8 @@ the client LLM writes its own narrative from these numbers, so the MCP path
 never needs ``agent.py`` (which pulls Pinecone/Mistral/OpenAI/Streamlit).
 
 ``EffortEstimator`` (effort_estimator.py) delegates here for the numbers and
-adds the LLM narrative on top for the Streamlit/CLI report. Its private
-``_foo`` methods are thin wrappers kept for backward compatibility with
-existing tests that call them directly — the actual logic lives here.
+adds the LLM narrative on top for the Streamlit/CLI report; tests call these
+functions directly.
 
 Calculation pipeline (see compute_estimation()):
   1. Detect project type -> baseline QA % (industry benchmarks)

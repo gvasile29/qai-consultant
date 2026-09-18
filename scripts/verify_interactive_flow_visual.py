@@ -72,7 +72,7 @@ def main() -> int:
         reveal(page, submit_btn)
         submit_btn.click(timeout=10000)
         page.wait_for_selector(".review-grid", timeout=15000)
-        # interactive_flow_style.py sets animation-delay = i * 0.05s for i in
+        # components.py (formerly interactive_flow_style.py) sets animation-delay = i * 0.05s for i in
         # 1..10 (10 fields) -> the last tile's delay is 0.50s; combined with
         # the 0.4s animation itself, the entrance doesn't finish until ~0.90s
         # after .review-grid mounts. Wait past that with margin, or the
