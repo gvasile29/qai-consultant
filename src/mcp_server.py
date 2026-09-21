@@ -509,17 +509,20 @@ def main() -> None:
     telemetry.track_server_start()
     try:
         index = _get_index()
-        # Force the FIRST real embedding-model inference (constructing
-        # HuggingFaceEmbeddings + one embed_query() call — native torch/MKL
-        # thread and DLL init) to happen here, on the main thread, before
-        # mcp.run() starts stdio_server()'s concurrent stdin-reader task.
-        # Deferring this to the first retrieve_qa_knowledge call (which
-        # FastMCP dispatches to an anyio worker thread) deadlocks on Windows:
-        # that worker thread's torch/MKL native thread creation races the
-        # stdin-reader thread's blocking ReadFile() on the piped stdin for
-        # the process loader lock, and neither ever proceeds. Confirmed via
-        # a real `uvx qai-consultant-mcp` stdio subprocess (v3.0/v3.0.1 E2E
-        # test) hanging indefinitely on the second tool call.
+        # Force the FIRST real embedding-model inference (constructing the
+        # embedding backend + one embed_query() call — native runtime thread
+        # and DLL init) to happen here, on the main thread, before mcp.run()
+        # starts stdio_server()'s concurrent stdin-reader task. Deferring this
+        # to the first retrieve_qa_knowledge call (which FastMCP dispatches to
+        # an anyio worker thread) deadlocks on Windows: that worker thread's
+        # native thread creation races the stdin-reader thread's blocking
+        # ReadFile() on the piped stdin for the process loader lock, and
+        # neither ever proceeds. Originally found with torch/MKL (v3.0/v3.0.1
+        # E2E test, hanging indefinitely on the second tool call); the hazard
+        # is about ANY native runtime's first init, not torch specifically —
+        # re-verified against fastembed's onnxruntime backend via
+        # scripts/verify_mcp_stdio_no_deadlock.py (Task 4 of the 2026-09-17
+        # embedding-backend-simplification plan) before this backend switch shipped.
         #
         # Deliberately NOT a full index build (that used to be bundled into
         # this same call via search("warmup", k=1), which forced embedding
