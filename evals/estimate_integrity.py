@@ -4,7 +4,7 @@ re-implemented. Issues
 surface as failing checks, not prose; a green table means inputs round-trip honestly.
 Keyless and instant (no LLM, no keys), so it drops straight into CI.
 
-    python -m evals.estimate_integrity          # exits non-zero if any check fails
+    pytest tests/test_estimate_integrity.py
 
 Golden cases live in ``golden.jsonl``; the fabricated-version check reads
 ``captured_test_plan.md``.

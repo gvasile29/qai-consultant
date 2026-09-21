@@ -5,7 +5,7 @@ surface as failing checks, not prose; a green table means the analysis is honest
 Keyless and instant (no LLM, no keys, no heavy deps — results_core.py is
 stdlib-only), so it drops straight into CI.
 
-    python -m evals.results_integrity          # exits non-zero if any check fails
+    pytest tests/test_results_integrity.py
 
 Golden cases live in ``results_golden.jsonl``; JUnit XML/CSV fixtures live under
 ``fixtures/results/*``.

@@ -4,7 +4,7 @@ Issues surface as failing checks, not prose; a green table means the rubric scor
 honestly. Keyless and instant (no LLM, no keys, no heavy deps — review_core.py is
 stdlib-only), so it drops straight into CI.
 
-    python -m evals.review_integrity          # exits non-zero if any check fails
+    pytest tests/test_review_integrity.py
 
 Golden cases live in ``review_golden.jsonl``; document fixtures live under
 ``fixtures/review/*.md``.

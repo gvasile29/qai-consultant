@@ -209,7 +209,7 @@ python -m evals.run                  # tier 2 only (rag/local_index_parity)
 - `estimate_integrity`: runs the *real shipped* `InputValidator` / `EffortEstimator` (stubs only the heavy `agent` module) on golden inputs. 5 metrics: `duration_bounds`, `team_restatement_invariance`, `name_display_fidelity`, `confidence_magnitude_sanity`, `no_fabricated_versions`.
 - `review_integrity` (v3.1): runs the real shipped `review_core.review_document()` (no stub needed — dependency-free). 4 metrics: `score_ordering`, `dimension_attribution`, `determinism`, `insufficient_content_handling`.
 - `results_integrity` (v3.1): runs the real shipped `results_core.analyze()`/parsers (no stub needed). 4 metrics: `flaky_and_ever_failing_boundaries`, `cluster_count`, `malformed_input_never_crashes`, `csv_xml_parity`.
-- `maturity_integrity` (v3.5): runs the real shipped `maturity_core.assess_maturity()` (no stub needed — dependency-free). 5 metrics: `level_ordering`, `no_level_skip`, `ai_act_gating`, `determinism`, `insufficient_content_handling`.
+- `maturity_integrity` (v3.5): runs the real shipped `maturity_core.assess_maturity()` (no stub needed — dependency-free). 6 metrics: `level_ordering`, `no_level_skip`, `ai_act_gating`, `determinism`, `negation_not_counted_as_evidence`, `insufficient_content_handling`.
 
 No LLM, no API keys in any of the four; a red row names a real defect in the shipped logic.
 
@@ -227,7 +227,7 @@ No LLM, no API keys in any of the four; a red row names a real defect in the shi
 | `thresholds.py` | The gate spec — every floor + one line of rationale |
 | `run.py` | Aggregate gate over the single remaining tier (rag/local_index_parity); tier-1 pytest tests are now invoked directly by CI, not via this runner |
 
-> **Skip semantics:** judged metrics SKIP (never fail) when the judge backend is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still runs the full deterministic tier. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
+> **Skip semantics:** judged metrics SKIP (never fail) when the judge backend is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still gets the deterministic checks via `pytest tests/`, independent of whether the RAG tier can run. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
 
 ## CI
 
