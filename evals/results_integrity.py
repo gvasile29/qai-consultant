@@ -14,7 +14,6 @@ Golden cases live in ``results_golden.jsonl``; JUnit XML/CSV fixtures live under
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -235,21 +234,3 @@ def format_table(outcomes: list[CheckOutcome]) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")  # findings contain non-ASCII; don't crash on cp1252/ascii
-    try:
-        outcomes = run_all()
-    except Exception as exc:  # noqa: BLE001 — missing/corrupt golden or fixture → report, not traceback
-        print(f"\nresults_integrity errored (did not run): {type(exc).__name__}: {exc}")
-        return 1
-    print(format_table(outcomes))
-    ok = all(o.passed for o in outcomes)
-    total_defects = sum(len(o.findings) for o in outcomes)
-    print(f"\nRelease gate: {'PASS' if ok else 'FAIL'} ({total_defects} defect(s) across "
-          f"{sum(1 for o in outcomes if not o.passed)} check(s))")
-    return 0 if ok else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

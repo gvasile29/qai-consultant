@@ -1,25 +1,14 @@
 # evals
 
-A release gate that treats QAI Consultant like a model under test, not just code that runs: it asks *are the numbers and documents it produces honest?* Two independent tiers, one non-zero exit if either fails.
+A release gate that treats QAI Consultant like a model under test, not just code that runs: it asks *are the numbers and documents it produces honest?* Two tiers, one non-zero exit if either fails.
 
 ```bash
-python -m evals.run         # both tiers
-python -m evals.run --det   # keyless deterministic tier only (no LLM, no keys)
+python -m evals.run   # both tiers
 ```
 
-## Tier 1 — `estimate_integrity` (deterministic, keyless)
+## Tier 1 — Deterministic checks (moved to pytest)
 
-Runs the **real shipped functions** (`InputValidator`, `EffortEstimator`) on golden inputs and asserts they round-trip honestly — re-implements nothing. No LLM, no API keys, instant; drops straight into CI.
-
-| Metric | Catches |
-|--------|---------|
-| `duration_bounds` | a 4-digit year parsed as a duration (`"June 2026"` → 42,546 days) |
-| `team_restatement_invariance` | restated headcount double-counted (`"3+2, or 5"` → 10 people) |
-| `name_display_fidelity` | project name silently mangled (spaces → `_`) in the deliverable title |
-| `confidence_magnitude_sanity` | a physically-impossible estimate labelled "High" confidence |
-| `no_fabricated_versions` | version numbers in a deliverable that no user ever supplied |
-
-A red row names a real defect in the shipped logic — the tier *is* the issue list.
+The four deterministic "tier-1" modules (`estimate_integrity`, `review_integrity`, `results_integrity`, `maturity_integrity`) moved to ordinary pytest tests in `tests/` as of 2026-09-17. The `pytest tests/` suite (run by the CI `test` job) now covers them. See `tests/test_estimate_integrity.py` et al. and CLAUDE.md's Evals section.
 
 ## Tier 2 — `rag` (classical RAG metrics, fully local)
 
@@ -38,10 +27,10 @@ Recall and precision are keyless and deterministic. The other three need a gener
 ## Layout
 
 ```
-estimate_integrity.py  golden.jsonl  captured_test_plan.md   # tier 1
-rag.py  rag_golden.jsonl  judge.py                           # tier 2 (judge.py = LLMClient adapter)
-thresholds.py                                                # the gate spec (every floor + why)
-run.py                                                       # aggregate gate
+rag.py  rag_golden.jsonl  judge.py          # tier 2 RAG eval (judge.py = LLMClient adapter)
+local_index_parity.py                        # tier 2 LocalIndex parity eval
+thresholds.py                                # the gate spec (every floor + why)
+run.py                                       # aggregate gate
 ```
 
-Add a case by appending a line to `golden.jsonl` (tier 1) or `rag_golden.jsonl` (tier 2) — the datasets *are* the suites; no new test files.
+Add a case by appending a line to `rag_golden.jsonl` — the dataset *is* the suite; no new test files. The deterministic tier-1 cases live in `tests/test_*.py` instead (see above).
