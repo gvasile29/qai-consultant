@@ -196,7 +196,7 @@ class LocalIndex:
 
     def warmup_embedder(self) -> None:
         """Force the embedding model's one-time native init (model download
-        if needed, torch/MKL thread + DLL init) via a single cheap
+        if needed, native runtime thread + DLL init) via a single cheap
         embed_query() call — deliberately WITHOUT embedding the full KB
         corpus. Call this on the main thread before mcp.run() starts
         stdio_server()'s concurrent stdin-reader task: the Windows loader-
