@@ -8,22 +8,17 @@ on:
 
 jobs:
   test:
-    name: Tests (Python ${{ matrix.python-version }})
+    name: Tests (Python 3.11)
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
@@ -38,9 +33,15 @@ jobs:
         # Live-LLM tests (test_risk_analyzer.py, test_app_v03.py::test_both_documents_...,
         # test_effort_estimator.py::test_full_estimate_bmw) SKIP themselves via the
         # `agent` fixture when no API keys are configured — no ignore/deselect needed.
+        #
+        # Single Python version (was a 3.10/3.11/3.12 matrix): 3.11 matches
+        # runtime.txt (Streamlit Cloud's actual deploy version), and every other
+        # job in this file already only tested 3.11 — the matrix was the one
+        # outlier. pyproject.toml's requires-python ">=3.10" floor for the MCP
+        # package is verified by its own packaging tests, not by this matrix.
 
-  lint:
-    name: Lint (ruff)
+  quality:
+    name: Quality (ruff + mypy + bandit)
     runs-on: ubuntu-latest
 
     steps:
@@ -61,23 +62,6 @@ jobs:
           ruff check src/ tests/ \
             --ignore E501,E402,F401,W291,W293
 
-  typecheck:
-    name: Type Check (mypy)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-
       - name: Run mypy
         run: |
           set -o pipefail
@@ -86,27 +70,9 @@ jobs:
           mypy src/ | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
         # Blocking since PR #63 — the pre-existing 53-error backlog was cleared
-        # in PR #61. `set -o pipefail` is required: bash's default pipe exit
-        # status is the LAST command's (tee, always 0), which silently masked
-        # mypy's real exit code until this was caught in PR #67 — see the
-        # pipefail gotcha in CLAUDE.md's Gotchas section.
-
-  security-bandit:
-    name: Security (bandit)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        # in PR #61. `set -o pipefail` is required — see CLAUDE.md's Gotchas
+        # section (bash's default pipe exit status is the LAST command's, tee,
+        # always 0 — this silently masked mypy's real exit code until PR #67).
 
       - name: Run bandit
         run: |
@@ -116,8 +82,15 @@ jobs:
           bandit -r src/ -ll | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
         # Blocking since PR #63 — the pre-existing 2-finding backlog was
-        # cleared in PR #61. `set -o pipefail` is required — see the pipefail
-        # gotcha in CLAUDE.md's Gotchas section.
+        # cleared in PR #61. Same pipefail requirement as the mypy step above.
+    # Three static-analysis tools that were previously three separate jobs
+    # (each paying its own checkout+setup-python+pip-install), now three
+    # steps in one job. Accepted trade-off: a ruff failure stops mypy/bandit
+    # from running in that same CI pass (steps run sequentially, no
+    # continue-on-error) — a developer sees one failure per push instead of
+    # all three at once. Judged worth it for removing the redundant
+    # checkout/setup/install boilerplate; revisit if this trade-off proves
+    # annoying in practice.
 
   security-pip-audit:
     name: Security (pip-audit)
