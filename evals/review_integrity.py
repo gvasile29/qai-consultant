@@ -13,7 +13,6 @@ Golden cases live in ``review_golden.jsonl``; document fixtures live under
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
