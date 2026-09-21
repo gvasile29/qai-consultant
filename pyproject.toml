@@ -53,7 +53,6 @@ dependencies = [
     "coloredlogs==15.0.1 ; python_full_version < '3.11'",
     "cryptography==50.0.1",
     "defusedxml==0.7.1",
-    "distro==1.9.0",
     "exceptiongroup==1.3.1 ; python_full_version < '3.11'",
     "fastembed==0.8.0",
     "filelock==3.32.4",
@@ -97,7 +96,6 @@ dependencies = [
     "requests==2.34.2",
     "rpds-py==0.30.0 ; python_full_version < '3.11'",
     "rpds-py==2026.6.3 ; python_full_version >= '3.11'",
-    "sniffio==1.3.1",
     "sse-starlette==3.4.8",
     "starlette==1.6.0",
     "sympy==1.14.0",
@@ -107,8 +105,6 @@ dependencies = [
     "typing-inspection==0.4.4",
     "urllib3==2.7.0",
     "uvicorn==0.52.4 ; sys_platform != 'emscripten'",
-    "websockets==16.1.1 ; python_full_version < '3.11'",
-    "websockets==17.1 ; python_full_version >= '3.11'",
     "win32-setctime==1.2.0 ; sys_platform == 'win32'",
 ]
 
