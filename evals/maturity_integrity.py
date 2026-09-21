@@ -4,7 +4,7 @@ as failing checks, not prose; a green table means the rubric scores honestly. Ke
 and instant (no LLM, no keys, no heavy deps — maturity_core.py is stdlib-only), so it
 drops straight into CI.
 
-    python -m evals.maturity_integrity          # exits non-zero if any check fails
+    pytest tests/test_maturity_integrity.py
 
 Golden cases live in ``maturity_golden.jsonl``; description fixtures live under
 ``fixtures/maturity/*.txt``.
@@ -13,7 +13,6 @@ Golden cases live in ``maturity_golden.jsonl``; description fixtures live under
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -248,21 +247,3 @@ def format_table(outcomes: list[CheckOutcome]) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    try:
-        outcomes = run_all()
-    except Exception as exc:  # noqa: BLE001 — missing/corrupt golden or fixture → report, not traceback
-        print(f"\nmaturity_integrity errored (did not run): {type(exc).__name__}: {exc}")
-        return 1
-    print(format_table(outcomes))
-    ok = all(o.passed for o in outcomes)
-    total_defects = sum(len(o.findings) for o in outcomes)
-    print(f"\nRelease gate: {'PASS' if ok else 'FAIL'} ({total_defects} defect(s) across "
-          f"{sum(1 for o in outcomes if not o.passed)} check(s))")
-    return 0 if ok else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
