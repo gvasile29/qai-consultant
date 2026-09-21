@@ -195,19 +195,17 @@ python -m pytest tests/test_agent.py::test_kb_missing_raises_error -v  # single 
 
 ## Evals (`evals/` — release gate)
 
-A release gate that treats the app like a model under test ("are the numbers and documents it produces honest?"), separate from `tests/`. Two independent tiers; exits non-zero if either fails. The eval functions **are** the assertions — there is no `tests/` wrapper for this module by design.
+A release gate that treats the app like a model under test ("are the numbers and documents it produces honest?"), separate from `tests/`. The former tier-1 deterministic checks (estimate, review, results, maturity integrity) migrated to ordinary pytest test modules in `tests/` on 2026-09-17, leaving one remaining tier: rag/local_index_parity. The eval functions **are** the assertions — there is no standalone module-level runner by design.
 
 ```bash
-python -m evals.run                  # everything
-python -m evals.run --det            # tier 1 only (keyless, no LLM) — 4 modules
-python -m evals.estimate_integrity   # tier 1: estimate checks standalone
-python -m evals.review_integrity     # tier 1: v3.1 F1 rubric checks standalone
-python -m evals.results_integrity    # tier 1: v3.1 F2 results-analysis checks standalone
-python -m evals.maturity_integrity   # tier 1: v3.5 maturity checks standalone
-python -m evals.rag                  # tier 2 standalone
+pytest tests/test_estimate_integrity.py         # tier 1 (formerly evals-det): estimate checks
+pytest tests/test_review_integrity.py           # tier 1 (formerly evals-det): v3.1 F1 rubric checks
+pytest tests/test_results_integrity.py          # tier 1 (formerly evals-det): v3.1 F2 results-analysis checks
+pytest tests/test_maturity_integrity.py         # tier 1 (formerly evals-det): v3.5 maturity checks
+python -m evals.run                  # tier 2 only (rag/local_index_parity)
 ```
 
-**Tier 1 (deterministic, keyless, CI-safe — 4 modules, all in the "tier-1-style" family):**
+**Tier 1 (deterministic, keyless, CI-safe — 4 modules, now ordinary pytest tests as of 2026-09-17):**
 - `estimate_integrity`: runs the *real shipped* `InputValidator` / `EffortEstimator` (stubs only the heavy `agent` module) on golden inputs. 5 metrics: `duration_bounds`, `team_restatement_invariance`, `name_display_fidelity`, `confidence_magnitude_sanity`, `no_fabricated_versions`.
 - `review_integrity` (v3.1): runs the real shipped `review_core.review_document()` (no stub needed — dependency-free). 4 metrics: `score_ordering`, `dimension_attribution`, `determinism`, `insufficient_content_handling`.
 - `results_integrity` (v3.1): runs the real shipped `results_core.analyze()`/parsers (no stub needed). 4 metrics: `flaky_and_ever_failing_boundaries`, `cluster_count`, `malformed_input_never_crashes`, `csv_xml_parity`.
@@ -227,7 +225,7 @@ No LLM, no API keys in any of the four; a red row names a real defect in the shi
 | `local_index_parity.py` | Tier 2, keyless but not dependency-free (needs the embedding stack): reruns `rag.py`'s Context Recall@k / MRR metrics against the real `src/local_index.LocalIndex` (chunked 1000/200, what the MCP server actually serves) instead of `rag.py`'s coarser doc-level 4000-char index, so a chunking/category/cache regression that only shows up at chunk granularity doesn't slip past the doc-level eval. `python -m evals.local_index_parity` |
 | `judge.py` | LLM judge/generator for the judged metrics, via the app's `LLMClient` (production Mistral) |
 | `thresholds.py` | The gate spec — every floor + one line of rationale |
-| `run.py` | Aggregate gate over all tiers (`--det` skips only tier 2 `rag`/`local_index_parity`, not `review_integrity`/`results_integrity` — those are tier 1) |
+| `run.py` | Aggregate gate over the single remaining tier (rag/local_index_parity); tier-1 pytest tests are now invoked directly by CI, not via this runner |
 
 > **Skip semantics:** judged metrics SKIP (never fail) when the judge backend is unreachable; the whole RAG tier SKIPs when `sentence-transformers` is absent — so a bare CI box still runs the full deterministic tier. Add a case by appending a line to the relevant `*.jsonl`; the datasets *are* the suites.
 
@@ -237,12 +235,9 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`/`mas
 
 | Job | Blocking? | What it checks |
 |-----|-----------|-----------------|
-| `test` | Yes | `pytest tests/` on Python 3.10/3.11/3.12 |
-| `lint` | Yes | `ruff check src/ tests/` |
-| `typecheck` | **Yes** (since PR #63) | `mypy src/` — the ~53-error pre-existing backlog was cleared in PR #61; any new mypy error now blocks merge. |
-| `security-bandit` | **Yes** (since PR #63) | `bandit -r src/ -ll` — the 2-finding pre-existing backlog (`results_core.py`'s `ET.fromstring`, `telemetry.py`'s `urlopen`) was cleared in PR #61; any new medium+ finding now blocks merge. |
+| `test` | Yes | `pytest tests/` on Python 3.11 (single version as of 2026-09-17 — see Gotchas; this also runs the former evals-det tier-1 checks, now ordinary pytest tests) |
+| `quality` | Yes | `ruff check src/ tests/`, `mypy src/`, `bandit -r src/ -ll` — merged into one job as of 2026-09-17 (was 3 separate jobs: `lint`, `typecheck`, `security-bandit`) |
 | `security-pip-audit` | **No** | `pip-audit -r requirements.txt --desc` — non-blocking. The 10-CVE backlog (langchain/nltk/transformers family) was cleared in PR #62, but this job stays non-blocking on purpose: a new CVE can land in a transitive dependency with no fixed version yet published, which would block unrelated PRs with no way out. Promote once there's an allowlist/waiver mechanism for exactly that case. |
-| `evals-det` | Yes | `python -m evals.run --det` — the tier-1 deterministic eval suite described in the "Evals" section above, now enforced on every PR instead of only run manually. |
 | `coverage` | Yes | `pytest --cov=src --cov-fail-under=60` — the coverage floor is the measured `ubuntu-latest` baseline (60.88%) at the time this gate was added, rounded down; it can only be raised over time, never silently regress. Measured locally on Windows first (61.36%) — the two platforms differ enough (fewer tests execute on Linux; some skip there) that the floor had to be set from the CI runner's own number, not the dev machine's. |
 
 `security-pip-audit` uses `continue-on-error: true` (not a shell-level `|| true`) so its findings stay visible as a neutral/warning status in the PR checks list and in the job's `$GITHUB_STEP_SUMMARY`, without blocking merge. `typecheck`/`security-bandit` no longer use `continue-on-error` — a failure there now fails the job for real, same as `test`/`lint`.
@@ -336,3 +331,4 @@ Keep each version's scope tight — implement incrementally in this order.
 - **A version bump merged to `master` is not the same as a version actually published to PyPI — check `pypi.org/pypi/qai-consultant-mcp/json`'s `info.version` before assuming the MCP package's tool surface is live.** v3.5.0 (the `assess_qa_maturity` tool) was merged to `master` on 2026-09-10 with `src/version.py`/`pyproject.toml`/`CHANGELOG.md` all agreeing on 3.5.0, but the actual `twine upload` step (human-gated, per `docs/plans/2026-07-22-mcp-distribution-plan.md`'s explicit rule) was never run — no `v3.5.0` git tag exists either. Anyone installing `qai-consultant-mcp` between 2026-09-10 and the v3.5.1 release below was still getting 3.4.4, missing the maturity tool entirely, with no error or warning anywhere (PyPI has no concept of "this repo says a newer version should exist"). Found while preparing v3.5.1's release (a `maturity_core.py` keyword-matching fix, see the roadmap entry above) — checking "is the fix live" led to checking "is *any* of this live," which it wasn't. Any future MCP-surface release should verify the live PyPI version directly rather than trusting `version.py`/the roadmap section, and should not assume the previous version number was ever actually published.
 - **QA Maturity's keyword-based evidence detection will keep missing paraphrased practices — treat each report as a data point, not a one-time fix.** `maturity_core.py`'s `_TMMI_CHECKS`/`_AI_ACT_CHECKS` are fixed keyword/phrase lists by design (dependency-free, deterministic, no LLM — see the module's own docstring). The v3.5.1 fix (`_requirement_traceability_signal()`'s phrase fallback, `progress_tracking`'s expanded keyword list) closed two gaps found via live QA, but a third (Non Functional Testing's "performance"/"security" requiring the compound phrase, not a bare mention) was deliberately left open — those particular words are common enough in non-testing contexts that broadening them risks more false positives than the false negatives they'd fix. There is no general fix for this class of issue short of an LLM-based evidence-extraction pre-pass (noted as a possible direction in the original v3.5.0 design spec, out of scope so far) — expect more of these to surface from real usage, and evaluate each one's false-positive risk individually rather than reflexively broadening every reported keyword gap.
 - **A project-local `[tool.uv.sources]`/`[[tool.uv.index]]` index scoping is invisible to real `uvx`/`pip` consumers.** `[tool.uv.*]` config only applies when `uv` resolves this repo's own `pyproject.toml` directly — it is never distributed as part of a built wheel/sdist, so it cannot verify anything about what a real downstream consumer sees. Any future per-package index scoping in this file must be verified via `uvx --from <published-package>==<version> ...` run from a directory with no ambient project files, not via `uv sync`/`uv pip install .` from inside the checked-out repo. Full incident history: `docs/postmortems/2026-09-mcp-dependency-pinning-saga.md`.
+- **Renaming or merging a CI job's `name:` requires updating branch protection's required status checks in the same change, sequenced BEFORE the job-name change lands, not after.** Found while simplifying CI on 2026-09-17: `master`'s branch protection required exact status-check-context strings (`Tests (Python 3.10)`, `Lint (ruff)`, `Type Check (mypy)`, `Security (bandit)`, `Evals (deterministic)`, among others) matching the workflow's old job `name:` fields. Reducing the test matrix and merging `lint`/`typecheck`/`security-bandit` into one `quality` job made those old names stop reporting forever, which would have permanently blocked every future PR until branch protection was updated — avoided by updating `gh api .../branches/master/protection/required_status_checks` FIRST (relaxing the requirement before the job names actually changed), so the PR carrying the workflow change satisfied the already-updated requirement the moment its new-named jobs reported. Any future CI job rename/merge/deletion needs this same check-then-update-first sequencing, not an update-after-the-fact.
