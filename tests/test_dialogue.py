@@ -110,6 +110,21 @@ def test_project_name_truncated_at_50():
     print(f"  PASS: 60-char name → truncated to {len(result.cleaned)} chars")
 
 
+def test_project_name_strips_embedded_control_characters():
+    """project_name: embedded control characters (\\n, \\r, \\t) are stripped —
+    architecture-review Minor finding #8. A crafted project name containing a
+    newline could otherwise break the YAML front matter structure
+    ai_disclosure.build_front_matter() embeds it into, e.g. injecting a fake
+    `document_type:`/`ai_generated:` line."""
+    result = _v().validate("project_name", "Foo\ndocument_type: fake\nai_generated: false")
+    assert result.valid, f"Expected valid after stripping control chars, got: '{result.error}'"
+    assert "\n" not in result.cleaned
+    assert "\r" not in result.cleaned
+    # ':' is also stripped independently, by the pre-existing INVALID_FILENAME_CHARS rule.
+    assert result.cleaned == "Foodocument_type fakeai_generated false"
+    print(f"  PASS: embedded newlines stripped → cleaned = '{result.cleaned}'")
+
+
 def test_project_description_too_short_invalid():
     """project_description < 10 chars → invalid; error contains 'more specific'."""
     short = "web app"   # 7 chars, below MIN_DESCRIPTION_LENGTH=10

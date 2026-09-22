@@ -191,7 +191,12 @@ def test_cache_invalidates_when_kb_file_changes(tmp_path):
         assert mock_cls.called, "An edited KB file must invalidate the cache and trigger a rebuild"
 
     assert idx2.kb_version != version1
-    assert len(list(cache_dir.glob("*.json"))) == 2, "Old and new cache files should both exist (keyed by hash)"
+    remaining = list(cache_dir.glob("*.json"))
+    assert len(remaining) == 1, (
+        "The stale (old kb_version) cache file must be evicted once the new "
+        "one is successfully written, not left to accumulate forever"
+    )
+    assert idx2.kb_version in remaining[0].name
 
 
 def test_kb_content_hash_changes_on_new_file(tmp_path):
@@ -273,6 +278,95 @@ def test_cache_written_under_old_format_version_is_treated_as_miss(tmp_path):
         assert mock_cls.called, "A format-1 cache must not be trusted after the format-2 bump"
 
     assert idx2.kb_version == idx1.kb_version
+
+
+# ── Stale cache eviction (architecture-review Minor finding #5) ────────────────────
+
+def test_stale_format_version_cache_file_is_evicted_on_rebuild(tmp_path):
+    """A leftover index_v1_*.json (pre-fastembed-switch cache) must be
+    cleaned up once a fresh format-2 cache is successfully built, not left
+    to accumulate forever across format-version bumps."""
+    kb = tmp_path / "kb"
+    cache_dir = tmp_path / "cache"
+    _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
+
+    stale_v1 = cache_dir / "index_v1_deadbeefdeadbeef.json"
+    cache_dir.mkdir(parents=True)
+    stale_v1.write_text("{}", encoding="utf-8")
+
+    idx = _build_index(kb, cache_dir)
+
+    remaining = list(cache_dir.glob("*.json"))
+    assert not stale_v1.exists(), "Stale format-1 cache file must be evicted"
+    assert len(remaining) == 1
+    assert idx.kb_version in remaining[0].name
+
+
+def test_eviction_never_deletes_the_just_written_cache_file(tmp_path):
+    kb = tmp_path / "kb"
+    cache_dir = tmp_path / "cache"
+    _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
+
+    idx = _build_index(kb, cache_dir)
+
+    cache_files = list(cache_dir.glob("*.json"))
+    assert len(cache_files) == 1
+    assert idx.kb_version in cache_files[0].name
+
+
+def test_eviction_failure_does_not_break_index_construction(tmp_path, monkeypatch):
+    """A best-effort cleanup: if deleting a stale cache file raises for any
+    reason, _ensure_built() must still succeed rather than propagate."""
+    kb = tmp_path / "kb"
+    cache_dir = tmp_path / "cache"
+    _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
+
+    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
+        idx = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
+        with patch.object(LocalIndex, "_evict_stale_cache_files", side_effect=OSError("boom")):
+            idx._ensure_built()  # must not raise
+
+    assert idx._built
+    result = idx.search("risk testing")
+    assert "error" not in result
+
+
+# ── Query-vector LRU cache bound (architecture-review Minor finding #6) ────────────
+
+def test_qcache_evicts_least_recently_used_entry_past_the_cap(tmp_path):
+    from local_index import _MAX_QCACHE_ENTRIES
+
+    kb = tmp_path / "kb"
+    _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
+    idx = _build_index(kb, tmp_path / "cache")
+
+    for i in range(_MAX_QCACHE_ENTRIES):
+        idx._query_vector(f"query {i}")
+    assert len(idx._qcache) == _MAX_QCACHE_ENTRIES
+    assert "query 0" in idx._qcache
+
+    idx._query_vector("query overflow")
+
+    assert len(idx._qcache) == _MAX_QCACHE_ENTRIES, "Cache must stay capped at _MAX_QCACHE_ENTRIES"
+    assert "query 0" not in idx._qcache, "The least-recently-used entry must be evicted"
+    assert "query overflow" in idx._qcache
+
+
+def test_qcache_hit_refreshes_recency_and_protects_from_eviction(tmp_path):
+    from local_index import _MAX_QCACHE_ENTRIES
+
+    kb = tmp_path / "kb"
+    _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
+    idx = _build_index(kb, tmp_path / "cache")
+
+    for i in range(_MAX_QCACHE_ENTRIES):
+        idx._query_vector(f"query {i}")
+
+    idx._query_vector("query 0")  # re-access — should move to most-recently-used
+    idx._query_vector("query overflow")  # should now evict "query 1", not "query 0"
+
+    assert "query 0" in idx._qcache
+    assert "query 1" not in idx._qcache
 
 
 # ── list_sources() ────────────────────────────────────────────────────────────────

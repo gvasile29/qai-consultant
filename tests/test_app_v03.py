@@ -187,6 +187,88 @@ def test_render_strategy_isolates_each_generation_step():
     print("  PASS: all 4 generation steps in render_strategy() are individually try/except-wrapped")
 
 
+# ── render_strategy() resumability gating (architecture-review Minor finding #4) ──
+# CLAUDE.md's "render_strategy() resumability" gotcha explains why this must be
+# gated on an explicit completion flag rather than any single stage's output —
+# these tests give that invariant real regression protection via static source
+# checks, the same technique test_render_strategy_isolates_each_generation_step()
+# above already uses for this same function (full Streamlit rendering can't be
+# driven headlessly — see CLAUDE.md's Browser/UI Testing section).
+
+def test_render_strategy_gates_on_results_complete_not_a_single_stage():
+    """needs_generation must be derived from results_complete, not from
+    'strategy' or any other single stage's output — a rerun landing after
+    stage 3 but before the PDF-bytes precompute must still be treated as
+    incomplete."""
+    fn = extract_function(read_app_source(), "render_strategy")
+    assert 'needs_generation = not st.session_state.get("results_complete", False)' in fn
+
+
+def test_render_strategy_run_count_increments_only_once_per_logical_run():
+    """A rerun mid-pipeline (generation_started already True) must not
+    re-increment run_count — otherwise a websocket reconnect during
+    streaming would burn extra quota for the same logical 'Generate' click."""
+    fn = extract_function(read_app_source(), "render_strategy")
+    lines = fn.splitlines()
+    increment_lines = [i for i, line in enumerate(lines) if "st.session_state.run_count += 1" in line]
+    assert increment_lines, "Could not find the run_count increment in render_strategy()"
+    preceding = [lines[i].strip() for i in range(max(0, increment_lines[0] - 3), increment_lines[0])]
+    assert "if not generation_started:" in preceding, (
+        f"run_count increment must be inside 'if not generation_started:', "
+        f"preceding lines were: {preceding}"
+    )
+
+
+def test_render_strategy_run_cap_check_allows_resuming_generation():
+    """The MAX_RUNS_PER_SESSION check must not block a rerun that's resuming
+    an already-started generation — only a brand-new attempt should be
+    capped."""
+    fn = extract_function(read_app_source(), "render_strategy")
+    cap_lines = [line for line in fn.splitlines() if "MAX_RUNS_PER_SESSION" in line and "if " in line]
+    assert cap_lines, "Could not find the MAX_RUNS_PER_SESSION gate in render_strategy()"
+    assert "not generation_started" in cap_lines[0], (
+        "The run-cap check must include 'not generation_started' so a resumed "
+        "mid-pipeline rerun isn't blocked by the cap"
+    )
+
+
+def test_render_strategy_each_stage_skips_if_already_produced():
+    """Each of the 4 stages must check 'is None' before regenerating, so a
+    resumed run (after an interrupted rerun) doesn't redo completed work."""
+    fn = extract_function(read_app_source(), "render_strategy")
+    for key in ("risk_register", "effort_report", "strategy", "test_plan"):
+        assert f'st.session_state.get("{key}") is None' in fn, \
+            f"Missing resume-skip guard for stage '{key}'"
+
+
+def test_render_strategy_results_complete_set_after_all_stages_and_pdf_precompute():
+    """results_complete = True must be the LAST thing set in the generation
+    branch — after all 4 stages AND the PDF-bytes precompute — or a rerun
+    landing between the last stage and the PDF precompute would incorrectly
+    read as 'already done' and never produce PDF bytes."""
+    fn = extract_function(read_app_source(), "render_strategy")
+    lines = fn.splitlines()
+
+    completion_idx = next(
+        i for i, line in enumerate(lines) if "st.session_state.results_complete = True" in line
+    )
+    stage_result_markers = (
+        'st.session_state.risk_register = risk_register',
+        'st.session_state.effort_report = effort_report',
+        'st.session_state.strategy = strategy',
+        'st.session_state.test_plan = test_plan',
+        'st.session_state.risk_pdf_bytes = markdown_to_pdf',
+    )
+    for marker in stage_result_markers:
+        marker_idx = next((i for i, line in enumerate(lines) if marker in line), None)
+        assert marker_idx is not None, f"Could not find stage-result marker: {marker}"
+        assert marker_idx < completion_idx, (
+            f"'{marker}' must be set before results_complete = True, "
+            f"found at line {marker_idx} vs completion at {completion_idx}"
+        )
+    print("  PASS: results_complete is set only after all 4 stages and the PDF precompute")
+
+
 def test_generate_another_clears_risk_keys():
     """'Generate Another Strategy' deletes all risk-related keys + feedback_submitted."""
     GENERATE_ANOTHER_KEYS = [
