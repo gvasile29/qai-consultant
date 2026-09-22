@@ -23,6 +23,7 @@ import hashlib
 import json
 import math
 import re
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -33,6 +34,7 @@ from kb_config import CHUNK_OVERLAP, CHUNK_SIZE, EMBEDDING_MODEL, get_source_cat
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _CACHE_FORMAT_VERSION = 2  # bumped for the fastembed backend switch (was 1: sentence-transformers)
+_MAX_QCACHE_ENTRIES = 256  # LRU cap on _query_vector()'s per-instance cache
 
 
 def _resolve_default_kb_dir() -> Path:
@@ -183,7 +185,7 @@ class LocalIndex:
         self._norms: list[float] = []
         # Cheap (file hashing only, no embedding) — safe to compute eagerly.
         self.kb_version: str = _kb_content_hash(self.kb_dir)
-        self._qcache: dict[str, list[float]] = {}
+        self._qcache: "OrderedDict[str, list[float]]" = OrderedDict()
         self._embedder = None
         self._built = False
 
@@ -230,8 +232,9 @@ class LocalIndex:
         self._built = True
         try:
             self._save_cache(cache_path)
+            self._evict_stale_cache_files(cache_path)
         except Exception:
-            pass  # a cache write failure must never break index construction
+            pass  # a cache write/eviction failure must never break index construction
 
     def _build_fresh(self) -> None:
         chunks: list[Chunk] = []
@@ -250,7 +253,7 @@ class LocalIndex:
             vecs = []
         self._vectors = vecs
         self._norms = [math.sqrt(sum(x * x for x in v)) or 1.0 for v in vecs]
-        self._qcache = {}
+        self._qcache = OrderedDict()
 
     # ── Disk cache ───────────────────────────────────────────────────────────
 
@@ -270,6 +273,15 @@ class LocalIndex:
         tmp_path.write_text(json.dumps(payload), encoding="utf-8")
         tmp_path.replace(cache_path)  # atomic on both Windows and POSIX
 
+    def _evict_stale_cache_files(self, current_path: Path) -> None:
+        """Delete sibling index_v*_*.json cache files left behind by a prior
+        KB content edit (old kb_version) or a _CACHE_FORMAT_VERSION bump (old
+        format) — without this, the cache dir grows without bound across the
+        life of an MCP install as the KB is edited over time."""
+        for stale in self.cache_dir.glob("index_v*_*.json"):
+            if stale != current_path:
+                stale.unlink(missing_ok=True)
+
     def _load_cache(self, cache_path: Path) -> None:
         payload = json.loads(cache_path.read_text(encoding="utf-8"))
         if payload.get("format_version") != _CACHE_FORMAT_VERSION:
@@ -286,14 +298,19 @@ class LocalIndex:
         self._chunks = chunks
         self._vectors = vectors
         self._norms = [math.sqrt(sum(x * x for x in v)) or 1.0 for v in vectors]
-        self._qcache = {}
+        self._qcache = OrderedDict()
 
     # ── Query ────────────────────────────────────────────────────────────────
 
     def _query_vector(self, query: str) -> list[float]:
-        if query not in self._qcache:
-            self._qcache[query] = self._embedding_model().embed_query(query)
-        return self._qcache[query]
+        if query in self._qcache:
+            self._qcache.move_to_end(query)
+            return self._qcache[query]
+        vec = self._embedding_model().embed_query(query)
+        self._qcache[query] = vec
+        if len(self._qcache) > _MAX_QCACHE_ENTRIES:
+            self._qcache.popitem(last=False)
+        return vec
 
     def search(self, query: str, category: Optional[str] = None, k: int = 5) -> dict:
         """Returns {"chunks": [...], "kb_version": ...} on success, or

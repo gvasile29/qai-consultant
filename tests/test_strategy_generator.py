@@ -100,3 +100,118 @@ def test_generate_all_results_summary_defaults_to_none():
     sig = inspect.signature(StrategyGenerator.generate_all)
     assert sig.parameters["results_summary"].default is None
     print("  PASS: generate_all()'s results_summary parameter defaults to None")
+
+
+def _stub_all_stages(monkeypatch, tmp_path):
+    """Wire every one of the 4 generate_all() stages to a cheap, successful
+    stub. Individual tests below override one stage with a raising stub to
+    exercise that stage's except-branch in isolation."""
+    monkeypatch.setattr(sg_module.RiskAnalyzer, "analyze",
+                         lambda self, context, chunks=None, results_summary=None: ("# Risk Register", ["[Standard] risk.md"]))
+    monkeypatch.setattr(sg_module.RiskAnalyzer, "save", lambda self, text, ctx: tmp_path / "risk.md")
+    monkeypatch.setattr(sg_module.EffortEstimator, "estimate", lambda self, ctx, risk: ("# Effort Report", {"total_days": 5}))
+    monkeypatch.setattr(sg_module.EffortEstimator, "save", lambda self, text, ctx: tmp_path / "effort.md")
+    monkeypatch.setattr(sg_module.StrategyGenerator, "generate", lambda self, ctx, chunks=None: ("# Test Strategy", ["[Standard] strategy.md"]))
+    monkeypatch.setattr(sg_module.StrategyGenerator, "save", lambda self, text, ctx: tmp_path / "strategy.md")
+    monkeypatch.setattr(sg_module.TestPlanGenerator, "generate", lambda self, ctx, risk, chunks=None: ("# Test Plan", ["[Standard] plan.md"]))
+    monkeypatch.setattr(sg_module.TestPlanGenerator, "save", lambda self, text, ctx: tmp_path / "plan.md")
+
+
+def test_generate_all_risk_failure_still_populates_other_steps(monkeypatch, tmp_path):
+    """A Risk Register failure (step 1/4) must not prevent Effort, Strategy,
+    or Test Plan from running — CLAUDE.md's 'Per-step isolation' gotcha."""
+    _stub_all_stages(monkeypatch, tmp_path)
+    monkeypatch.setattr(sg_module.RiskAnalyzer, "analyze",
+                         lambda self, context, chunks=None, results_summary=None: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    agent = MagicMock()
+    agent.retrieve_knowledge.return_value = []
+    result = StrategyGenerator(agent).generate_all(SAMPLE_CONTEXT)
+
+    assert result["risk_register"] == ""
+    assert result["risk_sources"] == []
+    assert result["risk_path"] is None
+    assert result["effort_report"] == "# Effort Report"
+    assert result["strategy"] == "# Test Strategy"
+    assert result["test_plan"] == "# Test Plan"
+    print("  PASS: Risk Register failure isolated, Effort/Strategy/Test Plan still populated")
+
+
+def test_generate_all_effort_failure_still_populates_other_steps(monkeypatch, tmp_path):
+    """An Effort Estimation failure (step 2/4) must not prevent Strategy or
+    Test Plan from running, and must not discard the already-generated
+    Risk Register."""
+    _stub_all_stages(monkeypatch, tmp_path)
+    monkeypatch.setattr(sg_module.EffortEstimator, "estimate",
+                         lambda self, ctx, risk: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    agent = MagicMock()
+    agent.retrieve_knowledge.return_value = []
+    result = StrategyGenerator(agent).generate_all(SAMPLE_CONTEXT)
+
+    assert result["risk_register"] == "# Risk Register"
+    assert result["effort_report"] == ""
+    assert result["effort_data"] == {}
+    assert result["effort_path"] is None
+    assert result["strategy"] == "# Test Strategy"
+    assert result["test_plan"] == "# Test Plan"
+    print("  PASS: Effort Estimation failure isolated, Risk/Strategy/Test Plan still populated")
+
+
+def test_generate_all_strategy_failure_still_populates_other_steps(monkeypatch, tmp_path):
+    """A Test Strategy failure (step 3/4) must not prevent Test Plan from
+    running, and must not discard Risk Register or Effort results."""
+    _stub_all_stages(monkeypatch, tmp_path)
+    monkeypatch.setattr(sg_module.StrategyGenerator, "generate",
+                         lambda self, ctx, chunks=None: (_ for _ in ()).throw(ValueError("LLM returned empty Test Strategy")))
+
+    agent = MagicMock()
+    agent.retrieve_knowledge.return_value = []
+    result = StrategyGenerator(agent).generate_all(SAMPLE_CONTEXT)
+
+    assert result["risk_register"] == "# Risk Register"
+    assert result["effort_report"] == "# Effort Report"
+    assert result["strategy"] == ""
+    assert result["sources"] == []
+    assert result["strategy_path"] is None
+    assert result["test_plan"] == "# Test Plan"
+    print("  PASS: Test Strategy failure isolated, Risk/Effort/Test Plan still populated")
+
+
+def test_generate_all_test_plan_failure_still_populates_other_steps(monkeypatch, tmp_path):
+    """A Test Plan failure (step 4/4, the last stage) must not discard the
+    results already produced by Risk Register, Effort, or Strategy."""
+    _stub_all_stages(monkeypatch, tmp_path)
+    monkeypatch.setattr(sg_module.TestPlanGenerator, "generate",
+                         lambda self, ctx, risk, chunks=None: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    agent = MagicMock()
+    agent.retrieve_knowledge.return_value = []
+    result = StrategyGenerator(agent).generate_all(SAMPLE_CONTEXT)
+
+    assert result["risk_register"] == "# Risk Register"
+    assert result["effort_report"] == "# Effort Report"
+    assert result["strategy"] == "# Test Strategy"
+    assert result["test_plan"] == ""
+    assert result["test_plan_sources"] == []
+    assert result["test_plan_path"] is None
+    print("  PASS: Test Plan failure isolated, Risk/Effort/Strategy still populated")
+
+
+def test_generate_all_rag_prefetch_failure_falls_back_to_empty_chunks(monkeypatch, tmp_path):
+    """A Pinecone/RAG prefetch timeout on any of the 3 futures must fall back
+    to an empty chunk list rather than aborting the whole pipeline —
+    CLAUDE.md's 'RAG futures' gotcha."""
+    _stub_all_stages(monkeypatch, tmp_path)
+
+    agent = MagicMock()
+    agent.retrieve_knowledge.side_effect = RuntimeError("Pinecone timeout")
+    result = StrategyGenerator(agent).generate_all(SAMPLE_CONTEXT)
+
+    # All 4 stages still ran and produced their stubbed output despite every
+    # RAG future raising.
+    assert result["risk_register"] == "# Risk Register"
+    assert result["effort_report"] == "# Effort Report"
+    assert result["strategy"] == "# Test Strategy"
+    assert result["test_plan"] == "# Test Plan"
+    print("  PASS: RAG prefetch failure on all 3 futures falls back to [] without aborting the pipeline")

@@ -68,6 +68,27 @@ def test_build_front_matter_extra_fields():
     assert fm.index("standard: IEEE 829") < fm.rindex("---")
 
 
+def test_build_front_matter_strips_embedded_newlines_from_project_name():
+    """Defense-in-depth (architecture-review Minor finding #8): even bypassing
+    InputValidator entirely (e.g. a direct, non-UI caller of ProjectContext),
+    build_front_matter() itself must not let a crafted project_name inject
+    extra YAML lines — each interpolated field is a single line in the output."""
+    fm = build_front_matter(
+        "Risk Register", "Foo\ndocument_type: fake\nai_generated: false", MISTRAL_MODEL,
+    )
+    lines = fm.splitlines()
+    assert lines[0] == "---"
+    assert lines[-1] == "---"
+    # Exactly one "project:"/"document_type:"/"ai_generated:" line each — a
+    # smuggled newline in project_name did not fabricate additional
+    # front-matter keys (the injected text survives only as inert data
+    # embedded within the single "project:" line, never as its own line).
+    assert sum(1 for line in lines if line.startswith("project:")) == 1
+    assert sum(1 for line in lines if line.startswith("document_type:")) == 1
+    assert sum(1 for line in lines if line.startswith("ai_generated:")) == 1
+    assert "ai_generated: true" in fm
+
+
 def test_pdf_meta_html_contains_expected_tags():
     html = pdf_meta_html(MISTRAL_MODEL)
     assert 'name="author"' in html
@@ -87,7 +108,7 @@ def test_ai_disclosure_module_has_no_third_party_or_agent_imports():
     import ast
     source = (SRC_DIR / "ai_disclosure.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
-    allowed = {"datetime", "version", "__future__", "base64", "pathlib"}
+    allowed = {"datetime", "version", "__future__", "base64", "pathlib", "re"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:

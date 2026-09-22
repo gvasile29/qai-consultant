@@ -8,6 +8,7 @@ import sys
 
 
 from pathlib import Path
+from typing import Optional
 sys.path.append(str(Path(__file__).resolve().parent))
 
 import streamlit as st
@@ -52,6 +53,29 @@ logger = get_logger(__name__)
 
 BRAND_DIR = Path(__file__).resolve().parent.parent / "assets" / "brand"
 EU_AI_ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "eu_ai_icon"
+
+# Same ceiling as mcp_server.py's analyze_test_results _MAX_RESULTS_INPUT_BYTES
+# clamp — the Streamlit uploaders otherwise had no size guard of their own
+# beyond Streamlit's generic 200MB default.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def read_uploaded_text(uploaded_file) -> Optional[str]:
+    """Read an st.file_uploader() file as UTF-8 text, enforcing MAX_UPLOAD_BYTES.
+
+    Returns the decoded text, or None (after rendering st.error()) if the
+    file exceeds the limit — callers should treat None like "no file".
+    """
+    raw = uploaded_file.getvalue()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        st.error(
+            f"'{uploaded_file.name}' is {len(raw) / (1024 * 1024):.1f} MB, "
+            f"over the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit. "
+            "Please upload a smaller file."
+        )
+        return None
+    return raw.decode("utf-8", errors="ignore")
+
 
 # ── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -623,7 +647,9 @@ def render_review():
         if uploaded_results:
             records = []
             for uploaded_file in uploaded_results:
-                content = uploaded_file.read().decode("utf-8", errors="ignore")
+                content = read_uploaded_text(uploaded_file)
+                if content is None:
+                    continue
                 if uploaded_file.name.lower().endswith(".csv"):
                     records.extend(parse_results_csv(content))
                 else:
@@ -1230,8 +1256,10 @@ def render_doc_review():
         document_text = ""
         source_label = "Document"
         if uploaded is not None:
-            document_text = uploaded.read().decode("utf-8", errors="ignore")
-            source_label = Path(uploaded.name).stem
+            content = read_uploaded_text(uploaded)
+            if content is not None:
+                document_text = content
+                source_label = Path(uploaded.name).stem
         elif pasted.strip():
             document_text = pasted
 
@@ -1442,8 +1470,10 @@ def render_maturity_assessment():
         description_text = ""
         source_label = "Assessment"
         if uploaded is not None:
-            description_text = uploaded.read().decode("utf-8", errors="ignore")
-            source_label = Path(uploaded.name).stem
+            content = read_uploaded_text(uploaded)
+            if content is not None:
+                description_text = content
+                source_label = Path(uploaded.name).stem
         elif pasted.strip():
             description_text = pasted
 

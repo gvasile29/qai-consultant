@@ -5,6 +5,7 @@ All modules import get_logger() from here instead of using raw logging or print(
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # ── Config ─────────────────────────────────────────────────────────────────────
@@ -12,6 +13,8 @@ LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_FILE = LOG_DIR / "qai_consultant.log"
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+LOG_MAX_BYTES = 5 * 1024 * 1024  # 5 MB per file
+LOG_BACKUP_COUNT = 5             # qai_consultant.log + .log.1 .. .log.5, ~30 MB ceiling
 
 _initialized = False
 
@@ -37,8 +40,12 @@ def setup_logging(level: str = "INFO") -> None:
     root = logging.getLogger("qai")
     root.setLevel(numeric_level)
 
-    # ── File handler — always DEBUG level for full detail ──────────────────────
-    file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    # ── File handler — always DEBUG level for full detail, rotates at
+    # LOG_MAX_BYTES so long-running CLI/local usage can't grow this file
+    # forever ──────────────────────────────────────────────────────────────────
+    file_handler = RotatingFileHandler(
+        LOG_FILE, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT, encoding="utf-8",
+    )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
 

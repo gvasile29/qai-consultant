@@ -22,6 +22,12 @@ MAX_ADDITIONAL_CONTEXT_LENGTH = 2000   # optional free-text additional context
 # Characters invalid in filenames (stripped from project_name)
 INVALID_FILENAME_CHARS = r'[/\\:*?"<>|]'
 
+# ASCII control characters (incl. \n, \r, \t) — stripped from project_name so
+# a crafted value can't break the YAML front matter build_front_matter()
+# embeds it into (see ai_disclosure.py). Not in INVALID_FILENAME_CHARS since
+# these aren't OS-reserved filename characters, just structurally unsafe here.
+CONTROL_CHARS = r'[\x00-\x1f\x7f]'
+
 # Characters considered potentially dangerous (stripped from all inputs)
 DANGEROUS_CHARS = r'[<>{}|\\]'
 
@@ -100,7 +106,8 @@ class InputValidator:
         preserved for display fidelity — only OS-reserved filename characters are
         stripped. Each save() method applies its own independent filename
         sanitization (space → underscore) when building an actual file path."""
-        cleaned = re.sub(INVALID_FILENAME_CHARS, "", value).strip()
+        cleaned = re.sub(INVALID_FILENAME_CHARS, "", value)
+        cleaned = re.sub(CONTROL_CHARS, "", cleaned).strip()
 
         if not cleaned:
             return ValidationResult(

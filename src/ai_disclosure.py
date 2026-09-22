@@ -32,10 +32,13 @@ assessment and design rationale.
 from __future__ import annotations
 
 import base64
+import re
 from datetime import datetime
 from pathlib import Path
 
 from version import __version__
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 EU_AI_ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "eu_ai_icon"
 
@@ -65,6 +68,18 @@ def with_ai_footer(text: str) -> str:
     return f"{text.rstrip()}\n\n---\n\n{AI_GENERATED_FOOTER}\n"
 
 
+def _sanitize_yaml_scalar(value: str) -> str:
+    """Strip ASCII control characters (incl. \\n, \\r) from a value before it's
+    interpolated as an unquoted YAML scalar below. build_front_matter() builds
+    this block with plain f-strings, not a YAML library, so an embedded
+    newline in a caller-supplied value (e.g. project_name) could otherwise
+    inject extra front-matter lines. InputValidator._validate_project_name()
+    already strips these for the interactive dialogue path, but this is the
+    single point every caller — UI, CLI, and any future non-UI caller of
+    ProjectContext — actually goes through, so it's sanitized here too."""
+    return _CONTROL_CHARS.sub("", value)
+
+
 def build_front_matter(
     document_type: str, project_name: str, model: str, extra: dict[str, str] | None = None
 ) -> str:
@@ -80,13 +95,13 @@ def build_front_matter(
         "generated_by: QAI Consultant",
         f"generator_version: {__version__}",
         "ai_generated: true",
-        f"model: {model}",
+        f"model: {_sanitize_yaml_scalar(model)}",
         f"date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        f"project: {project_name}",
-        f"document_type: {document_type}",
+        f"project: {_sanitize_yaml_scalar(project_name)}",
+        f"document_type: {_sanitize_yaml_scalar(document_type)}",
     ]
     for key, value in (extra or {}).items():
-        lines.append(f"{key}: {value}")
+        lines.append(f"{key}: {_sanitize_yaml_scalar(value)}")
     lines.append("---")
     return "\n".join(lines)
 
