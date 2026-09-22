@@ -8,8 +8,8 @@ MCP_PLAN.md section 5: the ISTQB/OWASP PDFs (and the OWASP Top10 HTML
 duplicate) must never reach the distributed package regardless of
 whatever the pyproject.toml config *looks* like it should do. A fresh-venv
 install + real stdio smoke test (uvx-style) is done manually — see the
-step 8 commit message — since it needs network + ~1-2 minutes to pull
-torch/sentence-transformers, too slow for every CI run.
+step 8 commit message — since it needs network to pull the embedding
+backend's package, too slow for every CI run.
 """
 
 import re
@@ -57,22 +57,22 @@ def test_all_dependencies_are_exact_pinned():
     A loose bound (`>=`, `~=`, or a bare name) lets `uv` re-resolve to a
     newer upstream release between two `uvx qai-consultant-mcp` launches,
     even when the user hasn't changed anything on their end. That forces
-    a full ~88-package reinstall (~26-30s) on top of the already-known
-    ~20-25s sentence-transformers/torch import cost, which can push the
-    total past Claude Desktop's ~60s `initialize` timeout and cause a
-    silent attach failure. See the MCP dependency-pinning gotcha in
-    CLAUDE.md for the incident this guards against.
+    a full package reinstall on top of the embedding backend's own import
+    cost, which can push the total past Claude Desktop's ~60s `initialize`
+    timeout and cause a silent attach failure. See the MCP dependency-pinning
+    gotcha in CLAUDE.md for the incident this guards against.
 
-    Since v3.4.4 the list is a full transitive lock (~99 entries, generated
-    via `uv pip compile --universal`), not just the 6 direct imports -- a
+    Since v3.4.4 the list is a full transitive lock (generated via
+    `uv pip compile --universal`), not just the direct imports -- a
     2026-08-31 incident showed an unpinned *transitive* dep (scipy, pulled
     in by scikit-learn) can reintroduce the exact same failure even with
-    every direct dependency exact-pinned. A trailing PEP 508 environment
-    marker (`; python_full_version < '3.11'` etc.) is allowed after the
-    `==` pin -- some transitive deps genuinely need a different exact
-    version per Python version/platform (e.g. numpy/scipy/scikit-learn each
-    appear 2-3 times, once per supported Python minor version) -- but the
-    version itself must still be an exact `==` pin, never a range.
+    every direct dependency exact-pinned. As of v3.5.3 (the fastembed
+    backend swap) the list is a much smaller ~64 entries. A trailing PEP 508
+    environment marker (`; python_full_version < '3.11'` etc.) is allowed
+    after the `==` pin -- some transitive deps genuinely need a different
+    exact version per Python version/platform (e.g. numpy/onnxruntime/
+    rpds-py each appear multiple times, once per marker-split variant) --
+    but the version itself must still be an exact `==` pin, never a range.
 
     Parsed as plain text/regex, not a TOML library, since CI's Python
     3.10 matrix entry has no stdlib `tomllib` and this repo doesn't

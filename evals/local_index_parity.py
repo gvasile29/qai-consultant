@@ -8,8 +8,8 @@ the class the MCP server's ``retrieve_qa_knowledge`` tool calls directly — so 
 regression in chunking, category tagging, or the cache layer that only shows up
 at chunk granularity doesn't slip past the doc-level eval.
 
-Keyless but NOT dependency-free — needs the embedding stack (sentence-transformers/
-torch, installed via requirements.txt), same caveat as evals/rag.py. SKIPs (not
+Keyless but NOT dependency-free — needs the embedding stack (fastembed/onnxruntime,
+installed via requirements-dev.txt), same caveat as evals/rag.py. SKIPs (not
 fails) when that stack or its model weights are unavailable.
 
     python -m evals.local_index_parity

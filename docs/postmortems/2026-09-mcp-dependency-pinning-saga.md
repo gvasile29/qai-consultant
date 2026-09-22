@@ -1,6 +1,6 @@
 # Postmortem: the MCP dependency-pinning saga (v3.3.1 -> v3.4.4 -> v3.5.1/v3.5.2)
 
-**Status:** Fixed (v3.5.2). A proposed structural fix (swapping the embedding backend to fastembed/ONNX) is specced but not shipped as of 3.5.2 — see `docs/superpowers/specs/2026-09-17-mcp-embedding-backend-simplification-design.md`. **Linked from:** CLAUDE.md's "Every entry in pyproject.toml's dependencies must be exact-pinned" and "project-local [tool.uv.sources] index scoping" Gotchas.
+**Status:** Fixed (v3.5.2). A proposed structural fix (swapping the embedding backend to fastembed/ONNX) is specced and shipped in v3.5.3 — see `docs/superpowers/specs/2026-09-17-mcp-embedding-backend-simplification-design.md`. **Linked from:** CLAUDE.md's "Every entry in pyproject.toml's dependencies must be exact-pinned" and "project-local [tool.uv.sources] index scoping" Gotchas.
 
 Three chained incidents, each caused by the previous fix's blind spot, all rooted in the same fact: `uvx qai-consultant-mcp` resolves against PyPI's live index on every launch, so nothing committed to this repo (a `uv.lock`, a `[tool.uv.sources]` block) travels to a real end user's install.
 
@@ -26,4 +26,4 @@ Three consecutive Claude Desktop attach attempts each logged `Downloading scipy 
 
 ## The pattern
 
-All three incidents were "fixed" by adding *more* pinning rigor around the same underlying cost (`sentence-transformers`/`torch`'s heavy, slow-importing dependency chain), never by questioning whether that cost needed to be there at all. A proposed fastembed/ONNX backend swap would address the root cause directly — specced, not yet shipped: `docs/superpowers/specs/2026-09-17-mcp-embedding-backend-simplification-design.md`.
+All three incidents were "fixed" by adding *more* pinning rigor around the same underlying cost (`sentence-transformers`/`torch`'s heavy, slow-importing dependency chain), never by questioning whether that cost needed to be there at all. A fastembed/ONNX backend swap addresses the root cause directly — shipped in v3.5.3: `docs/superpowers/specs/2026-09-17-mcp-embedding-backend-simplification-design.md`.
