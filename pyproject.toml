@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qai-consultant-mcp"
-version = "3.5.2"
+version = "3.5.3"
 description = "Local, keyless MCP server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, test-results health analysis, and QA process maturity assessment."
 readme = "README_MCP.md"
 requires-python = ">=3.10"
@@ -33,114 +33,82 @@ classifiers = [
 # Generated via `uv pip compile pyproject.toml --universal --python-version
 # 3.10`; regenerate the same way (against the *previous* pinned set, so drift
 # is deliberate) when a direct dependency needs a version bump. Do NOT add
-# `--extra-index-url https://download.pytorch.org/whl/cpu` to that command —
-# see the v3.5.1 incident note near the (removed) `[tool.uv.sources]` block
-# further down this file: a CPU-index-scoped torch pin resolves fine for this
-# project's own tooling
-# but breaks every real `uvx qai-consultant-mcp` consumer, since PyPI-consumer
-# resolution never sees this file's `[tool.uv.*]` config. `torch` is pinned
-# plain (`torch==2.13.0`, no environment marker) so it resolves identically
-# for local dev and for real consumers.
+# a scoped `--extra-index-url` (e.g. https://download.pytorch.org/whl/cpu) to
+# that command — see the v3.5.1 incident note near the (removed)
+# `[tool.uv.sources]` block further down this file: a CPU-index-scoped pin
+# resolves fine for this project's own tooling but breaks every real
+# `uvx qai-consultant-mcp` consumer, since PyPI-consumer resolution never sees
+# this file's `[tool.uv.*]` config. (The package that originally motivated
+# this warning, `torch`, was removed from this dependency list entirely in
+# v3.5.3 when the local index's embedding backend switched to
+# fastembed/onnxruntime — see CLAUDE.md's v3.5.3 roadmap entry — but the same
+# PyPI-vs-project-local-config trap applies to any future platform-specific
+# wheel pin.)
 dependencies = [
-    "aiohappyeyeballs==2.7.1",
-    "aiohttp==3.14.3",
-    "aiosignal==1.4.0",
     "annotated-types==0.8.0",
     "anyio==4.14.2",
-    "async-timeout==4.0.3 ; python_full_version < '3.11'",
     "attrs==26.1.0",
     "certifi==2026.7.22",
     "cffi==2.1.1 ; platform_python_implementation != 'PyPy'",
     "charset-normalizer==3.5.1",
     "click==8.5.0 ; sys_platform != 'emscripten'",
-    "cloudpickle==3.1.2",
     "colorama==0.4.6 ; sys_platform == 'win32'",
+    "coloredlogs==15.0.1 ; python_full_version < '3.11'",
     "cryptography==50.0.1",
     "defusedxml==0.7.1",
-    "distro==1.9.0",
     "exceptiongroup==1.3.1 ; python_full_version < '3.11'",
+    "fastembed==0.8.0",
     "filelock==3.32.4",
-    "frozenlist==1.8.0",
+    "flatbuffers==25.12.19",
     "fsspec==2026.7.0",
-    "greenlet==3.5.5 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'",
     "h11==0.16.0",
     "hf-xet==1.6.0 ; platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'",
     "httpcore==1.0.9",
     "httpx==0.28.1",
     "httpx-sse==0.4.3",
     "huggingface-hub==0.36.2",
+    "humanfriendly==10.0 ; python_full_version < '3.11'",
     "idna==3.19",
-    "jinja2==3.1.6",
-    "joblib==1.6.0",
-    "jsonpatch==1.33",
-    "jsonpointer==3.1.1",
     "jsonschema==4.26.0",
     "jsonschema-specifications==2025.9.1",
-    "langchain-classic==1.0.8",
-    "langchain-community==0.4.2",
-    "langchain-core==1.6.1",
-    "langchain-protocol==0.0.19",
-    "langchain-text-splitters==1.1.2",
-    "langsmith==0.11.2",
-    "markupsafe==3.0.3",
+    "loguru==0.7.3",
     "mcp==1.28.1",
+    "mmh3==5.3.0",
     "mpmath==1.3.0",
-    "multidict==6.7.1",
-    "narwhals==2.25.0 ; python_full_version >= '3.11'",
-    "networkx==3.4.2 ; python_full_version < '3.11'",
-    "networkx==3.6.1 ; python_full_version >= '3.11'",
     "numpy==2.2.6 ; python_full_version < '3.11'",
     "numpy==2.4.6 ; python_full_version == '3.11.*'",
     "numpy==2.5.2 ; python_full_version >= '3.12'",
-    "orjson==3.12.0 ; platform_python_implementation != 'PyPy'",
+    "onnxruntime==1.23.2 ; python_full_version < '3.11'",
+    "onnxruntime==1.30.0 ; python_full_version >= '3.11'",
     "packaging==26.3",
     "pillow==12.3.0",
     "platformdirs==4.11.0",
-    "propcache==0.5.2",
+    "protobuf==7.36.2",
+    "py-rust-stemmers==0.1.8",
     "pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'",
     "pydantic==2.13.5",
     "pydantic-core==2.46.5",
     "pydantic-settings==2.15.0",
     "pyjwt==2.13.0",
+    "pyreadline3==3.5.6 ; python_full_version < '3.11' and sys_platform == 'win32'",
     "python-dotenv==1.2.3",
     "python-multipart==0.0.32",
     "pywin32==312 ; sys_platform == 'win32'",
     "pyyaml==6.0.3",
     "referencing==0.37.0",
-    "regex==2026.8.31",
     "requests==2.34.2",
-    "requests-toolbelt==1.0.0",
     "rpds-py==0.30.0 ; python_full_version < '3.11'",
     "rpds-py==2026.6.3 ; python_full_version >= '3.11'",
-    "safetensors==0.8.0",
-    "scikit-learn==1.7.2 ; python_full_version < '3.11'",
-    "scikit-learn==1.9.0 ; python_full_version >= '3.11'",
-    "scipy==1.15.3 ; python_full_version < '3.11'",
-    "scipy==1.17.1 ; python_full_version == '3.11.*'",
-    "scipy==1.18.1 ; python_full_version >= '3.12'",
-    "sentence-transformers==2.7.0",
-    "setuptools==84.0.0",
-    "sniffio==1.3.1",
-    "sqlalchemy==2.0.52",
     "sse-starlette==3.4.8",
     "starlette==1.6.0",
     "sympy==1.14.0",
-    "tenacity==9.1.4",
-    "threadpoolctl==3.6.0",
     "tokenizers==0.22.2",
-    "torch==2.13.0",
     "tqdm==4.70.0",
-    "transformers==4.57.6",
     "typing-extensions==4.16.0",
     "typing-inspection==0.4.4",
     "urllib3==2.7.0",
-    "uuid-utils==0.17.0",
     "uvicorn==0.52.4 ; sys_platform != 'emscripten'",
-    "websockets==16.1.1 ; python_full_version < '3.11'",
-    "websockets==17.1 ; python_full_version >= '3.11'",
-    "xxhash==4.0.1",
-    "yarl==1.24.5",
-    "zstandard==0.25.0",
+    "win32-setctime==1.2.0 ; sys_platform == 'win32'",
 ]
 
 [project.urls]
@@ -153,28 +121,32 @@ qai-consultant-mcp = "mcp_server:main"
 [tool.mypy]
 ignore_missing_imports = true
 
-# ── uv: NO scoped torch index here — see the v3.5.1 incident note below ─────────
+# ── uv: NO scoped platform-specific index here — see the v3.5.1 incident note below ──
 # A `[tool.uv.sources]`/`[[tool.uv.index]]` scoped-index block used to live here
 # (MCP_PLAN.md section 6's "Decided 2026-07-15" note), routing `torch` to
-# download.pytorch.org's CPU-only wheel index. DO NOT re-add it: `[tool.uv.*]`
-# config is a *project-local* uv setting — it applies when `uv` resolves this
-# repo's own pyproject.toml directly (`uv sync`, `uv run`, or the drift-canary's
-# `uv pip compile pyproject.toml ...`), but it is NOT distributed as part of the
-# built wheel/sdist metadata, so a real end user's `uvx qai-consultant-mcp` (which
-# only ever resolves against plain PyPI, having never seen this repo's
-# pyproject.toml) cannot see it. The 2026-09 drift-canary regeneration (`c45bf21`)
-# correctly resolved `torch==2.13.0+cpu` *for this project's own compile step*,
-# baked that version string into `dependencies` below, and published it as
-# `qai-consultant-mcp==3.5.1` — which then failed to resolve for every real
-# `uvx`/`pip install` consumer with "no version of torch==2.13.0+cpu", since
-# plain PyPI never mirrors that CPU-tagged local version. Caught post-publish via
-# a real `uvx --from qai-consultant-mcp==3.5.1 ...` smoke test from a neutral
-# directory (not run before that release — see the Gotchas entry in CLAUDE.md);
-# fixed by reverting to a plain `torch==2.13.0` pin below, which resolves
-# identically for both local project tooling and real consumers. If CPU-only
-# torch is ever worth pursuing again, it needs a mechanism that survives being
-# published to PyPI (e.g. a documented `--extra-index-url` in the install
-# instructions), not project-local `[tool.uv.sources]` scoping.
+# download.pytorch.org's CPU-only wheel index. DO NOT re-add a block like it for
+# any future dependency: `[tool.uv.*]` config is a *project-local* uv setting —
+# it applies when `uv` resolves this repo's own pyproject.toml directly
+# (`uv sync`, `uv run`, or a manual `uv pip compile pyproject.toml ...`), but it
+# is NOT distributed as part of the built wheel/sdist metadata, so a real end
+# user's `uvx qai-consultant-mcp` (which only ever resolves against plain PyPI,
+# having never seen this repo's pyproject.toml) cannot see it. The 2026-09
+# drift-canary regeneration (`c45bf21`) correctly resolved `torch==2.13.0+cpu`
+# *for this project's own compile step*, baked that version string into
+# `dependencies`, and published it as `qai-consultant-mcp==3.5.1` — which then
+# failed to resolve for every real `uvx`/`pip install` consumer with "no version
+# of torch==2.13.0+cpu", since plain PyPI never mirrors that CPU-tagged local
+# version. Caught post-publish via a real `uvx --from qai-consultant-mcp==3.5.1
+# ...` smoke test from a neutral directory (not run before that release — see
+# the Gotchas entry in CLAUDE.md); fixed by reverting to a plain `torch==2.13.0`
+# pin, which resolved identically for both local project tooling and real
+# consumers. As of v3.5.3, `torch` (and the CPU-wheel question entirely) is moot
+# here — the local index's embedding backend switched to fastembed/onnxruntime
+# and `torch` was dropped from `dependencies` above — but the lesson generalizes:
+# if a platform-specific wheel index is ever worth pursuing again for some other
+# dependency, it needs a mechanism that survives being published to PyPI (e.g. a
+# documented `--extra-index-url` in the install instructions), not project-local
+# `[tool.uv.sources]` scoping.
 
 # ── setuptools: flat modules from src/, no nested package ───────────────────────
 # Matches these modules' existing bare `from x import y` style (no package prefix) —

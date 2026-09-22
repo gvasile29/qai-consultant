@@ -17,11 +17,18 @@ mcp>=1.8.0,<2.0.0
 build>=1.0.0
 setuptools>=67.0
 
+# fastembed (v3.5.3) -- the MCP server's local_index.py embedding backend;
+# needed to run tests/test_local_index.py's real-package assertions and
+# evals/local_index_parity.py locally/in CI against the real backend, not a
+# mock. Pinned to match pyproject.toml's exact-pinned MCP package dependency.
+fastembed==0.8.0
+
 # Browser automation for local UI testing (Streamlit app) — not a runtime
 # dependency, and not part of the published qai-consultant-mcp wheel.
 playwright==1.62.0
 
-# uv (v3.4.4+) -- runs the pin-regeneration command used both by
-# .github/workflows/dependency-drift-check.yml and by anyone manually
-# regenerating pyproject.toml's dependencies array per the comment above it.
+# uv (v3.4.4+) -- runs the pin-regeneration command used by anyone manually
+# regenerating pyproject.toml's dependencies array per the comment above it
+# (the dependency-drift-check.yml workflow that used to also run this
+# command on a schedule was removed in v3.5.3 -- see CLAUDE.md's CI section).
 uv==0.11.28

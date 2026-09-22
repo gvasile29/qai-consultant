@@ -41,7 +41,7 @@ claude mcp add qai-consultant -- uvx qai-consultant-mcp
 }
 ```
 
-First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2`, CPU-only) and builds a local index — this takes a minute or two the first time, then it's cached.
+First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2`, served via `fastembed`'s ONNX Runtime) and builds a local index — this now takes a few seconds to a minute the first time (previously a minute or two, before the v3.5.3 backend switch), then it's cached.
 
 ## Tools
 

@@ -27,12 +27,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from fastembed import TextEmbedding
 
 from kb_config import CHUNK_OVERLAP, CHUNK_SIZE, EMBEDDING_MODEL, get_source_category
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_CACHE_FORMAT_VERSION = 1  # bump if the cache file's schema changes
+_CACHE_FORMAT_VERSION = 2  # bumped for the fastembed backend switch (was 1: sentence-transformers)
 
 
 def _resolve_default_kb_dir() -> Path:
@@ -70,6 +70,23 @@ class Chunk:
     source: str      # KB-relative path, e.g. "methodologies/Risk_Based_Testing.md"
     category: str
     title: str        # first "# " heading in the source file, or its filename
+
+
+class _FastEmbedEmbeddings:
+    """Adapter matching HuggingFaceEmbeddings' two methods LocalIndex calls,
+    backed by fastembed's ONNX Runtime instead of sentence-transformers/torch —
+    see docs/superpowers/specs/2026-09-17-mcp-embedding-backend-simplification-design.md.
+    Cuts cold-start import time roughly 3x (no torch), which is what actually
+    matters for the MCP server's uvx-launched cold start."""
+
+    def __init__(self, model_name: str):
+        self._model = TextEmbedding(model_name=model_name)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [v.tolist() for v in self._model.embed(texts)]
+
+    def embed_query(self, text: str) -> list[float]:
+        return next(iter(self._model.embed([text]))).tolist()
 
 
 def _simple_chunk_splits(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
@@ -174,12 +191,12 @@ class LocalIndex:
 
     def _embedding_model(self):
         if self._embedder is None:
-            self._embedder = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+            self._embedder = _FastEmbedEmbeddings(EMBEDDING_MODEL)
         return self._embedder
 
     def warmup_embedder(self) -> None:
         """Force the embedding model's one-time native init (model download
-        if needed, torch/MKL thread + DLL init) via a single cheap
+        if needed, native runtime thread + DLL init) via a single cheap
         embed_query() call — deliberately WITHOUT embedding the full KB
         corpus. Call this on the main thread before mcp.run() starts
         stdio_server()'s concurrent stdin-reader task: the Windows loader-

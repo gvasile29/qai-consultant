@@ -2,11 +2,10 @@
 Tests for src/local_index.py — the MCP server's local, keyless KB index.
 
 Uses a small synthetic knowledge_base/ (tmp_path) and a deterministic fake
-embedder (bag-of-words over a fixed vocabulary) instead of the real
-sentence-transformers model, so these tests are fast and don't depend on
-model-download availability. The real model is exercised once, manually,
-in the v3.0 step 3 sanity check (a Risk_Based_Testing query against the
-actual knowledge_base/ returns that doc in the top 3).
+embedder (bag-of-words over a fixed vocabulary) instead of the real fastembed
+model, so these tests are fast and don't depend on model-download
+availability. The real model is exercised by evals/local_index_parity.py
+against the actual knowledge_base/.
 
 Covers: chunk counts/boundaries, category filtering, disk-cache round-trip,
 cache invalidation on KB edits, corrupted-cache recovery, and k clamping.
@@ -56,7 +55,7 @@ def _build_index(kb_dir: Path, cache_dir: Path) -> LocalIndex:
     lazy now (see local_index.py's _ensure_built() docstring), but these
     tests are about corpus/cache mechanics, not the lazy-build timing
     itself, so force it here to keep their original intent."""
-    with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()):
+    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
         index = LocalIndex(kb_dir=kb_dir, cache_dir=cache_dir)
         index._ensure_built()
         return index
@@ -161,12 +160,12 @@ def test_cache_round_trip_avoids_recomputing_embeddings(tmp_path):
     _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
 
     fake1 = _FakeEmbeddings()
-    with patch("local_index.HuggingFaceEmbeddings", return_value=fake1):
+    with patch("local_index._FastEmbedEmbeddings", return_value=fake1):
         idx1 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx1._ensure_built()
     assert len(list(cache_dir.glob("*.json"))) == 1, "First construction must write a cache file"
 
-    with patch("local_index.HuggingFaceEmbeddings") as mock_cls:
+    with patch("local_index._FastEmbedEmbeddings") as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()
         mock_cls.assert_not_called()  # unchanged KB must load from cache, not re-embed
@@ -186,7 +185,7 @@ def test_cache_invalidates_when_kb_file_changes(tmp_path):
 
     _write_kb(kb, {"standards/std.md": "# Std\n\nCHANGED content about testing priority"})
 
-    with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
+    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()
         assert mock_cls.called, "An edited KB file must invalidate the cache and trigger a rebuild"
@@ -216,7 +215,7 @@ def test_corrupted_cache_falls_back_to_rebuild(tmp_path):
     assert len(cache_files) == 1
     cache_files[0].write_text("{ this is not valid json !!!", encoding="utf-8")
 
-    with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()):
+    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()  # must not raise
 
@@ -238,10 +237,40 @@ def test_cache_with_wrong_embedding_model_falls_back_to_rebuild(tmp_path):
     payload["embedding_model"] = "some/other-model"
     cache_files[0].write_text(json.dumps(payload), encoding="utf-8")
 
-    with patch("local_index.HuggingFaceEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
+    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()
         assert mock_cls.called, "A cache built with a different embedding model must not be trusted"
+
+    assert idx2.kb_version == idx1.kb_version
+
+
+def test_cache_format_version_is_2():
+    from local_index import _CACHE_FORMAT_VERSION
+    assert _CACHE_FORMAT_VERSION == 2, (
+        "Bumped for the fastembed backend switch — an old format-1 cache (built "
+        "with sentence-transformers vectors) must never be read as if it were "
+        "fastembed output; see docs/superpowers/specs/"
+        "2026-09-17-mcp-embedding-backend-simplification-design.md"
+    )
+
+
+def test_cache_written_under_old_format_version_is_treated_as_miss(tmp_path):
+    kb = tmp_path / "kb"
+    cache_dir = tmp_path / "cache"
+    _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
+
+    idx1 = _build_index(kb, cache_dir)
+    cache_files = list(cache_dir.glob("*.json"))
+    assert len(cache_files) == 1
+    payload = json.loads(cache_files[0].read_text(encoding="utf-8"))
+    payload["format_version"] = 1  # simulate a pre-upgrade, sentence-transformers-era cache
+    cache_files[0].write_text(json.dumps(payload), encoding="utf-8")
+
+    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
+        idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
+        idx2._ensure_built()
+        assert mock_cls.called, "A format-1 cache must not be trusted after the format-2 bump"
 
     assert idx2.kb_version == idx1.kb_version
 

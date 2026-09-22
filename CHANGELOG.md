@@ -3,6 +3,16 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.3] - 2026-09-21
+
+### Changed
+- `qai-consultant-mcp`'s local knowledge-base index (`local_index.py`) now uses `fastembed` (ONNX Runtime) instead of `sentence-transformers`/`torch` for embeddings. This removes the single largest contributor to the package's cold-start time — the root cause behind the v3.3.1/v3.4.4/v3.5.1 dependency-pinning incidents, all of which were fixed by adding more pinning rigor around this cost rather than addressing it directly. Retrieval quality is unchanged (`evals/local_index_parity.py`: recall@5=0.91, MRR=0.86, identical to the previous backend); cold import time is roughly 3x faster.
+- `pyproject.toml`'s dependency list shrank from ~99 to a much smaller resolved set with `torch`, `sentence-transformers`, `langchain-community`, and their transitive chains (`scikit-learn`, `scipy`, `networkx`, `langchain-core`/`-classic`/`-protocol`/`-text-splitters`, `langsmith`) removed.
+- Removed the weekly dependency-drift-canary workflow (`.github/workflows/dependency-drift-check.yml`) — no longer justified at the smaller dependency scale; re-run `uv pip compile` by hand before each MCP release instead.
+
+### Notes
+- The Streamlit app / CLI (`agent.py`, `ingest.py`, `requirements.txt`) are unaffected — they keep using `sentence-transformers`/`torch` via the Pinecone-backed RAG path, a separate system with no `uvx` cold-start constraint.
+
 ## [3.5.2] - 2026-09-15
 
 ### Fixed
