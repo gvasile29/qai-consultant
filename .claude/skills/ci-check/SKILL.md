@@ -15,3 +15,5 @@ bash .claude/skills/ci-check/check.sh <run_id> # a specific run
 It waits for the run to finish, prints a `name: conclusion` line per job, and exits non-zero if the run failed. One tool call, no raw streaming output.
 
 **Never declare a task done after a push without this passing.** If it fails, read the failing job's log (`gh run view <run_id> --log-failed --job=<job_id>`), fix, push again, re-run the check. See `feedback_pipeline_check.md` in memory for the origin of this rule.
+
+For other `gh`-JSON needs (listing PRs, recent workflow runs, a PR's head SHA), use `python scripts/gh_helpers.py <list-prs|workflow-runs|pr-head-sha>` instead of writing a throwaway `python3 -c "import json,sys; ..."` one-liner.
