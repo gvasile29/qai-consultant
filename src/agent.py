@@ -118,6 +118,11 @@ class LLMClient:
             )
 
     def _chat_stream(self, messages: list):
+        # Fallback is only safe before the first chunk reaches the consumer:
+        # OpenRouter restarts the document from scratch, so a mid-stream
+        # fallback would leave the already-shown opening duplicated in the UI
+        # and in the saved file. After the first chunk, surface the failure.
+        yielded_any = False
         try:
             stream = self._mistral.chat.stream(
                 model=MISTRAL_MODEL,
@@ -128,9 +133,17 @@ class LLMClient:
             for event in stream:
                 content = event.data.choices[0].delta.content
                 if content:
+                    yielded_any = True
                     yield content
             return
         except Exception as e:
+            if yielded_any:
+                logger.warning(f"Mistral streaming failed mid-response ({e}); not falling back")
+                raise QAIConnectionError(
+                    f"\n❌ LLM streaming was interrupted mid-response!\n\n"
+                    f"   The partial output above is incomplete — please retry.\n"
+                    f"   Last error: {e}"
+                ) from e
             logger.warning(f"Mistral streaming failed ({e}), falling back to OpenRouter")
 
         try:

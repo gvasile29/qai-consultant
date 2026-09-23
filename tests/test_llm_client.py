@@ -188,6 +188,53 @@ def test_streaming_both_fail_raises_connection_error():
     assert "LLM streaming failed" in error_msg or "OpenRouter" in error_msg
 
 
+def _failing_after(events, exc):
+    """Yield the given stream events, then raise exc — a mid-stream drop."""
+    yield from events
+    raise exc
+
+
+def test_streaming_mid_stream_failure_does_not_restart_on_openrouter():
+    """A Mistral failure AFTER content was yielded must not fall back: OpenRouter
+    would restart the document from scratch and the consumer (st.write_stream,
+    the saved file) would end up with the opening section duplicated."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "stream test"}]
+
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.stream.return_value = _failing_after(
+            _make_mistral_stream_events(["## Test Strategy\n", "partial "]),
+            Exception("connection reset"),
+        )
+        received = []
+        with pytest.raises(QAIConnectionError) as exc_info:
+            for chunk in client._chat_stream(messages):
+                received.append(chunk)
+
+    assert received == ["## Test Strategy\n", "partial "]
+    mock_or_create.assert_not_called()
+    assert "interrupted" in str(exc_info.value)
+
+
+def test_streaming_failure_before_first_token_still_falls_back():
+    """A Mistral stream that dies before yielding any content is still safe to
+    retry on OpenRouter — nothing has reached the consumer yet."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "stream test"}]
+
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.stream.return_value = _failing_after(
+            _make_mistral_stream_events([""]), Exception("dropped before content")
+        )
+        mock_or_create.return_value = _make_openrouter_stream_chunks(["Fallback."])
+        result = list(client._chat_stream(messages))
+
+    assert result == ["Fallback."]
+    mock_or_create.assert_called_once()
+
+
 def test_chat_non_streaming_calls_chat_once():
     """chat(stream=False) delegates to _chat_once and does not call _chat_stream."""
     client = _make_client()

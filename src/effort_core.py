@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from dialogue import ProjectContext
+from risk_ledger import parse_risk_matrix
 
 MAX_PLAUSIBLE_DURATION_DAYS = 1825  # ~5 working-years; a parsed timeline beyond this is
                                      # almost certainly a parsing error (e.g. a calendar
@@ -335,17 +336,22 @@ def risk_buffer(risk_register: str, data: EstimationData) -> None:
         data.risk_buffer_days = round(data.pert_total_expected * 0.15, 1)
         return
 
-    rr_lower = risk_register.lower()
+    # Count one entry per Risk Matrix row, keyed on its Risk Level cell only.
+    # Counting keyword occurrences in the whole text also picked up prose
+    # ("critical path") and the Likelihood/Impact columns, pushing almost
+    # every register to the 35% cap regardless of its actual risks.
+    rows = parse_risk_matrix(risk_register)
+    if not rows:
+        data.risk_buffer_days = round(data.pert_total_expected * 0.15, 1)
+        return
+
     buffer = 0
-
-    # Count risk levels mentioned in the risk register
-    critical_count = rr_lower.count("critical")
-    high_count = rr_lower.count("| high") + rr_lower.count("risk level: high")
-    medium_count = rr_lower.count("| medium") + rr_lower.count("risk level: medium")
-
-    buffer += critical_count * RISK_BUFFER["critical"]
-    buffer += high_count * RISK_BUFFER["high"]
-    buffer += medium_count * RISK_BUFFER["medium"]
+    for row in rows:
+        level = row["risk_level"].lower()
+        for tier in ("critical", "high", "medium"):
+            if tier in level:
+                buffer += RISK_BUFFER[tier]
+                break
 
     # Cap buffer at 35% of expected effort
     max_buffer = data.pert_total_expected * 0.35
@@ -353,6 +359,12 @@ def risk_buffer(risk_register: str, data: EstimationData) -> None:
 
 
 # ── Step 6.5: Data quality score ────────────────────────────────────────────────
+
+_VAGUE_ANSWER_RE = re.compile(
+    r"\b(?:tbd|unknown|not sure|don'?t know|unclear|maybe|to be determined)\b",
+    re.IGNORECASE,
+)
+
 
 def calculate_data_quality(context: ProjectContext, data: EstimationData) -> None:
     """
@@ -362,10 +374,11 @@ def calculate_data_quality(context: ProjectContext, data: EstimationData) -> Non
     Scoring:
       - 5 key fields checked: timeline, team_qa_size, team_dev_size,
         compliance_requirements, existing_automation
-      - Each field: 4 pts if specific, 2 pts if vague, 0 pts if empty/unknown
+      - Each field: 4 pts if specific, 2 pts if vague, 0 pts if empty
+      - "none" / "n/a" state an absence precisely (no compliance, no
+        automation) and count as specific; "unknown" / "not sure" are vague.
+        Keywords match whole words — "na" in "functional" is not vague.
     """
-    VAGUE_KEYWORDS = {"tbd", "unknown", "not sure", "don't know", "n/a",
-                      "na", "none", "?", "unclear", "maybe", "to be determined"}
     score = 0
 
     fields = [
@@ -379,7 +392,7 @@ def calculate_data_quality(context: ProjectContext, data: EstimationData) -> Non
     for field_val in fields:
         if not field_val or not field_val.strip():
             score += 0
-        elif any(vague in field_val.lower() for vague in VAGUE_KEYWORDS):
+        elif "?" in field_val or _VAGUE_ANSWER_RE.search(field_val):
             score += 2
         else:
             score += 4

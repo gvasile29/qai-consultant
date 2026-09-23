@@ -260,6 +260,45 @@ def test_data_quality_3_specific_2_vague_gives_16pts():
     print(f"  PASS: 3 specific + 2 vague (TBD/unknown) → data_quality_score = {data.data_quality_score} (3×4 + 2×2)")
 
 
+def test_data_quality_vague_keyword_inside_a_word_is_not_vague():
+    """'na' inside 'functional'/'financial' must not mark a specific answer
+    vague — keywords match whole words, not substrings."""
+    ctx = make_context(
+        timeline="6 months",
+        team_qa_size="3 engineers",
+        team_dev_size="5 developers",
+        compliance_requirements="ISO 26262 functional safety, financial regulations",
+        existing_automation="Maintenance scripts in Jenkins",
+    )
+    data = EstimationData()
+    effort_core.calculate_data_quality(ctx, data)
+    assert data.data_quality_score == 20, \
+        f"Specific answers containing 'na' as a substring → expected 20, got {data.data_quality_score}"
+
+
+def test_data_quality_none_is_a_specific_answer_not_unknown():
+    """'none' / 'N/A' state an absence precisely (no compliance, no automation)
+    and score as specific; 'unknown' / 'not sure' stay vague."""
+    ctx = make_context(
+        timeline="6 months",
+        team_qa_size="3 engineers",
+        team_dev_size="5 developers",
+        compliance_requirements="None",        # precise → 4 pts
+        existing_automation="N/A",             # precise → 4 pts
+    )
+    data = EstimationData()
+    effort_core.calculate_data_quality(ctx, data)
+    assert data.data_quality_score == 20, \
+        f"'None'/'N/A' are precise answers → expected 20, got {data.data_quality_score}"
+
+    ctx.compliance_requirements = "not sure"   # vague → 2 pts
+    ctx.existing_automation = "unknown?"       # vague → 2 pts
+    data = EstimationData()
+    effort_core.calculate_data_quality(ctx, data)
+    assert data.data_quality_score == 16, \
+        f"'not sure'/'unknown?' are vague → expected 16, got {data.data_quality_score}"
+
+
 def test_data_quality_all_empty_gives_0pts():
     """All 5 fields empty → data_quality_score = 0."""
     ctx = make_context(
