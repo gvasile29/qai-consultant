@@ -3,6 +3,15 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.4] - 2026-09-23
+
+Reliability fixes from an external audit (`docs/audits/2026-09-23-external-audit.md`).
+
+### Fixed
+- Generated documents could show their opening section twice. If the primary LLM provider (Mistral) dropped the connection partway through a streamed Risk Register, Test Strategy, or Test Plan, the app restarted the whole document on the fallback provider (OpenRouter) and appended it after the partial text already on screen. Fallback now happens only if the primary fails before producing any text; a mid-response failure shows a clear "interrupted, please retry" error instead.
+- The Effort Estimation's risk buffer was inflated for almost every project. It counted how often words like "critical" or "| high" appeared anywhere in the Risk Register — including risk descriptions, prose, and the Likelihood/Impact columns — so even a two-risk register hit the 35% cap. It now counts one entry per row of the Risk Matrix table, by its Risk Level. If the table can't be read, the standard 15% default applies.
+- The estimate's confidence score penalized precise answers as "vague". Answers containing "na" anywhere in a word (e.g. "functional safety", "financial regulations") were scored as vague, and "None" / "N/A" (no compliance requirements, no existing automation) were treated the same as "unknown". Vague-answer keywords now match whole words only, and "None" / "N/A" count as specific answers. This also applies to the MCP `estimate_qa_effort` tool.
+
 ## [3.5.3] - 2026-09-21
 
 ### Changed

@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.5.3-green.svg)
+![Version](https://img.shields.io/badge/version-3.5.4-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -284,6 +284,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.5.0** ✅ QA Maturity Assessment (`assess_qa_maturity`) — deterministic TMMi process-maturity signal (10 process areas, indicative level 1-3) plus a conditional EU AI Act Articles 9-15 readiness score for AI/ML projects; available in the web app ("📈 Assess QA Maturity"), CLI (`--maturity`), and the MCP server (`assess_qa_maturity`)
 - **v3.5.1** Fix: QA Maturity scoring missed paraphrased evidence (requirement traceability described in prose, progress tracking described as "defect triage"/"pass rate") — found via live browser QA. **Yanked from PyPI** — see v3.5.2, published the same day, for why
 - **v3.5.2** ✅ Fix: the v3.5.1 MCP package could not be installed at all (`torch==2.13.0+cpu` unresolvable from plain PyPI) — reverted to a plain `torch==2.13.0` pin. This is the first working PyPI publish of the `assess_qa_maturity` MCP tool, since v3.5.0's own publish step was never completed and v3.5.1 was broken
+- **v3.5.4** ✅ Reliability fixes from the 2026-09-23 external audit: streaming no longer duplicates output when the primary LLM drops mid-response; the effort estimate's risk buffer now counts actual Risk Matrix rows (it was inflated to the 35% cap by keyword matches); confidence scoring no longer treats precise answers like "None" or "functional safety" as vague. See `CHANGELOG.md`.
 - **v3.5.3** ✅ `qai-consultant-mcp`'s local index switched from `sentence-transformers`/`torch` to `fastembed` (ONNX Runtime) for embeddings — same retrieval quality (`evals/local_index_parity.py`: recall@5=0.91, MRR=0.86, unchanged), ~3x faster cold import, and a much smaller dependency list. Removed the weekly dependency-drift-canary workflow, no longer justified at the smaller scale. See `CHANGELOG.md` for details.
 - **v4.0** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 

@@ -485,6 +485,54 @@ def test_confidence_level_medium():
     print(f"  PASS: {len(data.multipliers)} multipliers -> confidence = '{data.confidence_level}' (score={data.confidence_score}/100)")
 
 
+# ── Risk buffer: counts Risk Matrix rows, not keyword occurrences ────────────
+
+_RISK_REGISTER_TWO_ROWS = """\
+## Risk Matrix Overview
+
+| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |
+|---|---|---|---|---|---|
+| R01 | **Critical** payment failure on the critical path | High | High | **Critical** | 1 |
+| R02 | Session handling | High | Medium | Medium | 2 |
+
+## R01 — Payment failure
+Critical impact on revenue. Risk Level: Critical. Likelihood: High.
+"""
+
+
+def _pert_data(expected: float = 100.0) -> EstimationData:
+    data = EstimationData()
+    data.pert_total_expected = expected
+    return data
+
+
+def test_risk_buffer_counts_matrix_rows_not_keywords():
+    """One Critical row + one Medium row → 5 + 1 = 6 days. The old keyword
+    count also counted 'critical' in descriptions/prose and '| high' in the
+    Likelihood/Impact columns, inflating this to the 35% cap."""
+    data = _pert_data(100.0)
+    effort_core.risk_buffer(_RISK_REGISTER_TWO_ROWS, data)
+    assert data.risk_buffer_days == 6.0, \
+        f"1 Critical + 1 Medium row → expected 6.0 days, got {data.risk_buffer_days}"
+
+
+def test_risk_buffer_still_capped_at_35_percent():
+    rows = "\n".join(f"| R{i:02d} | Risk {i} | High | High | Critical | {i} |" for i in range(1, 11))
+    register = ("| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |\n"
+                "|---|---|---|---|---|---|\n" + rows)
+    data = _pert_data(100.0)
+    effort_core.risk_buffer(register, data)
+    assert data.risk_buffer_days == 35.0  # 10 × 5 = 50, capped at 35% of 100
+
+
+def test_risk_buffer_without_parseable_matrix_uses_default_15_percent():
+    """A register the parser can't read gets the same 15% default as no
+    register at all, instead of guessing from keyword counts."""
+    data = _pert_data(100.0)
+    effort_core.risk_buffer("Critical critical CRITICAL — no table here", data)
+    assert data.risk_buffer_days == 15.0
+
+
 # ── Streamlit app.py structural tests ────────────────────────────────────────
 
 def test_three_tabs_in_app():
