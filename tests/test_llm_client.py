@@ -211,14 +211,102 @@ def test_openrouter_calls_send_the_free_model_fallback_chain():
         assert call.kwargs["extra_body"] == {"models": agent.OPENROUTER_MODELS}
 
 
+def test_openrouter_stream_skips_chunks_without_choices():
+    """OpenRouter can send keep-alive/usage chunks with an empty `choices`
+    list; indexing choices[0] on them must not abort the stream."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "x"}]
+    empty = MagicMock()
+    empty.choices = []
+    real = list(_make_openrouter_stream_chunks(["A", "B"]))
+
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.stream.side_effect = Exception("down")
+        mock_or_create.return_value = iter([empty, real[0], empty, real[1]])
+        result = list(client._chat_stream(messages))
+
+    assert result == ["A", "B"]
+
+
+def test_empty_mistral_stream_falls_back_to_openrouter():
+    """A Mistral stream that ends normally with no content is a failure, not
+    a valid empty document — and nothing reached the consumer, so falling
+    back is safe."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "x"}]
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.stream.return_value = _make_mistral_stream_events(["", ""])
+        mock_or_create.return_value = _make_openrouter_stream_chunks(["Fallback."])
+        assert list(client._chat_stream(messages)) == ["Fallback."]
+    mock_or_create.assert_called_once()
+
+
+def test_empty_openrouter_stream_raises_instead_of_returning_nothing():
+    """Observed live: a free model spent its whole token budget on hidden
+    reasoning and streamed no content, which the app silently stored as an
+    empty (failed) Risk Register with no message."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "x"}]
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.stream.side_effect = Exception("down")
+        mock_or_create.return_value = _make_openrouter_stream_chunks(["", ""])
+        with pytest.raises(QAIConnectionError) as exc_info:
+            list(client._chat_stream(messages))
+    assert "empty response" in str(exc_info.value)
+
+
+def test_empty_responses_on_the_non_streaming_path():
+    client = _make_client()
+    messages = [{"role": "user", "content": "x"}]
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.complete.return_value = _make_mistral_response("")
+        mock_or_create.return_value = _make_openrouter_response("From OpenRouter.")
+        assert client._chat_once(messages) == "From OpenRouter."
+
+        mock_or_create.return_value = _make_openrouter_response(None)
+        with pytest.raises(QAIConnectionError) as exc_info:
+            client._chat_once(messages)
+    assert "empty response" in str(exc_info.value)
+
+
+def test_openrouter_error_payload_without_choices_surfaces_provider_error():
+    """Observed live: OpenRouter returned a body with `choices: null` and an
+    `error` object, which surfaced as "'NoneType' object is not subscriptable"."""
+    client = _make_client()
+    messages = [{"role": "user", "content": "x"}]
+    error_response = MagicMock()
+    error_response.choices = None
+    error_response.model_extra = {"error": {"message": "Upstream error from Nvidia: overloaded"}}
+
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.complete.side_effect = Exception("down")
+        mock_or_create.return_value = error_response
+        with pytest.raises(QAIConnectionError) as exc_info:
+            client._chat_once(messages)
+
+    message = str(exc_info.value)
+    assert "Upstream error from Nvidia: overloaded" in message
+    assert "NoneType" not in message
+    # Hosted app: end users can't act on API keys — that hint belongs in the log.
+    assert "API key" not in message and "secrets" not in message
+
+
 def test_openrouter_fallback_chain_uses_only_free_models():
     """The fallback runs on OpenRouter's free tier — a paid model in the chain
-    would silently accrue charges on an account with no credits."""
+    would silently accrue charges on an account with no credits. Auto-routers
+    ("openrouter/free", "openrouter/auto") are banned: live, one routed the
+    Risk Register to a content-safety classifier that returned "User Safety: safe"."""
     import agent
 
     assert 1 <= len(agent.OPENROUTER_MODELS) <= 3
     for model in agent.OPENROUTER_MODELS:
-        assert model.endswith(":free") or model == "openrouter/free", model
+        assert model.endswith(":free"), model
+        assert not model.startswith("openrouter/"), model
 
 
 def _failing_after(events, exc):

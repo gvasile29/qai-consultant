@@ -112,7 +112,7 @@ User Input
 
 ```python
 MISTRAL_MODEL    = "mistral-small-latest"          # primary LLM provider
-OPENROUTER_MODELS = ["nvidia/nemotron-3-super-120b-a12b:free", "z-ai/glm-5.2:free", "openrouter/free"]  # fallback chain, free tier only (v3.6.1)
+OPENROUTER_MODELS = ["nvidia/nemotron-3-super-120b-a12b:free", "z-ai/glm-5.2:free"]  # fallback chain, free tier only (v3.6.1)
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"   # must match ingest.py
 TOP_K_RESULTS    = 5          # default k for retrieve_knowledge()
 RAG_K_GENERATION = 5          # k for Risk + Strategy prompts
@@ -122,7 +122,7 @@ LLM_NUM_PREDICT = 1500        # max output tokens — prevents runaway generatio
 LLM_TEMPERATURE = 0.1         # near-deterministic sampling
 ```
 
-> **LLMClient fallback:** Mistral API is tried first. On any exception, OpenRouter is used automatically, sending `OPENROUTER_MODELS` as OpenRouter's `models` fallback array (max 3 entries). Both failing raises `QAIConnectionError`. The OpenRouter account has no credits: every entry must stay `:free` (or `openrouter/free`) — enforced by `tests/test_llm_client.py::test_openrouter_fallback_chain_uses_only_free_models`. Free tier = 50 requests/day (~12 full generations) until a one-time $10 credit purchase lifts it to 1,000/day.
+> **LLMClient fallback:** Mistral API is tried first. On any exception, OpenRouter is used automatically, sending `OPENROUTER_MODELS` as OpenRouter's `models` fallback array (max 3 entries). Both failing raises `QAIConnectionError`. The OpenRouter account has no credits: every entry must stay `:free` and never an `openrouter/*` auto-router (live, `openrouter/free` routed a Risk Register to a content-safety classifier that answered "User Safety: safe") — enforced by `tests/test_llm_client.py::test_openrouter_fallback_chain_uses_only_free_models`. Free tier = 50 requests/day (~12 full generations) until a one-time $10 credit purchase lifts it to 1,000/day.
 
 ### Generated Output
 
@@ -257,7 +257,7 @@ Full version history and rationale lives in `CHANGELOG.md` — this is a condens
 - **v3.5.0–v3.5.3** ✅ QA Maturity Assessment (`assess_qa_maturity` tool, TMMi-based, `src/maturity_core.py`) + keyword-matching fixes (see the QA Maturity Gotcha) + MCP embedding backend switched to `fastembed`, dropping torch/sentence-transformers/langchain-community.
 - **v3.5.4** ✅ Reliability fixes from the external audit (`docs/audits/2026-09-23-external-audit.md`): streaming fallback only before the first token, row-based risk buffer, word-boundary data-quality scoring.
 - **v3.6.0** ✅ Server-side daily run limits (`usage_guard.py`) + deterministic Executive Readout above the output tabs (`executive_readout.py`), from the external audit.
-- **v3.6.1** ✅ Free-tier-only OpenRouter fallback chain (`OPENROUTER_MODELS`) + training-data warning in `AI_INTERACTION_NOTICE`.
+- **v3.6.1** ✅ Free-tier-only OpenRouter fallback chain (`OPENROUTER_MODELS`), empty LLM responses raise instead of saving a blank document, + training-data warning in `AI_INTERACTION_NOTICE`.
 - **v4.0** Remote MCP + distribution: hosted Streamable HTTP server connectable from claude.ai, registry submissions, server-side usage metrics.
 
 > **MCP lens (governs all v3.x scope):** the client LLM is stronger than the internal one, so the server never exposes LLM generation — only what the client can't do alone (standards-grounded retrieval, deterministic estimation, validated QA process templates). `ask()`/`ask_streaming()`/document generation stay in Streamlit/CLI. Rationale: `MCP_PLAN.md`.
