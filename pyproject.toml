@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qai-consultant-mcp"
-version = "3.5.4"
+version = "3.6.0"
 description = "Local, keyless MCP server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, test-results health analysis, and QA process maturity assessment."
 readme = "README_MCP.md"
 requires-python = ">=3.10"

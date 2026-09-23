@@ -3,6 +3,14 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.6.0] - 2026-09-23
+
+Public-app protection and an at-a-glance summary, from the external audit (`docs/audits/2026-09-23-external-audit.md`).
+
+### Added
+- **Executive Readout** above the Risk Register / Effort / Strategy / Test Plan tabs: overall risk level with a count per severity, the QA effort range, team capacity against the expected effort, the estimate's confidence, and the top 3 risks to address first (by the Risk Register's own priority). Built directly from the generated Risk Matrix and the deterministic effort numbers — no extra AI call, and nothing that isn't already in the four documents.
+- **Daily generation limits** on the public app. The existing 3-runs-per-session cap reset whenever a visitor opened a new tab; two limits now persist across sessions: a global daily cap for all users (default 100 runs) and a per-visitor daily cap (default 10). Both reset at 00:00 UTC. Visitor IPs are never stored — only a date-salted hash, which can't be linked across days. If the limit service is unreachable, generation is still allowed. Self-hosters can change the limits with the optional `QAI_GLOBAL_DAILY_RUN_LIMIT` / `QAI_CLIENT_DAILY_RUN_LIMIT` settings (see `.env.example`).
+
 ## [3.5.4] - 2026-09-23
 
 Reliability fixes from an external audit (`docs/audits/2026-09-23-external-audit.md`).

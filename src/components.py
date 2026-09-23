@@ -95,6 +95,48 @@ def risk_ledger_table_html(rows: list) -> str:
     )
 
 
+def executive_readout_html(readout) -> str:
+    """Render an executive_readout.ExecutiveReadout as a .ledger-card with a
+    key/value table.risk-ledger body. None returns "" so callers can skip
+    rendering. Every value is escaped -- risk descriptions are LLM output."""
+    if readout is None:
+        return ""
+
+    rows = []
+    if readout.overall_risk:
+        tier = severity_tier(readout.overall_risk)
+        rows.append(
+            "<tr><td class=\"rid\">Overall risk</td><td>"
+            f'<span class="sev {tier}">{_html.escape(readout.overall_risk)}</span> '
+            f"{_html.escape(readout.risk_breakdown)}</td></tr>"
+        )
+    if readout.effort_range:
+        rows.append(f'<tr><td class="rid">QA effort</td><td>{_html.escape(readout.effort_range)}</td></tr>')
+    if readout.capacity:
+        cap_tier = "fail" if readout.capacity_deficit else "pass"
+        rows.append(
+            f'<tr><td class="rid">Team capacity</td><td><span class="sev {cap_tier}">'
+            f'{"Deficit" if readout.capacity_deficit else "OK"}</span> {_html.escape(readout.capacity)}</td></tr>'
+        )
+    if readout.confidence:
+        rows.append(f'<tr><td class="rid">Confidence</td><td>{_html.escape(readout.confidence)}</td></tr>')
+    for i, (risk_id, description) in enumerate(readout.address_first):
+        label = "Address first" if i == 0 else ""
+        rows.append(
+            f'<tr><td class="rid">{label}</td>'
+            f"<td><strong>{_html.escape(risk_id)}</strong> — {_html.escape(description)}</td></tr>"
+        )
+
+    if not rows:
+        return ""
+    return (
+        '<div class="ledger-card">'
+        '<div class="idx">Executive readout</div>'
+        f'<table class="risk-ledger"><tbody>{"".join(rows)}</tbody></table>'
+        "</div>"
+    )
+
+
 # ── Landing: hero + "How it works" / "What you get" (Phase 1) ─────────────
 # All animations here are one-shot on page load. Relies on theme.py's
 # global prefers-reduced-motion rule (build_css()) to zero out
