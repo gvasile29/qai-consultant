@@ -3,6 +3,18 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.6.1] - 2026-09-23
+
+### Changed
+- The backup AI provider (used when Mistral is unavailable) now runs only on OpenRouter's free models, in a fallback chain: NVIDIA Nemotron 3 Super, then Z.ai GLM 5.2. If the first is rate-limited or removed, the second answers automatically. Previously the backup used a paid model on an account with no credits, which accrued charges and would eventually have stopped working. Chosen by running the real Risk Register prompt through 5 free candidates; two were rejected (upstream rate limits, empty output from hidden reasoning). OpenRouter's free auto-router was also tried as a last resort and rejected: in a full end-to-end run it sent the Risk Register to a content-safety classifier, which returned "User Safety: safe" instead of a document.
+- Free models are much less reliable than the primary provider (they are often overloaded or rate-limited, and the free tier allows about 12 full generations a day), so the backup should be treated as best-effort.
+- The "You are interacting with an AI system" notice now also warns that submitted text is sent to third-party AI providers that may log it and use it for training, and asks users not to enter confidential or personal data.
+
+### Fixed
+- An AI response with no text was silently saved as an empty document and the stage marked as failed with no explanation (seen live: a free model spent its whole output budget on hidden reasoning). An empty response from the primary provider now falls back to the backup; an empty response from the backup shows a clear "empty response — please retry" error.
+- A streamed response from the backup provider could fail on keep-alive chunks that carry no content; those are now skipped.
+- When the backup provider returned an error inside a normal-looking response (e.g. "Upstream error from Nvidia: Service temporarily overloaded"), users saw a cryptic "'NoneType' object is not subscriptable" message; the provider's own error is now shown. The "both providers unavailable" message no longer tells users to check API keys or `.env` files, which visitors of the hosted app can't do — it now says the AI providers are temporarily unavailable and to try again in a few minutes, and the operator hint (check the Mistral plan, OpenRouter quota, Streamlit secrets) goes to the server log instead.
+
 ## [3.6.0] - 2026-09-23
 
 Public-app protection and an at-a-glance summary, from the external audit (`docs/audits/2026-09-23-external-audit.md`).

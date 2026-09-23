@@ -54,6 +54,30 @@ def _get_secret(key: str) -> str:
 
 # ── LLM Client Adapter ─────────────────────────────────────────────────────────
 
+_EMPTY_RESPONSE_MESSAGE = (
+    "\n❌ The AI provider returned an empty response!\n\n"
+    "   The fallback models sometimes spend their whole output budget on hidden\n"
+    "   reasoning or are overloaded — please retry in a minute."
+)
+
+
+def _both_providers_failed(kind: str, error: Exception) -> "QAIConnectionError":
+    """User-facing error for when Mistral and OpenRouter both fail. The app is
+    hosted, so end users can't act on API keys or quotas — that hint goes to
+    the operator log instead of the message shown in the UI."""
+    logger.error(
+        "Both LLM providers failed (%s): %s — operator: check the Mistral plan/"
+        "rate limits, OpenRouter free-tier quota, and API keys in Streamlit secrets.",
+        kind, error,
+    )
+    return QAIConnectionError(
+        f"\n❌ LLM {kind} failed!\n\n"
+        "   The AI providers are temporarily unavailable (overloaded or rate-limited).\n"
+        "   Please try again in a few minutes.\n"
+        f"   Details: {error}"
+    )
+
+
 class LLMClient:
     """
     Thin adapter: Mistral API primary, OpenRouter fallback.
@@ -94,28 +118,33 @@ class LLMClient:
                 temperature=LLM_TEMPERATURE,
             )
             # Mistral SDK stubs type message/content as Optional/union to cover all
-            # possible API responses; this call always returns a populated str here.
-            return response.choices[0].message.content  # type: ignore[union-attr,return-value]
+            # possible API responses; for a text chat completion it is a str.
+            content = response.choices[0].message.content  # type: ignore[union-attr]
+            if not content:
+                raise ValueError("empty response")
+            return content  # type: ignore[return-value]
         except Exception as e:
             logger.warning(f"Mistral failed ({e}), falling back to OpenRouter")
 
         try:
-            response = self._openrouter.chat.completions.create(  # type: ignore[assignment]
-                model=OPENROUTER_MODEL,
+            or_response = self._openrouter.chat.completions.create(
+                model=OPENROUTER_MODELS[0],
                 messages=messages,
                 max_tokens=LLM_NUM_PREDICT,
                 temperature=LLM_TEMPERATURE,
+                extra_body={"models": OPENROUTER_MODELS},
             )
-            # OpenAI SDK stubs type message/content as Optional/union to cover all
-            # possible API responses; this call always returns a populated str here.
-            return response.choices[0].message.content  # type: ignore[union-attr,return-value]
+            if not or_response.choices:
+                # OpenRouter can return HTTP 200 with `choices: null` and an
+                # `error` object (e.g. upstream overload) instead of raising.
+                error = (or_response.model_extra or {}).get("error") or {}
+                raise RuntimeError(error.get("message") or "response had no choices")
+            fallback_content = or_response.choices[0].message.content
         except Exception as e:
-            raise QAIConnectionError(
-                f"\n❌ LLM generation failed!\n\n"
-                f"   Both Mistral API and OpenRouter are unavailable.\n"
-                f"   Last error: {e}\n\n"
-                "   Check your API keys in .env or Streamlit secrets."
-            )
+            raise _both_providers_failed("generation", e)
+        if not fallback_content:
+            raise QAIConnectionError(_EMPTY_RESPONSE_MESSAGE)
+        return fallback_content
 
     def _chat_stream(self, messages: list):
         # Fallback is only safe before the first chunk reaches the consumer:
@@ -135,7 +164,9 @@ class LLMClient:
                 if content:
                     yielded_any = True
                     yield content
-            return
+            if yielded_any:
+                return
+            logger.warning("Mistral streamed an empty response, falling back to OpenRouter")
         except Exception as e:
             if yielded_any:
                 logger.warning(f"Mistral streaming failed mid-response ({e}); not falling back")
@@ -148,28 +179,42 @@ class LLMClient:
 
         try:
             stream = self._openrouter.chat.completions.create(  # type: ignore[assignment]
-                model=OPENROUTER_MODEL,
+                model=OPENROUTER_MODELS[0],
                 messages=messages,
                 max_tokens=LLM_NUM_PREDICT,
                 temperature=LLM_TEMPERATURE,
                 stream=True,
+                extra_body={"models": OPENROUTER_MODELS},
             )
             for chunk in stream:
+                if not chunk.choices:  # keep-alive / usage-only chunks carry no choices
+                    continue
                 content = chunk.choices[0].delta.content
                 if content:
+                    yielded_any = True
                     yield content
         except Exception as e:
-            raise QAIConnectionError(
-                f"\n❌ LLM streaming failed!\n\n"
-                f"   Both Mistral API and OpenRouter are unavailable.\n"
-                f"   Last error: {e}\n\n"
-                "   Check your API keys in .env or Streamlit secrets."
-            )
+            raise _both_providers_failed("streaming", e)
+        if not yielded_any:
+            raise QAIConnectionError(_EMPTY_RESPONSE_MESSAGE)
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 MISTRAL_MODEL    = "mistral-small-latest"
-OPENROUTER_MODEL = "mistralai/mistral-small-3.2-24b-instruct"
+# OpenRouter fallback: free-tier models only (the account has no credits), sent
+# as OpenRouter's `models` fallback array so a rate-limited or removed free model
+# falls through to the next. Order = measured quality/latency on the real Risk
+# Register prompt (2026-09-23): Nemotron 3 Super (TTFT ~6s), then GLM 5.2
+# (slower, 32k ctx). Never add the "openrouter/free" auto-router: in a live
+# end-to-end run it routed the Risk Register to a content-safety classifier,
+# which "answered" with "User Safety: safe". Only explicitly vetted chat models.
+# Free endpoints may log/train on prompts — disclosed in
+# ai_disclosure.AI_INTERACTION_NOTICE.
+OPENROUTER_MODELS = [
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "z-ai/glm-5.2:free",
+]
+OPENROUTER_MODEL = OPENROUTER_MODELS[0]
 # EMBEDDING_MODEL imported from kb_config (shared with ingest.py, evals/rag.py,
 # and the MCP server's local_index.py) — kept as a module attribute here too
 # since existing callers (evals/rag.py's fallback import, tests) reference
