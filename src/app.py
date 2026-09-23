@@ -47,6 +47,7 @@ from maturity_generator import (
     save_maturity_report,
 )
 from visit_counter import get_and_increment_visit_count
+from usage_guard import consume_run
 
 setup_logging()
 logger = get_logger(__name__)
@@ -741,6 +742,29 @@ def _save_feedback(feedback_value: str, extra_note: str):
         st.error("❌ Could not save feedback. Please try again.")
 
 
+_DAILY_LIMIT_MESSAGES = {
+    "global_limit": (
+        "⚠️ QAI Consultant has reached its daily generation limit for all users. "
+        "Please come back tomorrow (resets at 00:00 UTC)."
+    ),
+    "client_limit": (
+        "⚠️ You've reached today's generation limit. "
+        "Please come back tomorrow (resets at 00:00 UTC)."
+    ),
+}
+
+
+def _enforce_daily_quota() -> None:
+    """Check and record one LLM run against the server-side daily caps
+    (usage_guard.py) — unlike run_count, these survive a new session. Stops
+    the script with a warning when a cap is reached; fails open on any
+    metrics-store error."""
+    decision = consume_run(st.context.headers, st.context.ip_address)
+    if not decision.allowed:
+        st.warning(_DAILY_LIMIT_MESSAGES.get(decision.reason, _DAILY_LIMIT_MESSAGES["global_limit"]))
+        st.stop()
+
+
 def render_strategy():
     MAX_RUNS_PER_SESSION = 3
 
@@ -815,6 +839,7 @@ def render_strategy():
         # interrupted attempt doesn't burn the user's quota or redo
         # already-completed steps.
         if not generation_started:
+            _enforce_daily_quota()
             st.session_state.generation_started = True
             st.session_state.run_count += 1
 
@@ -997,6 +1022,20 @@ def render_strategy():
         # All 4 stages (and the PDF-bytes precompute) finished this pass —
         # only NOW is it safe to stop re-entering this block on a rerun.
         st.session_state.results_complete = True
+
+    # ── Executive Readout (deterministic "so what?" above the tabs) ───────
+    from executive_readout import build_readout
+    from components import executive_readout_html
+    from risk_ledger import parse_risk_matrix as _parse_risk_matrix
+
+    _readout_html = executive_readout_html(
+        build_readout(
+            _parse_risk_matrix(st.session_state.get("risk_register") or ""),
+            st.session_state.get("effort_data"),
+        )
+    )
+    if _readout_html:
+        st.markdown(_readout_html, unsafe_allow_html=True)
 
     # ── Three Tabs ────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
@@ -1335,6 +1374,7 @@ def render_doc_review():
                 "Refresh the page to start a new session."
             )
         elif st.button("🤖 Generate narrative review", use_container_width=True, type="primary"):
+            _enforce_daily_quota()
             st.session_state.run_count += 1
             agent = st.session_state.get("agent")
 
@@ -1556,6 +1596,7 @@ def render_maturity_assessment():
                 "Refresh the page to start a new session."
             )
         elif st.button("🤖 Generate narrative assessment", use_container_width=True, type="primary"):
+            _enforce_daily_quota()
             st.session_state.run_count += 1
             agent = st.session_state.get("agent")
 
