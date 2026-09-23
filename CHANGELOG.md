@@ -3,6 +3,15 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.6.1] - 2026-09-23
+
+### Changed
+- The backup AI provider (used when Mistral is unavailable) now runs only on OpenRouter's free models, in a fallback chain: NVIDIA Nemotron 3 Super, then Z.ai GLM 5.2, then OpenRouter's free auto-router. If one free model is rate-limited or removed, the next one answers automatically. Previously the backup used a paid model on an account with no credits, which accrued charges and would eventually have stopped working. Chosen by running the real Risk Register prompt through 5 free candidates: all three produce a Risk Matrix table the app can read; two others were rejected (upstream rate limits, empty output from hidden reasoning).
+- The "You are interacting with an AI system" notice now also warns that submitted text is sent to third-party AI providers that may log it and use it for training, and asks users not to enter confidential or personal data.
+
+### Fixed
+- A streamed response from the backup provider could fail on keep-alive chunks that carry no content; those are now skipped.
+
 ## [3.6.0] - 2026-09-23
 
 Public-app protection and an at-a-glance summary, from the external audit (`docs/audits/2026-09-23-external-audit.md`).

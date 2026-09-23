@@ -101,10 +101,11 @@ class LLMClient:
 
         try:
             response = self._openrouter.chat.completions.create(  # type: ignore[assignment]
-                model=OPENROUTER_MODEL,
+                model=OPENROUTER_MODELS[0],
                 messages=messages,
                 max_tokens=LLM_NUM_PREDICT,
                 temperature=LLM_TEMPERATURE,
+                extra_body={"models": OPENROUTER_MODELS},
             )
             # OpenAI SDK stubs type message/content as Optional/union to cover all
             # possible API responses; this call always returns a populated str here.
@@ -148,13 +149,16 @@ class LLMClient:
 
         try:
             stream = self._openrouter.chat.completions.create(  # type: ignore[assignment]
-                model=OPENROUTER_MODEL,
+                model=OPENROUTER_MODELS[0],
                 messages=messages,
                 max_tokens=LLM_NUM_PREDICT,
                 temperature=LLM_TEMPERATURE,
                 stream=True,
+                extra_body={"models": OPENROUTER_MODELS},
             )
             for chunk in stream:
+                if not chunk.choices:  # keep-alive / usage-only chunks carry no choices
+                    continue
                 content = chunk.choices[0].delta.content
                 if content:
                     yield content
@@ -169,7 +173,19 @@ class LLMClient:
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 MISTRAL_MODEL    = "mistral-small-latest"
-OPENROUTER_MODEL = "mistralai/mistral-small-3.2-24b-instruct"
+# OpenRouter fallback: free-tier models only (the account has no credits), sent
+# as OpenRouter's `models` fallback array so a rate-limited or removed free model
+# falls through to the next. Order = measured quality/latency on the real Risk
+# Register prompt (2026-09-23): Nemotron 3 Super (TTFT ~6s), GLM 5.2 (slower,
+# 32k ctx), then OpenRouter's free auto-router as the floor. OpenRouter accepts
+# at most 3 entries. Free endpoints may log/train on prompts — disclosed in
+# ai_disclosure.AI_INTERACTION_NOTICE.
+OPENROUTER_MODELS = [
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "z-ai/glm-5.2:free",
+    "openrouter/free",
+]
+OPENROUTER_MODEL = OPENROUTER_MODELS[0]
 # EMBEDDING_MODEL imported from kb_config (shared with ingest.py, evals/rag.py,
 # and the MCP server's local_index.py) — kept as a module attribute here too
 # since existing callers (evals/rag.py's fallback import, tests) reference

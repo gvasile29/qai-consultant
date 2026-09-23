@@ -188,6 +188,39 @@ def test_streaming_both_fail_raises_connection_error():
     assert "LLM streaming failed" in error_msg or "OpenRouter" in error_msg
 
 
+def test_openrouter_calls_send_the_free_model_fallback_chain():
+    """Both OpenRouter paths send OpenRouter's `models` fallback array so a
+    rate-limited/removed free model falls through to the next one."""
+    import agent
+
+    client = _make_client()
+    messages = [{"role": "user", "content": "x"}]
+    with patch.object(client._mistral, "chat") as mock_mistral_chat, \
+         patch.object(client._openrouter.chat.completions, "create") as mock_or_create:
+        mock_mistral_chat.complete.side_effect = Exception("down")
+        mock_mistral_chat.stream.side_effect = Exception("down")
+        mock_or_create.side_effect = [
+            _make_openrouter_response("ok"),
+            _make_openrouter_stream_chunks(["ok"]),
+        ]
+        client._chat_once(messages)
+        list(client._chat_stream(messages))
+
+    for call in mock_or_create.call_args_list:
+        assert call.kwargs["model"] == agent.OPENROUTER_MODELS[0]
+        assert call.kwargs["extra_body"] == {"models": agent.OPENROUTER_MODELS}
+
+
+def test_openrouter_fallback_chain_uses_only_free_models():
+    """The fallback runs on OpenRouter's free tier — a paid model in the chain
+    would silently accrue charges on an account with no credits."""
+    import agent
+
+    assert 1 <= len(agent.OPENROUTER_MODELS) <= 3
+    for model in agent.OPENROUTER_MODELS:
+        assert model.endswith(":free") or model == "openrouter/free", model
+
+
 def _failing_after(events, exc):
     """Yield the given stream events, then raise exc — a mid-stream drop."""
     yield from events

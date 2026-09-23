@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.6.0-green.svg)
+![Version](https://img.shields.io/badge/version-3.6.1-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -287,6 +287,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.5.3** ✅ `qai-consultant-mcp`'s local index switched from `sentence-transformers`/`torch` to `fastembed` (ONNX Runtime) for embeddings — same retrieval quality (`evals/local_index_parity.py`: recall@5=0.91, MRR=0.86, unchanged), ~3x faster cold import, and a much smaller dependency list. Removed the weekly dependency-drift-canary workflow, no longer justified at the smaller scale. See `CHANGELOG.md` for details.
 - **v3.5.4** ✅ Reliability fixes from the 2026-09-23 external audit: streaming no longer duplicates output when the primary LLM drops mid-response; the effort estimate's risk buffer now counts actual Risk Matrix rows (it was inflated to the 35% cap by keyword matches); confidence scoring no longer treats precise answers like "None" or "functional safety" as vague. See `CHANGELOG.md`.
 - **v3.6.0** ✅ Public-app protection and an at-a-glance summary, from the 2026-09-23 external audit: server-side daily generation limits (a global daily cap plus a per-visitor cap, alongside the existing 3-runs-per-session cap) so opening a new tab no longer resets the quota; and an **Executive Readout** above the four output tabs — overall risk, QA effort range, team capacity, confidence, and the top 3 risks to address first — built deterministically from the Risk Register and Effort Estimation, with no extra LLM call. See `CHANGELOG.md`.
+- **v3.6.1** ✅ The OpenRouter fallback now uses only free-tier models (Nemotron 3 Super → GLM 5.2 → OpenRouter's free auto-router, via OpenRouter's `models` fallback chain), so the fallback no longer accrues charges; the in-app AI notice now warns that submitted text may be logged and used for training by the LLM providers. See `CHANGELOG.md`.
 - **v4.0** Remote MCP + distribution — hosted server connectable from claude.ai, registry submissions
 
 ---

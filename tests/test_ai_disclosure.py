@@ -31,6 +31,14 @@ def test_ai_interaction_notice_mentions_ai_system():
     print("  PASS: AI_INTERACTION_NOTICE mentions 'AI system'")
 
 
+def test_ai_interaction_notice_warns_inputs_may_be_used_for_training():
+    """The free-tier LLM providers may log and train on what users submit —
+    users must be told before pasting company documents."""
+    notice = AI_INTERACTION_NOTICE.lower()
+    assert "train" in notice
+    assert "confidential" in notice
+
+
 def test_ai_generated_footer_is_visibly_labeled():
     """Footer text is a clear, human-readable 'AI-generated' label."""
     assert "AI-generated" in AI_GENERATED_FOOTER

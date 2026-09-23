@@ -46,7 +46,9 @@ AI_INTERACTION_NOTICE = (
     "🤖 **You are interacting with an AI system.** QAI Consultant uses an AI system "
     "(Mistral / OpenRouter LLMs) to generate the Risk Register, Effort Estimation, "
     "Test Strategy, and Test Plan. All outputs require review by a qualified QA "
-    "professional before use."
+    "professional before use. Text you submit is sent to these third-party LLM "
+    "providers, which may log it and use it to train their models — do not enter "
+    "confidential or personal data."
 )
 
 AI_GENERATED_FOOTER = (
