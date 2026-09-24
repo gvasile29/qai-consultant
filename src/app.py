@@ -275,18 +275,21 @@ def load_kb_sidebar_bullets() -> list[str]:
 # ── MCP announcement (v3.0) ──────────────────────────────────────────────────
 MCP_ANNOUNCEMENT_BODY = """
 QAI Consultant is also available as a local MCP server — call it directly from
-Claude Code, Claude Desktop, or claude.ai, no API keys required:
+Claude Code, Claude Desktop, or any other MCP client that runs local servers,
+no API keys required:
 
 ```
 uvx qai-consultant-mcp
 ```
 
 It exposes standards-grounded knowledge retrieval (`retrieve_qa_knowledge`,
-`list_kb_sources`) and deterministic PERT-based effort estimation
-(`estimate_qa_effort`) as MCP tools, plus prompts for the project-intake
+`list_kb_sources`), deterministic PERT-based effort estimation
+(`estimate_qa_effort`), QA document review (`review_qa_document`), test-results
+analysis (`analyze_test_results`) and QA maturity assessment
+(`assess_qa_maturity`) as MCP tools, plus prompts for the project-intake
 interview and Risk Register / Test Strategy / Test Plan structures — so your
-own AI coding assistant can ground its QA planning in the same knowledge base
-this app uses, fully offline and keyless.
+own AI assistant can ground its QA work in this app's knowledge base, fully
+offline and keyless.
 
 See the [GitHub repo](https://github.com/gvasile29/qai-consultant) for setup
 and client configuration.
@@ -464,12 +467,12 @@ def render_intro():
         st.markdown("""
 |  | **QAI Consultant** (this app) | **Generic AI** (no tools) | **Claude + `qai-consultant-mcp`** |
 |---|---|---|---|
-| Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, EU AI Act, 17 AI SDLC case studies | General training data only | Same curated knowledge base, retrieved live via `retrieve_qa_knowledge` |
+| Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, EU AI Act, 17 AI SDLC case studies | General training data only | The same curated knowledge base's Markdown documents (the ISTQB/OWASP PDFs aren't bundled, for licensing reasons), retrieved live via `retrieve_qa_knowledge` |
 | Structured output | 4 full documents auto-generated (Risk, Effort, Strategy, Plan) | Varies by prompt quality, ungrounded | Claude writes the narrative — grounded in real retrieved sources, with `[Source N]` citations |
 | Project discovery | Guided 11-question dialogue in the browser | You write the full prompt yourself | Same 11-question interview, served as an MCP prompt inside Claude |
 | Effort estimation | Deterministic PERT + multipliers + confidence score | None — numbers are guessed, not computed | Same deterministic PERT core via `estimate_qa_effort` — no LLM guesswork |
 | Setup | None — open the browser | None | One-time install (`uvx qai-consultant-mcp` / `claude mcp add`) |
-| Best for | Fastest kick-off, no IDE, shareable documents | Quick unstructured chat, accept generic output | Already working in Claude Code/Desktop/claude.ai, want grounded answers + real numbers without leaving it |
+| Best for | Fastest kick-off, no IDE, shareable documents | Quick unstructured chat, accept generic output | Already working in Claude Code/Desktop, want grounded answers + real numbers without leaving it |
 
 The MCP server (v3.0+) is built from the same knowledge base and the same deterministic estimation core as this app — it's not a lesser copy, it's the same grounding and math, just consumed as tools inside Claude instead of as generated documents. It deliberately never generates documents itself: Claude's own reasoning writes the narrative, this server only supplies retrieval and numbers. See the [MCP server on PyPI](https://pypi.org/project/qai-consultant-mcp/).
 
@@ -1470,6 +1473,19 @@ def render_doc_review():
         st.rerun()
 
 
+def _render_score_grid(scores: dict, per_row: int = 5) -> None:
+    """Signal Ledger cards in rows of `per_row`. One st.columns() per dimension
+    squeezed 10 TMMi cards into a single row at desktop width, wrapping "100"
+    across lines and overflowing the bars out of their cards."""
+    from components import signal_ledger_html
+    items = list(scores.items())
+    for start in range(0, len(items), per_row):
+        cols = st.columns(per_row)
+        for col, (dim, score) in zip(cols, items[start:start + per_row]):
+            with col:
+                st.markdown(signal_ledger_html(dim.replace("_", " ").title(), score), unsafe_allow_html=True)
+
+
 def render_maturity_assessment():
     """v3.5: QA Process Maturity Assessment. Step 1 (deterministic, instant)
     scores a free-text process description or pasted document via
@@ -1561,18 +1577,12 @@ def render_maturity_assessment():
     st.caption(result.disclaimer)
 
     st.markdown("### TMMi Process Area Scores")
-    tmmi_cols = st.columns(len(result.tmmi_dimension_scores))
-    for col, (dim, score) in zip(tmmi_cols, result.tmmi_dimension_scores.items()):
-        with col:
-            st.markdown(signal_ledger_html(dim.replace("_", " ").title(), score), unsafe_allow_html=True)
+    _render_score_grid(result.tmmi_dimension_scores)
 
     if result.ai_act_relevant:
         st.markdown("### EU AI Act Readiness (Articles 9-15)")
         st.caption(result.ai_act_note)
-        ai_cols = st.columns(len(result.ai_act_dimension_scores))
-        for col, (dim, score) in zip(ai_cols, result.ai_act_dimension_scores.items()):
-            with col:
-                st.markdown(signal_ledger_html(dim.replace("_", " ").title(), score), unsafe_allow_html=True)
+        _render_score_grid(result.ai_act_dimension_scores)
 
     st.markdown("### Findings")
     if not result.findings:
@@ -1736,8 +1746,8 @@ def main():
     if not st.session_state.get("mcp_announcement_seen"):
         st.session_state.mcp_announcement_seen = True
         st.info(
-            "🔌 QAI Consultant is now also available as an MCP server for Claude Code, "
-            "Claude Desktop, and claude.ai — see the sidebar's **Use QAI in your AI tools "
+            "🔌 QAI Consultant is also available as a local MCP server for Claude Code, "
+            "Claude Desktop, and other MCP clients — see the sidebar's **Use QAI in your AI tools "
             "(MCP)** panel."
         )
 

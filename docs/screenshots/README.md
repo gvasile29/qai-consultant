@@ -1,16 +1,29 @@
 # Screenshots
 
-Add screenshots here before making the repo public.
+Images used by the root `README.md`. Regenerate them after any visible UI change instead of
+editing them by hand.
 
-## Required screenshots:
+## CLI (`cli_banner.svg`, `cli_dialogue.svg`)
 
-1. `cli_banner.png` — CLI startup banner with version
-2. `cli_dialogue.png` — CLI dialogue questions flow
-3. `streamlit_intro.png` — Streamlit intro page
-4. `streamlit_strategy.png` — Streamlit results with 3 tabs (Risk Register / Effort / Strategy)
-5. `streamlit_risk_register.png` — Risk Register tab
-6. `streamlit_effort.png` — Effort Estimation tab
+```bash
+python scripts/generate_cli_screenshots.py
+```
 
-## How to take them:
-- Run `python src/cli.py` → screenshot after banner + first few questions
-- Run `streamlit run src/app.py` → screenshot intro page + results page
+Renders the real `cli.py` banner and a scripted Project Discovery dialogue (Web Application
+template answers) through a recording Rich console. No API keys or network needed.
+
+## Web UI (`streamlit_*.png`)
+
+```bash
+streamlit run src/app.py --server.port 8599 --server.headless true
+python scripts/generate_streamlit_screenshots.py
+```
+
+Needs real API keys in `.env`: the results screenshots come from a full 4-stage generation
+(~2-3 minutes). Captures a 1440x900 viewport per screen: landing page, MCP sidebar panel,
+Project Discovery dialogue, Executive Readout, the four output tabs, QA Document Quality
+Review, and QA Maturity Assessment.
+
+## Architecture (`architecture.svg`)
+
+Hand-authored SVG — edit the text directly (e.g. when the LLM models change).
