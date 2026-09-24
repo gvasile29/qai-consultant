@@ -11,6 +11,7 @@ end-user terms. The format is based on [Keep a Changelog](https://keepachangelog
 
 ### Fixed
 - The Risk Matrix could be silently ignored when the AI wrote its table header in bold (`| **Risk ID** | ...`), which Ministral 14B does. When that happened, the Risk Ledger table and the Executive Readout came out empty and the effort estimate added no risk buffer. Bold headers are now recognized, including in the MCP server's `estimate_qa_effort` tool.
+- The nightly live check of the Mistral connection passed even while Mistral was rejecting every request, because the app silently switched to the backup provider, so the outage went unnoticed for two days. The check now disables the backup and fails whenever Mistral itself does not answer. The nightly check of the backup provider now retries for about 45 seconds when a free model is briefly overloaded, instead of failing on a momentary blip; a lasting outage still fails.
 
 ## [3.6.1] - 2026-09-23
 
