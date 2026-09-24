@@ -112,7 +112,8 @@ def test_mistral_completion(llm_client):
 
     The OpenRouter leg is forced to fail: otherwise a dead Mistral silently
     falls back and this test passes anyway -- exactly how mistral-small's
-    Free-plan 429s went unnoticed from 2026-09-22 until a manual check."""
+    Free-plan 429s went unnoticed from early September 2026 (last successful
+    Mistral request ~2026-09-03) until a manual check on 2026-09-24."""
     with patch.object(
         llm_client._openrouter.chat.completions,
         "create",
