@@ -153,7 +153,7 @@ All agent outputs are grounded in documents from `knowledge_base/`. Re-run `inge
 - **`standards/`** — IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE (all Markdown)
 - **`methodologies/`** — 5 guides (Agile, BDD/TDD, Exploratory, Risk-Based, Test Pyramid); each ends with a "QAI Consultant application" section
 - **`expert_knowledge/`** — Contribution framework with PROMPT files for AI-assisted knowledge extraction interviews; `Scenario_TeamAlignment.md` is the first real scenario
-- **`articles/`** — 10 real-world AI QA case studies with quantified outcomes
+- **`articles/`** — 17 real-world AI SDLC case studies (`articles/ai_sdlc/`) with quantified outcomes, plus an overview
 - **`evaluation_audit/`** — 11 docs covering process/test maturity models (TMMi, CMMI, ISO/IEC 33002), audit methodology (ISO 19011, gap analysis, audit report structure), security/compliance audit (OWASP ASVS, ISO 27001, SOC 2), and 3 real public failure case studies (Knight Capital, Boeing 737 MAX MCAS, CrowdStrike 2024 outage) illustrating process/audit gaps
 
 ### RAG indexing priority

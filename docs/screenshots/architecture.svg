@@ -91,9 +91,9 @@
   <!-- LLM Client legend box -->
   <rect x="120" y="970" width="330" height="110" class="box"/>
   <text x="140" y="995" class="label">LLMClient</text>
-  <text x="140" y="1016" class="sub">Mistral API (mistral-small-latest)</text>
+  <text x="140" y="1016" class="sub">Mistral API (ministral-14b-2512)</text>
   <text x="140" y="1034" class="sub">↳ on any error, falls back to</text>
-  <text x="140" y="1052" class="sub">OpenRouter (mistral-small-3.2-24b)</text>
+  <text x="140" y="1052" class="sub">OpenRouter free (Nemotron → GLM 5.2)</text>
   <text x="140" y="1070" class="dim">both failing → QAIConnectionError</text>
 
   <!-- Knowledge base legend box -->

@@ -12,13 +12,15 @@ Listed on the [official MCP registry](https://registry.modelcontextprotocol.io) 
 
 ![qai-consultant-mcp answering a retrieve_qa_knowledge call in MCP Inspector](https://raw.githubusercontent.com/gvasile29/qai-consultant/master/assets/demo/qai-consultant-mcp-demo.gif)
 
-A local, fully keyless [MCP](https://modelcontextprotocol.io) server: standards-grounded QA knowledge retrieval (ISTQB, OWASP, IEEE, ISO, EU AI Act), deterministic QA effort estimation, QA document quality review, test-results health analysis, and QA process maturity assessment — callable directly from Claude Code, Claude Desktop, or claude.ai.
+A local, fully keyless [MCP](https://modelcontextprotocol.io) server: standards-grounded QA knowledge retrieval (OWASP, IEEE, ISO, A-SPICE, EU AI Act, plus testing methodologies and audit frameworks), deterministic QA effort estimation, QA document quality review, test-results health analysis, and QA process maturity assessment — callable from Claude Code, Claude Desktop, or any other MCP client that runs local stdio servers.
 
-No API keys, no Pinecone, no cloud LLM calls. It runs a local embedding index over a self-authored QA knowledge base and does the estimation math itself; **the client LLM writes the narrative**, this server just supplies grounding and numbers.
+No API keys, no Pinecone, no cloud LLM calls. It runs a local embedding index over a self-authored QA knowledge base (Markdown only — the ISTQB syllabus and OWASP guide PDFs used by the web app are not bundled, for licensing reasons) and does the estimation math itself; **the client LLM writes the narrative**, this server just supplies grounding and numbers.
 
-> This package is the MCP companion to [QAI Consultant](https://github.com/gvasile29/qai-consultant), an AI QA Architect web app / CLI. If you're looking for the full app (Test Strategy / Risk Register / Effort Report generation with a browser UI), see the [main project](https://github.com/gvasile29/qai-consultant) instead — this package is just the MCP server piece of it.
+> This package is the MCP companion to [QAI Consultant](https://github.com/gvasile29/qai-consultant), an AI QA Architect web app / CLI. If you're looking for the full app (Risk Register / Effort Estimation / Test Strategy / Test Plan generation with a browser UI), see the [main project](https://github.com/gvasile29/qai-consultant) instead — this package is just the MCP server piece of it.
 
 ## Install
+
+Requires [uv](https://docs.astral.sh/uv/) (for `uvx`).
 
 ```bash
 uvx qai-consultant-mcp
@@ -41,13 +43,13 @@ claude mcp add qai-consultant -- uvx qai-consultant-mcp
 }
 ```
 
-First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2`, served via `fastembed`'s ONNX Runtime) and builds a local index — this now takes a few seconds to a minute the first time (previously a minute or two, before the v3.5.3 backend switch), then it's cached.
+First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2`, served via `fastembed`'s ONNX Runtime) and builds a local index — a few seconds to a minute the first time, then it's cached.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (ISTQB, OWASP, IEEE, ISO standards; testing methodologies; audit/evaluation frameworks; the EU AI Act), filterable by category |
+| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (standards summaries — OWASP Top 10, IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE, EU AI Act; testing methodologies; audit/evaluation frameworks; AI SDLC case studies), filterable by category |
 | `list_kb_sources` | Every document in the knowledge base, grouped by category |
 | `estimate_qa_effort` | Deterministic PERT-based effort estimate (baseline + complexity multipliers + team capacity + confidence score) — no LLM narrative, you write your own from the numbers |
 | `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829-grounded dimensions, with findings and resolved KB citations — no LLM scoring, you write the narrative from the findings |
@@ -56,13 +58,14 @@ First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2
 
 ## Try It — Example Prompts
 
-Type these directly in Claude Code, Claude Desktop, or claude.ai once the server is attached:
+Type these directly in Claude Code or Claude Desktop once the server is attached:
 
 - *"Using qai-consultant, what does the knowledge base say about risk-based testing?"* → `retrieve_qa_knowledge`
 - *"List every document in the qai-consultant knowledge base, grouped by category."* → `list_kb_sources`
 - *"Using qai-consultant's estimate_qa_effort, estimate the effort for a B2B SaaS project called 'Test Migration', React + Node.js + PostgreSQL, 2 QA / 5 dev engineers, 3-month timeline, Agile/Scrum, no notable known risks, minimal existing test automation, no special compliance requirements."* → `estimate_qa_effort`
 - *"Here's a Test Plan [paste it] — use qai-consultant to review it with review_qa_document and give me the score and findings."* → `review_qa_document`
 - *"Here's a JUnit XML report from my last 3 CI runs [paste them] — use qai-consultant's analyze_test_results to find flaky tests."* → `analyze_test_results`
+- *"Here's how our team tests today [describe it] — use qai-consultant's assess_qa_maturity to estimate our TMMi level and the gaps to close."* → `assess_qa_maturity`
 
 The first one (`retrieve_qa_knowledge`) is the fastest way to confirm the server actually attached.
 
