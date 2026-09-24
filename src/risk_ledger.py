@@ -12,7 +12,8 @@ and review_core.py.
 """
 import re
 
-_TABLE_HEADER_RE = re.compile(r"^\|\s*Risk ID\s*\|", re.IGNORECASE | re.MULTILINE)
+# Tolerates a **bold** header cell ("| **Risk ID** |"), which ministral-14b emits.
+_TABLE_HEADER_RE = re.compile(r"^\|\s*(?:\*\*)?\s*Risk ID\s*(?:\*\*)?\s*\|", re.IGNORECASE | re.MULTILINE)
 
 _MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _MD_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")

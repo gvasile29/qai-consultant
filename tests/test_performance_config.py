@@ -24,17 +24,19 @@ from agent import LLMClient
 
 
 def test_num_predict_is_capped():
-    """LLM_NUM_PREDICT must be <= 4500 — prevents runaway generation.
+    """LLM_NUM_PREDICT must be <= 7000 — prevents runaway generation.
 
     Raised from the original 2000 ceiling in two steps: a bounded 5-7 risk
     Risk Register / Test Strategy (see risk_analyzer.py, strategy_generator.py)
     was empirically still truncating mid-sentence at 2000, then at 3000
     tokens on a realistic project — the Test Plan's 12-section IEEE 829
     structure and the Test Strategy's 11 sections need more room than a
-    shorter document. 4500 gives them enough headroom to finish without
-    removing the cap outright.
+    shorter document. 4500 gave them enough headroom on mistral-small; after
+    the switch to ministral-14b-2512 (2026-09-24) every Risk Register still
+    truncated at 4000, and the longest uncapped document measured 5,451
+    tokens — 7000 is the ceiling above the 6500 setting, not a target.
     """
-    assert agent.LLM_NUM_PREDICT <= 4500, (
+    assert agent.LLM_NUM_PREDICT <= 7000, (
         f"LLM_NUM_PREDICT={agent.LLM_NUM_PREDICT} is too large. "
         "Without a cap, providers may generate far more tokens than any of our prompts need."
     )
@@ -77,7 +79,7 @@ def test_temperature_is_low():
 
 if __name__ == "__main__":
     tests = [
-        ("LLM_NUM_PREDICT <= 2000 (output cap present)", test_num_predict_is_capped),
+        ("LLM_NUM_PREDICT <= 7000 (output cap present)", test_num_predict_is_capped),
         ("RAG_K_GENERATION <= 8 (no k creep)", test_rag_k_generation_not_too_large),
         ("MISTRAL_MODEL is set", test_mistral_model_is_set),
         ("OPENROUTER_MODEL is set", test_openrouter_model_is_set),
