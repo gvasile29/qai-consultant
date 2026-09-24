@@ -200,7 +200,14 @@ class LLMClient:
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-MISTRAL_MODEL    = "mistral-small-latest"
+# ministral-14b-2512, not mistral-small: on the Free plan Mistral answers
+# mistral-small/medium/magistral with 429 "Rate limit exceeded" (code 1300) even
+# at near-zero usage, while the Ministral family is served (verified 2026-09-24).
+# Of the models reachable on Free (ministral 3b/8b/14b, open-mistral-nemo),
+# ministral-14b was the only one with complete sections, correct arithmetic and
+# no invented project facts on the real Risk/Strategy/Plan prompts. Switch back
+# to "mistral-small-latest" if API pay-as-you-go is enabled on the account.
+MISTRAL_MODEL    = "ministral-14b-2512"
 # OpenRouter fallback: free-tier models only (the account has no credits), sent
 # as OpenRouter's `models` fallback array so a rate-limited or removed free model
 # falls through to the next. Order = measured quality/latency on the real Risk
@@ -224,11 +231,14 @@ RAG_K_GENERATION = 5        # chunks for Risk Register + Test Strategy prompts
 PINECONE_NAMESPACE = "knowledge-base"   # must match PINECONE_NAMESPACE in ingest.py
 
 # ── LLM Generation Parameters ──────────────────────────────────────────────────
-LLM_NUM_PREDICT = 4000      # max output tokens — prevents runaway generation; 1500, 2000, and
+LLM_NUM_PREDICT = 6500      # max output tokens — prevents runaway generation; 1500, 2000, and
                             # 3000 were all observed truncating the Test Strategy (11 sections)
                             # and Test Plan (12 sections, IEEE 829) mid-sentence on realistic
-                            # projects, even after bounding the requested risk count to 5-7
-                            # (test_num_predict_is_capped caps this at 4500)
+                            # projects, even after bounding the requested risk count to 5-7.
+                            # 4000 then truncated every Risk Register on both ministral-14b and
+                            # the Nemotron fallback (2026-09-24); uncapped, ministral-14b's
+                            # longest document was 5,451 tokens — 6500 leaves ~20% headroom
+                            # (test_num_predict_is_capped caps this at 7000)
 LLM_TEMPERATURE = 0.1       # near-deterministic
 
 

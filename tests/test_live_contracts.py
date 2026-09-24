@@ -31,7 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from agent import LLMClient, _get_secret
+from agent import LLMClient, QAIConnectionError, _get_secret
 from pinecone import Pinecone
 
 NAMESPACE = "ci-contract-tests"
@@ -108,8 +108,17 @@ def test_pinecone_roundtrip(pinecone_index):
 def test_mistral_completion(llm_client):
     """Exercise the real LLMClient.chat() Mistral path -- catches auth
     breakage, a renamed/deprecated model, a changed response shape upstream,
-    or a broken message-building/extraction path in _chat_once."""
-    content = llm_client.chat([{"role": "user", "content": "Reply with the single word OK."}])
+    or a broken message-building/extraction path in _chat_once.
+
+    The OpenRouter leg is forced to fail: otherwise a dead Mistral silently
+    falls back and this test passes anyway -- exactly how mistral-small's
+    Free-plan 429s went unnoticed from 2026-09-22 until a manual check."""
+    with patch.object(
+        llm_client._openrouter.chat.completions,
+        "create",
+        side_effect=RuntimeError("OpenRouter disabled: this test must exercise Mistral only"),
+    ):
+        content = llm_client.chat([{"role": "user", "content": "Reply with the single word OK."}])
     assert content and content.strip(), "LLMClient (Mistral path) returned an empty response"
 
 
@@ -118,11 +127,29 @@ def test_openrouter_fallback(llm_client):
     path against the real OpenRouter API -- catches both a broken OpenRouter
     contract (auth/model-name/endpoint) and a broken fallback code path
     (message building, response extraction), which otherwise only surfaces
-    in production during an actual Mistral outage."""
-    with patch.object(
-        llm_client._mistral.chat,
-        "complete",
-        side_effect=RuntimeError("forced failure for contract test"),
-    ):
-        content = llm_client.chat([{"role": "user", "content": "Reply with the single word OK."}])
+    in production during an actual Mistral outage.
+
+    Free OpenRouter models are routinely "temporarily overloaded" /
+    "rate-limited upstream" for seconds at a time (nightly run 2026-09-24
+    failed on exactly that), so a transient availability error is retried
+    with backoff; a sustained outage or any other error still FAILs, per the
+    module docstring's fail-loudly design."""
+    transient = ("overloaded", "rate-limited", "rate limit", "429", "503")
+    last_exc = None
+    for delay in (0, 15, 30):
+        time.sleep(delay)
+        try:
+            with patch.object(
+                llm_client._mistral.chat,
+                "complete",
+                side_effect=RuntimeError("forced failure for contract test"),
+            ):
+                content = llm_client.chat([{"role": "user", "content": "Reply with the single word OK."}])
+            break
+        except QAIConnectionError as exc:
+            if not any(marker in str(exc).lower() for marker in transient):
+                raise
+            last_exc = exc
+    else:
+        raise AssertionError(f"OpenRouter free models unavailable across 3 attempts (~45s): {last_exc}")
     assert content and content.strip(), "LLMClient (OpenRouter fallback path) returned an empty response"

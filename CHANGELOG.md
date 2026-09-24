@@ -3,6 +3,16 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.6.2] - 2026-09-24
+
+### Changed
+- The primary AI model is now Mistral's Ministral 14B (`ministral-14b-2512`) instead of Mistral Small. On Mistral's free plan, Mistral Small (and Medium) had been rejecting every request with "rate limit exceeded" since 2026-09-22 even at near-zero usage, so every document was actually being written by the free backup provider. Ministral 14B was chosen by running the real Risk Register, Test Strategy and Test Plan prompts, on two sample projects, through every model available on the free plan: it was the only one that completed every section, got its effort arithmetic right and did not invent facts about the project.
+- Generated documents may now be up to 6,500 tokens long (was 4,000). At 4,000, every Risk Register was cut off before its final sections, on both the new primary model and the backup; the longest complete document measured was about 5,450 tokens. Generation can take somewhat longer as a result.
+
+### Fixed
+- The Risk Matrix could be silently ignored when the AI wrote its table header in bold (`| **Risk ID** | ...`), which Ministral 14B does. When that happened, the Risk Ledger table and the Executive Readout came out empty and the effort estimate added no risk buffer. Bold headers are now recognized, including in the MCP server's `estimate_qa_effort` tool.
+- The nightly live check of the Mistral connection passed even while Mistral was rejecting every request, because the app silently switched to the backup provider, so the outage went unnoticed for two days. The check now disables the backup and fails whenever Mistral itself does not answer. The nightly check of the backup provider now retries for about 45 seconds when a free model is briefly overloaded, instead of failing on a momentary blip; a lasting outage still fails.
+
 ## [3.6.1] - 2026-09-23
 
 ### Changed

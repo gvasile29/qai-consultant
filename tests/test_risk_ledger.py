@@ -71,6 +71,21 @@ def test_parse_risk_matrix_strips_markdown_bold_from_cells():
     assert "*" not in rows[0]["description"]
 
 
+def test_parse_risk_matrix_accepts_bold_header_row():
+    # ministral-14b-2512 bolds the header cells too ("| **Risk ID** | ..."),
+    # which the header regex used to miss -- the whole table parsed as [].
+    text = (
+        "## **Risk Matrix Overview**\n\n"
+        "| **Risk ID** | **Risk Description** | **Likelihood** | **Impact** | **Risk Level** | **Priority** |\n"
+        "|-------------|----------------------|---------------|------------|----------------|--------------|\n"
+        "| **R01**     | **Authentication & Session Security Failure** | High | Critical | Critical | **1** |\n"
+        "| **R02**     | **GDPR Right-to-Erasure Flaws** | High | Critical | Critical | **2** |\n"
+    )
+    rows = parse_risk_matrix(text)
+    assert [r["risk_id"] for r in rows] == ["R01", "R02"]
+    assert rows[0]["priority"] == "1"
+
+
 def test_parse_risk_matrix_returns_empty_list_when_no_table_present():
     assert parse_risk_matrix("# Just a heading\n\nNo table here.") == []
 

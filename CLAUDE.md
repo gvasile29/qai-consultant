@@ -111,14 +111,14 @@ User Input
 ### Key Configuration (`src/agent.py` config block)
 
 ```python
-MISTRAL_MODEL    = "mistral-small-latest"          # primary LLM provider
+MISTRAL_MODEL    = "ministral-14b-2512"            # primary LLM provider (v3.6.2 — mistral-small is 429 on the Free plan)
 OPENROUTER_MODELS = ["nvidia/nemotron-3-super-120b-a12b:free", "z-ai/glm-5.2:free"]  # fallback chain, free tier only (v3.6.1)
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"   # must match ingest.py
 TOP_K_RESULTS    = 5          # default k for retrieve_knowledge()
 RAG_K_GENERATION = 5          # k for Risk + Strategy prompts
 PINECONE_NAMESPACE = "knowledge-base"   # must match ingest.py
 
-LLM_NUM_PREDICT = 1500        # max output tokens — prevents runaway generation
+LLM_NUM_PREDICT = 6500        # max output tokens — prevents runaway generation
 LLM_TEMPERATURE = 0.1         # near-deterministic sampling
 ```
 
@@ -258,6 +258,7 @@ Full version history and rationale lives in `CHANGELOG.md` — this is a condens
 - **v3.5.4** ✅ Reliability fixes from the external audit (`docs/audits/2026-09-23-external-audit.md`): streaming fallback only before the first token, row-based risk buffer, word-boundary data-quality scoring.
 - **v3.6.0** ✅ Server-side daily run limits (`usage_guard.py`) + deterministic Executive Readout above the output tabs (`executive_readout.py`), from the external audit.
 - **v3.6.1** ✅ Free-tier-only OpenRouter fallback chain (`OPENROUTER_MODELS`), empty LLM responses raise instead of saving a blank document, + training-data warning in `AI_INTERACTION_NOTICE`.
+- **v3.6.2** ✅ Primary model → `ministral-14b-2512` (Free-plan 429 on mistral-small), `LLM_NUM_PREDICT` 4000→6500, bold-tolerant Risk Matrix header parser.
 - **v4.0** Remote MCP + distribution: hosted Streamable HTTP server connectable from claude.ai, registry submissions, server-side usage metrics.
 
 > **MCP lens (governs all v3.x scope):** the client LLM is stronger than the internal one, so the server never exposes LLM generation — only what the client can't do alone (standards-grounded retrieval, deterministic estimation, validated QA process templates). `ask()`/`ask_streaming()`/document generation stay in Streamlit/CLI. Rationale: `MCP_PLAN.md`.
@@ -300,4 +301,5 @@ See the `release-checklist` skill (`.claude/skills/release-checklist/`) whenever
 - **QA Maturity's keyword-based evidence detection will keep missing paraphrased practices** — `maturity_core.py`'s checks are fixed keyword/phrase lists by design (dependency-free, no LLM). Treat each false-negative report as a data point and weigh false-positive risk before broadening any keyword list.
 - **A project-local `[tool.uv.sources]`/`[[tool.uv.index]]` index scoping is invisible to real `uvx`/`pip` consumers** — it only applies when `uv` resolves this repo's own `pyproject.toml` directly. Verify any per-package index scoping via `uvx --from <published-package>==<version> ...` from a directory with no ambient project files. Full incident history: `docs/postmortems/2026-09-mcp-dependency-pinning-saga.md`.
 - **Renaming/merging a CI job's `name:` requires updating branch protection's required status checks FIRST**, before the job-name change lands — otherwise the old required check names stop reporting forever and block every future PR.
+- **Mistral's Free plan 429s `mistral-small`/`medium`/`magistral` (code 1300) at near-zero usage while serving the Ministral family** — a 429 with a nearly empty Usage page is a plan/tier block, not real rate limiting; probe several models before blaming the key or quota.
 - **The eval/CI gates don't catch every gap — a periodic senior-architect review still finds real ones.** The 2026-09-22 pass closed 8 findings not caught by any automated gate: untested per-step-isolation `except` branches, a fixable CVE backlog in `requirements.txt`, unguarded file-upload sizes, an unbounded query cache, non-rotating logs, a stale index cache with no eviction, and unsanitized YAML front-matter fields. See PR #95 for the full list.
