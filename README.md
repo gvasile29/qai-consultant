@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.6.2-green.svg)
+![Version](https://img.shields.io/badge/version-3.6.3-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -334,6 +334,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.6.0** ✅ Public-app protection and an at-a-glance summary, from the 2026-09-23 external audit: server-side daily generation limits (a global daily cap plus a per-visitor cap, alongside the existing 3-runs-per-session cap) so opening a new tab no longer resets the quota; and an **Executive Readout** above the four output tabs — overall risk, QA effort range, team capacity, confidence, and the top 3 risks to address first — built deterministically from the Risk Register and Effort Estimation, with no extra LLM call. See `CHANGELOG.md`.
 - **v3.6.1** ✅ The OpenRouter fallback now uses only free-tier models (Nemotron 3 Super → GLM 5.2, via OpenRouter's `models` fallback chain), so the fallback no longer accrues charges; an empty AI response now shows a clear error instead of an empty document; the in-app AI notice now warns that submitted text may be logged and used for training by the LLM providers. See `CHANGELOG.md`.
 - **v3.6.2** ✅ Primary model switched to Ministral 14B (Mistral Small is rate-limited on Mistral's free plan), output budget raised to 6,500 tokens so documents are no longer cut off, and a bold Risk Matrix header no longer empties the Risk Ledger, Executive Readout and effort risk buffer
+- **v3.6.3** ✅ Fixed the MCP knowledge-base tools crashing with a numpy "inhomogeneous shape" error for installs that cached a briefly broken upstream copy of the embedding model (fastembed 0.8.1) See `CHANGELOG.md`.
 - **v4.0** Remote MCP — a hosted server connectable from claude.ai, plus server-side usage metrics
 
 ---
