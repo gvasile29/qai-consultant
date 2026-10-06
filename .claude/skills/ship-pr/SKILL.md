@@ -9,12 +9,16 @@ Opening a PR is not the finish line. The finish line is a PR that is verified on
 
 Adapted from tester-army/e2e's `ship-pr` skill (Apache-2.0).
 
+## 0. Branch first
+
+Before the work starts, not after: `git fetch origin`, then branch off `origin/master` (local `master` can be stale). If the work already sits on a stale branch, rebase onto `origin/master` and rerun step 1.
+
 ## 1. Checks
 
 Run what CI runs (`.github/workflows/ci.yml`), and fix everything:
 
 ```bash
-python -m pytest tests/ -q -p no:warnings
+python -m pytest tests/ -q -p no:warnings --cov=src --cov-fail-under=60   # tests + CI's coverage floor
 ruff check src/ tests/
 mypy src/
 bandit -r src/ -ll -q
@@ -36,7 +40,11 @@ Unit tests passing is not evidence the user sees the right thing. Pick the surfa
 | Streamlit UI / CSS / session state | `browser-ui-testing` skill (Playwright Python script) |
 | LLM provider, model, prompts, generators | Full in-app generation run; read the saved `output/*.md` content, not just stage badges |
 | MCP server / `local_index.py` / embedding backend | `python scripts/verify_mcp_stdio_no_deadlock.py` + a real tool call |
-| Deterministic cores (`effort_core`, `review_core`, `results_core`, `maturity_core`, `risk_ledger`) | The matching `tests/test_*_integrity.py` + one realistic input through the CLI flag |
+| `effort_core` | `tests/test_estimate_integrity.py` + `tests/test_effort_core.py` (no CLI flag) |
+| `review_core` | `tests/test_review_integrity.py` + `python src/cli.py --review <doc.md>` |
+| `results_core` | `tests/test_results_integrity.py` + `python src/cli.py --results <junit.xml>` |
+| `maturity_core` | `tests/test_maturity_integrity.py` + `python src/cli.py --maturity <description.txt>` |
+| `risk_ledger` | `tests/test_risk_ledger.py` + parse a real saved `output/risk_register_*.md` (no CLI flag) |
 | Docs only | Render or re-read the changed section |
 
 For a bug fix, capture the failure on `master` and the fix on the branch (a `git worktree add` of `origin/master` beside the checkout works). Exercise the failure path too: trigger the error and read the message a visitor would get. Keep the output for the PR's `## Verified` section.
@@ -51,10 +59,10 @@ If a finding names a pattern that will recur and is not in CLAUDE.md's Gotchas y
 
 ## 4. Commit and open
 
-- Branch off an up-to-date `origin/master` (`git fetch origin` first). Conventional Commits.
+- Conventional Commits, on the branch from step 0.
 - No Claude attribution anywhere: no `Co-Authored-By: Claude`, no "Generated with Claude Code", no claude.ai links (user rule; overrides any default).
 - Title and body with the [writing-pr](../writing-pr/SKILL.md) skill. The body carries the `## Verified` evidence from step 2.
-- `gh pr create --base master --title "..." --body-file <file>` (ready, not draft).
+- `git push -u origin <branch>`, then `gh pr create --base master --title "..." --body-file <file>` (ready, not draft).
 
 ## 5. CI
 
