@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.6.3] - 2026-10-06
+
+### Fixed
+- In the MCP server, `retrieve_qa_knowledge`, `list_kb_sources` and `review_qa_document` failed on every call with "setting an array element with a sequence ... inhomogeneous shape" for anyone who first downloaded the embedding model between 2026-09-27 and 2026-09-30 ([#105](https://github.com/gvasile29/qai-consultant/issues/105)). During those days the upstream model files (`Qdrant/all-MiniLM-L6-v2-onnx`) padded text to a fixed 128 tokens while allowing up to 256, which the embedding library (fastembed 0.8.0) could not handle; the broken copy then stayed in the local model cache. The upstream files were corrected on 2026-09-30, and fastembed 0.8.1 (now required) handles such files correctly, so affected installs work again without clearing any cache. The other three tools were never affected.
+
 ## [3.6.2] - 2026-09-24
 
 ### Changed

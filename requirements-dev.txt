@@ -21,7 +21,7 @@ setuptools>=67.0
 # needed to run tests/test_local_index.py's real-package assertions and
 # evals/local_index_parity.py locally/in CI against the real backend, not a
 # mock. Pinned to match pyproject.toml's exact-pinned MCP package dependency.
-fastembed==0.8.0
+fastembed==0.8.1
 
 # Browser automation for local UI testing (Streamlit app) — not a runtime
 # dependency, and not part of the published qai-consultant-mcp wheel.
