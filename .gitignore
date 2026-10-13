@@ -51,9 +51,13 @@ Thumbs.db
 .env.local
 
 # Claude Code internal files (settings.local.json, scheduled_tasks.lock are
-# machine-local; skills/ are repo dev tools and stay tracked)
+# machine-local; skills/, agents/, hooks/ and the shared settings.json are
+# repo dev tools and stay tracked)
 .claude/*
 !.claude/skills/
+!.claude/agents/
+!.claude/hooks/
+!.claude/settings.json
 
 # Generated output strategies (personal, not for public KB)
 knowledge_base/generated_strategies/
