@@ -1,14 +1,17 @@
 """
-QAI Consultant — MCP server opt-in usage telemetry (v3.0).
+QAI Consultant — MCP server usage telemetry (v3.0; on by default since v3.7.0).
 
-Disabled by default; enabled only when QAI_TELEMETRY=1. Answers "what do the
-people who opted in actually use?" — passive PyPI/GitHub stats (reviewed
-manually, no code involved) already answer "is anyone installing this?".
+Enabled by default; disabled by QAI_TELEMETRY=0 (also "false"/"no"/"off")
+or the cross-tool DO_NOT_TRACK=1 convention. main() prints a one-line
+notice to stderr at server start saying so (stderr is safe for a stdio MCP
+server — only stdout carries the protocol). Answers "how many servers are
+actually running, and which tools get called?", which PyPI download counts
+(they include CI, mirrors and bots, and miss cached re-launches) can't.
 
-Backend: PostHog free tier, a single plain HTTPS POST per event (no SDK
-dependency, no extra install weight). The project API key below is a PUBLIC
-write-only key — embedding it is PostHog's designed use for client-side
-event capture, not a secret; it can be overridden via
+Backend: PostHog free tier (EU Cloud), a single plain HTTPS POST per event
+(no SDK dependency, no extra install weight). The project API key below is a
+PUBLIC write-only key — embedding it is PostHog's designed use for
+client-side event capture, not a secret; it can be overridden via
 QAI_TELEMETRY_POSTHOG_KEY for local testing or a future key rotation.
 
 Engineering contract (telemetry must never touch the actual tool call):
@@ -18,11 +21,17 @@ Engineering contract (telemetry must never touch the actual tool call):
     slow down a tool call, and never raises/logs/retries
   - no retries, no disk buffering — a dropped event just never arrives
 
+Privacy contract: nothing is stored on the user's machine. The distinct id
+is a random UUID minted per server process (_SESSION_ID), never persisted,
+so events can't be linked across restarts (the pre-v3.7.0 persisted
+install id was removed with the switch to default-on — storing an
+identifier on the user's device would need prior consent under EU ePrivacy
+Art. 5(3)). Events are sent with $process_person_profile=false and
+$geoip_disable=true, and the PostHog project discards client IPs.
 Never sent: query text, project fields, KB content, file paths, hostnames,
 or any other free-text. Only: event name, tool name, success flag, duration
 ms, k/category (retrieval calls only — both fixed small enums, not
-free-text), package version, Python minor version, OS family, and a random
-anonymous install id.
+free-text), package version, Python minor version, OS family.
 """
 
 from __future__ import annotations
@@ -33,7 +42,6 @@ import platform
 import sys
 import threading
 import uuid
-from pathlib import Path
 from typing import Optional
 from urllib import request as _urllib_request
 
@@ -44,7 +52,8 @@ _POSTHOG_HOST = "https://eu.i.posthog.com"  # this project's PostHog org is on E
 # credential type — phx_... prefix, must never end up here).
 _POSTHOG_PROJECT_API_KEY_DEFAULT = "phc_pgVvXQx4idPNe7JNcX6uQHhTUryPfVEYKDxRVWcYNWVP"
 _TIMEOUT_SECONDS = 2.0
-_INSTALL_ID_FILENAME = "install_id.txt"
+_OPT_OUT_VALUES = {"0", "false", "no", "off"}
+_SESSION_ID = str(uuid.uuid4())  # per process, never persisted — see the privacy contract above
 
 
 def _posthog_api_key() -> str:
@@ -52,41 +61,29 @@ def _posthog_api_key() -> str:
 
 
 def is_enabled() -> bool:
-    return os.environ.get("QAI_TELEMETRY") == "1"
+    if os.environ.get("QAI_TELEMETRY", "").strip().lower() in _OPT_OUT_VALUES:
+        return False
+    do_not_track = os.environ.get("DO_NOT_TRACK", "").strip().lower()
+    if do_not_track and do_not_track not in _OPT_OUT_VALUES:
+        return False
+    return True
 
 
-def _cache_dir() -> Path:
-    """Same cache root as local_index.py's LocalIndex (platformdirs; a
-    same-shape fallback if platformdirs is unavailable), so the anonymous
-    install id lives alongside the embeddings cache. Duplicated rather than
-    imported from local_index.py to keep the two modules independently
-    importable/testable."""
-    try:
-        from platformdirs import user_cache_dir
-        return Path(user_cache_dir("qai-consultant-mcp", "qai-consultant"))
-    except Exception:
-        return Path(__file__).resolve().parent.parent / ".qai_mcp_cache"
+STARTUP_NOTICE = (
+    "qai-consultant-mcp: anonymous usage telemetry is on (tool name, success, duration, "
+    "version, OS family; never your queries or documents). Opt out with QAI_TELEMETRY=0 "
+    "or DO_NOT_TRACK=1."
+)
 
 
-def _get_or_create_install_id() -> str:
-    """Random anonymous UUID, persisted so it's stable across server
-    restarts. Carries no identifying information — it's a fresh random
-    value, not derived from hostname/MAC/etc."""
-    path = _cache_dir() / _INSTALL_ID_FILENAME
-    try:
-        if path.exists():
-            existing = path.read_text(encoding="utf-8").strip()
-            if existing:
-                return existing
-    except Exception:
-        pass
-    new_id = str(uuid.uuid4())
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(new_id, encoding="utf-8")
-    except Exception:
-        pass  # a failed write just means a fresh id may be re-minted next call
-    return new_id
+def print_startup_notice() -> None:
+    """One line on stderr when telemetry is enabled — stdout is the MCP
+    protocol channel and must never be written to."""
+    if is_enabled():
+        try:
+            print(STARTUP_NOTICE, file=sys.stderr, flush=True)
+        except Exception:
+            pass
 
 
 def _package_version() -> str:
@@ -102,6 +99,8 @@ def _base_properties() -> dict:
         "package_version": _package_version(),
         "python_minor_version": f"{sys.version_info.major}.{sys.version_info.minor}",
         "os_family": platform.system(),
+        "$process_person_profile": False,
+        "$geoip_disable": True,
     }
 
 
@@ -112,7 +111,7 @@ def _send(event_name: str, properties: dict) -> None:
         payload = {
             "api_key": _posthog_api_key(),
             "event": event_name,
-            "distinct_id": _get_or_create_install_id(),
+            "distinct_id": _SESSION_ID,
             "properties": {**_base_properties(), **properties},
         }
         data = json.dumps(payload).encode("utf-8")
@@ -146,7 +145,7 @@ def track_tool_called(
     category: Optional[str] = None,
     extra: Optional[dict] = None,
 ) -> None:
-    """tool_name is one of the 5 fixed MCP tool names; category (retrieval
+    """tool_name is one of the 6 fixed MCP tool names; category (retrieval
     calls only) is one of kb_config.SOURCE_CATEGORIES' values or None; extra
     (review_qa_document/analyze_test_results only) carries a few fixed
     small-enum/numeric fields (e.g. doc_type, score bucket, finding/run

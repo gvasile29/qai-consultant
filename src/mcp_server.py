@@ -506,6 +506,7 @@ def test_plan_structure() -> str:
 
 
 def main() -> None:
+    telemetry.print_startup_notice()
     telemetry.track_server_start()
     try:
         index = _get_index()

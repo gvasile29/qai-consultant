@@ -22,7 +22,9 @@ _SERVER = _REPO_ROOT / "src" / "mcp_server.py"
 
 
 async def main() -> int:
-    params = StdioServerParameters(command=sys.executable, args=[str(_SERVER)])
+    params = StdioServerParameters(
+        command=sys.executable, args=[str(_SERVER)], env={"QAI_TELEMETRY": "0"},  # dev check, not real usage
+    )
     start = time.monotonic()
 
     async with stdio_client(params) as (read, write):

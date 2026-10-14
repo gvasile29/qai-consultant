@@ -25,7 +25,7 @@ Start with `git diff origin/master...HEAD --stat`, then read the full diff of th
 
 7. **Version sync.** If `src/version.py` changed, `pyproject.toml`, `server.json`, `CHANGELOG.md`, `README.md`, and `README_MCP.md` must change with it. A version merged to master is not the same as a version published: note that PyPI publish (`twine upload`) and registry sync remain manual follow-ups.
 
-8. **Telemetry.** Any `telemetry.py` change stays opt-in (`QAI_TELEMETRY=1`), stays fire-and-forget with every exception swallowed, and sends no free-text payloads.
+8. **Telemetry.** Any `telemetry.py` change keeps the opt-out working (`QAI_TELEMETRY=0`, `DO_NOT_TRACK=1`) and the stderr startup notice, never persists an identifier to disk, never writes to stdout, stays fire-and-forget with every exception swallowed, and sends no free-text payloads.
 
 ## Run these (read-only, keyless)
 

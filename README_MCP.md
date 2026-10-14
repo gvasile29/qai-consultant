@@ -80,7 +80,7 @@ Each `*_structure` prompt instructs the client to ground its generation in `retr
 
 ## Privacy
 
-Usage telemetry is **off by default**. Set `QAI_TELEMETRY=1` to opt in. Even then, only the tool name, a success flag, duration, retrieval `k`/`category`, package/Python version, OS family, and a random anonymous install ID are sent — never your query text, project details, or knowledge-base content.
+Anonymous usage telemetry is **on by default** (since v3.7.0). Turn it off with `QAI_TELEMETRY=0` or `DO_NOT_TRACK=1`; the server prints a one-line notice to stderr at startup whenever it's on. Only the tool name, a success flag, duration, retrieval `k`/`category`, package/Python version and OS family are sent, under a random ID that is new for every server run and never written to disk — never your query text, project details, or knowledge-base content.
 
 ## Source
 

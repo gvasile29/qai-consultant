@@ -46,7 +46,12 @@ from maturity_generator import (
     build_maturity_report_markdown,
     save_maturity_report,
 )
-from visit_counter import get_and_increment_visit_count
+from visit_counter import (
+    download_counter_id,
+    feedback_counter_id,
+    get_and_increment_visit_count,
+    record_event,
+)
 from usage_guard import consume_run
 
 setup_logging()
@@ -439,6 +444,27 @@ EXAMPLE_TEST_PLAN = """
 """
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_adoption_snapshot() -> dict:
+    """Landing-page adoption numbers, shared by every visitor for an hour:
+    keeps Pinecone/pypistats/GitHub (60 unauthenticated req/h) off the
+    per-rerun path. Raises when every source failed: st.cache_data doesn't
+    cache exceptions, so a total outage is retried on the next visit
+    instead of hiding the strip for an hour."""
+    from adoption_metrics import collect_adoption
+    snapshot = collect_adoption()
+    if not any(snapshot.values()):
+        raise RuntimeError("all adoption sources failed")
+    return snapshot
+
+
+def _adoption_snapshot() -> dict:
+    try:
+        return _cached_adoption_snapshot()
+    except Exception:
+        return {}
+
+
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
     from components import build_landing_hero_html
@@ -500,6 +526,14 @@ The MCP server (v3.0+) is built from the same knowledge base and the same determ
     if st.button("📝 Review an existing QA document instead", use_container_width=True):
         st.session_state.current_step = "doc_review"
         st.rerun()
+
+    # Last on the page: a cold cache fetches over the network (<=6s), and
+    # nothing above — above all the Start button — should wait on it.
+    from components import build_adoption_strip_html
+    _adoption_html = build_adoption_strip_html(_hero_tokens, _adoption_snapshot())
+    if _adoption_html:
+        st.markdown("---")
+        st.markdown(_adoption_html, unsafe_allow_html=True)
 
 
 def render_dialogue():
@@ -716,6 +750,11 @@ def render_review():
                 st.session_state["input_additional_context"] = result.cleaned
                 st.session_state.current_step = "strategy"
                 st.rerun()
+
+
+def _track_download(doc: str, fmt: str):
+    """download_button on_click: count the download without blocking the rerun."""
+    record_event(download_counter_id(doc, fmt))
 
 
 def _save_feedback(feedback_value: str, extra_note: str):
@@ -1069,6 +1108,8 @@ def render_strategy():
                 label="⬇️ Download (.md)",
                 data=with_ai_footer(st.session_state.risk_register),
                 file_name=f"risk_register_{project_name}.md",
+                on_click=_track_download,
+                args=("risk_register", "md"),
                 mime="text/markdown",
                 use_container_width=True,
             )
@@ -1078,6 +1119,8 @@ def render_strategy():
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
                 file_name=f"risk_register_{project_name}.pdf",
+                on_click=_track_download,
+                args=("risk_register", "pdf"),
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -1108,6 +1151,8 @@ def render_strategy():
                 label="⬇️ Download (.md)",
                 data=with_ai_footer(st.session_state.effort_report),
                 file_name=f"effort_estimation_{project_name}.md",
+                on_click=_track_download,
+                args=("effort_estimation", "md"),
                 mime="text/markdown",
                 use_container_width=True,
             )
@@ -1117,6 +1162,8 @@ def render_strategy():
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
                 file_name=f"effort_estimation_{project_name}.pdf",
+                on_click=_track_download,
+                args=("effort_estimation", "pdf"),
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -1134,6 +1181,8 @@ def render_strategy():
                 label="⬇️ Download (.md)",
                 data=with_ai_footer(st.session_state.strategy),
                 file_name=f"test_strategy_{project_name}.md",
+                on_click=_track_download,
+                args=("test_strategy", "md"),
                 mime="text/markdown",
                 use_container_width=True,
                 type="primary",
@@ -1144,6 +1193,8 @@ def render_strategy():
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
                 file_name=f"test_strategy_{project_name}.pdf",
+                on_click=_track_download,
+                args=("test_strategy", "pdf"),
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -1161,6 +1212,8 @@ def render_strategy():
                 label="⬇️ Download (.md)",
                 data=with_ai_footer(st.session_state.test_plan),
                 file_name=f"test_plan_{project_name}.md",
+                on_click=_track_download,
+                args=("test_plan", "md"),
                 mime="text/markdown",
                 use_container_width=True,
                 type="primary",
@@ -1171,6 +1224,8 @@ def render_strategy():
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
                 file_name=f"test_plan_{project_name}.pdf",
+                on_click=_track_download,
+                args=("test_plan", "pdf"),
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -1226,16 +1281,19 @@ def render_strategy():
                     st.warning("Please describe what could be improved before saving.")
                 else:
                     _save_feedback("partially", extra_note)
+                    record_event(feedback_counter_id("partially"))
                     st.session_state["_feedback_partial"] = False
                     st.session_state.feedback_submitted = True
                     st.rerun()
 
         if yes:
             _save_feedback("yes", "")
+            record_event(feedback_counter_id("yes"))
             st.session_state.feedback_submitted = True
             st.rerun()
 
         if no:
+            record_event(feedback_counter_id("no"))
             st.session_state.feedback_submitted = True
             st.info("👍 Ok, strategy not added to knowledge base. Thank you for the feedback!")
             st.rerun()
@@ -1449,6 +1507,8 @@ def render_doc_review():
                 label="⬇️ Download (.md)",
                 data=with_ai_footer(report_md),
                 file_name="quality_review.md",
+                on_click=_track_download,
+                args=("quality_review", "md"),
                 mime="text/markdown",
                 use_container_width=True,
             )
@@ -1458,6 +1518,8 @@ def render_doc_review():
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
                 file_name="quality_review.pdf",
+                on_click=_track_download,
+                args=("quality_review", "pdf"),
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
@@ -1671,6 +1733,8 @@ def render_maturity_assessment():
                 label="⬇️ Download (.md)",
                 data=with_ai_footer(report_md),
                 file_name="maturity_assessment.md",
+                on_click=_track_download,
+                args=("maturity_assessment", "md"),
                 mime="text/markdown",
                 use_container_width=True,
             )
@@ -1680,6 +1744,8 @@ def render_maturity_assessment():
                 label="⬇️ Download (.pdf)",
                 data=pdf_bytes or b"",
                 file_name="maturity_assessment.pdf",
+                on_click=_track_download,
+                args=("maturity_assessment", "pdf"),
                 mime="application/pdf",
                 use_container_width=True,
                 disabled=pdf_bytes is None,
