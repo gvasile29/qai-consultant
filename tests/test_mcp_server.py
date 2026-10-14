@@ -127,6 +127,22 @@ def test_retrieve_qa_knowledge_invalid_category_returns_structured_error():
     assert "valid_categories" in result
 
 
+def test_retrieve_qa_knowledge_invalid_category_is_not_sent_to_telemetry(monkeypatch):
+    captured = []
+    monkeypatch.setattr(mcp_server.telemetry, "is_enabled", lambda: True)
+    monkeypatch.setattr(mcp_server.telemetry, "_send", lambda name, props: captured.append(props))
+    _run(_call_tool("retrieve_qa_knowledge", {
+        "query": "anything",
+        "category": "payments service for ACME Corp",
+    }))
+    import time as _time
+    deadline = _time.monotonic() + 5  # fire-and-forget thread; poll, don't guess a sleep
+    while not captured and _time.monotonic() < deadline:
+        _time.sleep(0.05)
+    assert captured, "expected one tool_called event"
+    assert all("category" not in props for props in captured)
+
+
 def test_retrieve_qa_knowledge_category_filter():
     result = _run(_call_tool("retrieve_qa_knowledge", {
         "query": "risk based testing prioritization",

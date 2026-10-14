@@ -115,6 +115,30 @@ def test_track_tool_called_omits_k_and_category_when_not_given(monkeypatch):
         assert "category" not in properties
 
 
+def test_track_tool_called_drops_unknown_category(monkeypatch):
+    """category arrives before LocalIndex validates it, so free text a client
+    puts there must never be sent (module contract: no free-text)."""
+    monkeypatch.setenv("QAI_TELEMETRY", "1")
+    with patch("telemetry._send") as mock_send:
+        telemetry.track_tool_called(
+            "retrieve_qa_knowledge", False, 1.0, k=5, category="payments service for ACME Corp",
+        )
+        _join_all_daemon_threads()
+        _, properties = mock_send.call_args[0]
+        assert "category" not in properties
+        assert properties["k"] == 5
+
+
+def test_track_tool_called_ignores_unhashable_category(monkeypatch):
+    """A client can send a list as category; it must not crash the tool."""
+    monkeypatch.setenv("QAI_TELEMETRY", "1")
+    with patch("telemetry._send") as mock_send:
+        telemetry.track_tool_called("retrieve_qa_knowledge", False, 1.0, category=["Standard"])
+        _join_all_daemon_threads()
+        _, properties = mock_send.call_args[0]
+        assert "category" not in properties
+
+
 def _join_all_daemon_threads(timeout: float = 2.0) -> None:
     for t in threading.enumerate():
         if t is not threading.main_thread() and t.daemon:
