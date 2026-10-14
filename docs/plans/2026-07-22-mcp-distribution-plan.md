@@ -171,7 +171,7 @@ A directory entry only works if the click-through lands on something convincing.
 
 A PyPI download is not an active user. Decide what counts as real adoption before the traffic arrives:
 
-- **Primary signal:** at least one real tool call (e.g. a `retrieve_qa_knowledge` or `review_qa_document` invocation) via the opt-in telemetry (`QAI_TELEMETRY=1`, PostHog, already wired in `src/telemetry.py`). Note that telemetry is off by default, so this undercounts; treat it as a floor, not a total.
+- **Primary signal:** at least one real tool call (e.g. a `retrieve_qa_knowledge` or `review_qa_document` invocation) via the opt-in telemetry (`QAI_TELEMETRY=1`, PostHog, already wired in `src/telemetry.py`). Note that telemetry is off by default, so this undercounts; treat it as a floor, not a total. *(Superseded in v3.7.0: telemetry is now on by default, opt-out via `QAI_TELEMETRY=0`/`DO_NOT_TRACK=1`.)*
 - **Secondary signals:** PyPI download trend (as a coarse interest proxy, not activation), GitHub stars, directory listing views if available.
 - Optional follow-up: server-side usage metrics (the other half of roadmap v3.2) if/when a hosted variant exists. Out of scope here.
 - **First check-in: 2 weeks after Phase 5 submissions go live.** Look at the primary signal (telemetry tool-call events) plus the secondary signals together; a single 2-week PyPI download count alone is not a verdict, but it's the point to first glance at the data rather than letting it go unreviewed indefinitely.

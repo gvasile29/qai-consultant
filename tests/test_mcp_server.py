@@ -408,9 +408,20 @@ def test_analyze_test_results_reference_tests_reports_never_run():
 
 # ── Telemetry silence when disabled ─────────────────────────────────────────────
 
-def test_telemetry_disabled_by_default_does_not_raise_on_new_tools(monkeypatch):
-    monkeypatch.delenv("QAI_TELEMETRY", raising=False)
+def test_telemetry_opted_out_does_not_raise_on_new_tools(monkeypatch):
+    monkeypatch.setenv("QAI_TELEMETRY", "0")
     assert mcp_server.telemetry.is_enabled() is False
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "test_plan",
+    }))
+    assert "error" not in result
+
+
+def test_telemetry_on_by_default_does_not_raise_on_new_tools(monkeypatch):
+    monkeypatch.delenv("QAI_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    assert mcp_server.telemetry.is_enabled() is True
+    monkeypatch.setattr(mcp_server.telemetry, "_send", lambda name, props: None)  # never hit PostHog from tests
     result = _run(_call_tool("review_qa_document", {
         "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "test_plan",
     }))

@@ -1,10 +1,14 @@
-﻿name: CI
+name: CI
 
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+
+
+env:
+  QAI_TELEMETRY: "0"  # MCP telemetry is on by default; never report CI runs to PostHog
 
 jobs:
   test:

@@ -3,6 +3,16 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.7.0] - 2026-10-13
+
+### Added
+- The landing page now shows live adoption numbers, refreshed hourly: app visits, AI runs, MCP server installs (PyPI downloads, which include installs found through the official MCP registry and Glama, since neither publishes its own counts) and GitHub stars. Document downloads and the share of people who found their Test Strategy useful appear too, once there are downloads and at least 5 ratings. A source that is unavailable is simply left out.
+- The app now counts every `.md` and `.pdf` download (per document) and every answer to "Was this Test Strategy useful?" (yes / partially / no). Nothing about the visitor or the document is recorded, only the counts.
+- `python scripts/usage_report.py` prints all of these numbers in full detail, plus the MCP registry listing.
+
+### Changed
+- The MCP server's anonymous usage telemetry is now **on by default** (it was opt-in). Turn it off with `QAI_TELEMETRY=0` or the standard `DO_NOT_TRACK=1`. The server prints a one-line notice saying so when it starts. What is sent is unchanged (tool name, success, duration, package/Python version, OS family; never your queries, documents or project details), and it is now more private than before: the server no longer stores an install ID on your machine. Each server run uses a fresh random ID that is never saved, so runs can't be linked together.
+
 ## [3.6.3] - 2026-10-06
 
 ### Fixed

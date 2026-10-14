@@ -5,6 +5,10 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch: {}
 
+
+env:
+  QAI_TELEMETRY: "0"  # MCP telemetry is on by default; never report CI runs to PostHog
+
 jobs:
   live-contracts:
     name: Live Contracts (Pinecone/Mistral/OpenRouter)

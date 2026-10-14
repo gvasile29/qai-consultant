@@ -281,6 +281,81 @@ def build_landing_deliverables_html(tokens: dict) -> str:
 """
 
 
+# ── Landing: live adoption strip ───────────────────────────────────────────
+
+ADOPTION_MIN_RATINGS = 5  # below this a "% useful" figure is noise (1 rating = 100%)
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _short_date(iso_day) -> str:
+    """'2026-09-23' -> 'Sep 2026'; anything unparseable -> ''."""
+    try:
+        year, month = str(iso_day).split("-")[:2]
+        return f"{_MONTHS[int(month) - 1]} {int(year)}"
+    except (ValueError, IndexError):
+        return ""
+
+
+def adoption_tiles(snapshot: dict) -> list:
+    """Pure: adoption_metrics.collect_adoption() output -> [(label, value, sub)].
+    A tile is left out when its source failed, and — so the strip never
+    advertises an empty or misleading number — when downloads are still 0
+    or there are fewer than ADOPTION_MIN_RATINGS feedback ratings."""
+    tiles = []
+    app = snapshot.get("app") or {}
+    pypi = snapshot.get("pypi") or {}
+    github = snapshot.get("github") or {}
+
+    if app.get("visits"):
+        tiles.append(("App visits", f"{app['visits']:,}", "browser sessions"))
+    if app.get("generation_runs"):
+        since = _short_date(app.get("generation_runs_since"))
+        tiles.append(("AI runs", f"{app['generation_runs']:,}", f"since {since}" if since else "documents generated"))
+    downloads = sum((app.get("downloads_total") or {}).values())
+    if downloads:
+        tiles.append(("Downloads", f"{downloads:,}", ".md + .pdf documents"))
+    if (app.get("feedback_total") or 0) >= ADOPTION_MIN_RATINGS and app.get("feedback_useful_pct") is not None:
+        tiles.append(("Found it useful", f"{app['feedback_useful_pct']:g}%", f"of {app['feedback_total']:,} ratings"))
+    if pypi.get("downloads_total"):
+        since = _short_date(pypi.get("since"))
+        tiles.append(("MCP installs", f"{pypi['downloads_total']:,}", f"PyPI downloads since {since}" if since else "PyPI downloads"))
+    if github.get("stars"):
+        tiles.append(("GitHub stars", f"{github['stars']:,}", "gvasile29/qai-consultant"))
+    return tiles
+
+
+def build_adoption_strip_html(tokens: dict, snapshot: dict) -> str:
+    """Pure function: token dict + collect_adoption() snapshot -> the
+    landing page's "live adoption" stat strip, or "" when no tile survives
+    (every source down), so the landing page renders unchanged. No entrance
+    animation: it renders after a network fetch, not on first paint."""
+    tiles = adoption_tiles(snapshot)
+    if not tiles:
+        return ""
+    tile_html = "".join(
+        f'<div class="adopt-stat"><div class="adopt-label">{_html.escape(label)}</div>'
+        f'<div class="adopt-value">{_html.escape(value)}</div>'
+        f'<div class="adopt-sub">{_html.escape(sub)}</div></div>'
+        for label, value, sub in tiles
+    )
+    return f"""
+<style>
+.adopt-strip {{ display: flex; gap: 1.4rem; flex-wrap: wrap; margin-bottom: 0.4rem; }}
+.adopt-stat {{ border-left: 2px solid {tokens['accent']}; padding-left: 0.7rem; }}
+.adopt-label {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.25rem; }}
+.adopt-value {{ font-family: 'Plex Mono', monospace; font-size: 1.1rem; font-weight: 500; color: {tokens['ink']}; font-variant-numeric: tabular-nums; }}
+.adopt-sub {{ font-family: 'Plex Sans', sans-serif; font-size: 0.72rem; color: {tokens['ink_dim']}; }}
+.adopt-note {{ font-family: 'Plex Sans', sans-serif; font-size: 0.72rem; color: {tokens['ink_dim']}; margin-top: 0.5rem; }}
+.adopt-note a {{ color: {tokens['accent']}; }}
+</style>
+<div class="pom-readout">&gt; live adoption &middot; updated hourly</div>
+<div class="adopt-strip">{tile_html}</div>
+<div class="adopt-note">MCP installs are <a href="https://pypi.org/project/qai-consultant-mcp/">PyPI</a> downloads, which include installs found via the
+<a href="https://registry.modelcontextprotocol.io">official MCP registry</a> and
+<a href="https://glama.ai/mcp/servers/gvasile29/qai-consultant">Glama</a> (neither publishes its own install counts), plus some CI/bot traffic.</div>
+"""
+
+
 # ── Dialogue & Sidebar: interactive-flow styling (Phase 2) ─────────────────
 # The dialogue and review screens rerun on user interaction (template
 # selection, "Additional context" edits) -- unlike the landing screen

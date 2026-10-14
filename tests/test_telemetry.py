@@ -1,8 +1,8 @@
 """
-Tests for src/telemetry.py — opt-in MCP server usage telemetry.
+Tests for src/telemetry.py — default-on (opt-out) MCP server usage telemetry.
 
-Covers the engineering contract from MCP_PLAN.md section 7: no-op unless
-QAI_TELEMETRY=1, fire-and-forget (never blocks/raises on the caller's
+Covers the engineering contract from MCP_PLAN.md section 7 (as revised in
+v3.7.0): on unless QAI_TELEMETRY=0 / DO_NOT_TRACK=1, fire-and-forget (never blocks/raises on the caller's
 thread), network failure fully silent, and no free-text ever leaves the
 process in the event payload.
 """
@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
@@ -21,25 +23,52 @@ sys.path.insert(0, str(SRC_DIR))
 import telemetry
 
 
-# ── is_enabled() / no-op when unset ─────────────────────────────────────────────
+# ── is_enabled(): on by default, opt-out ───────────────────────────────────────
 
-def test_disabled_when_env_unset(monkeypatch):
+def test_enabled_by_default(monkeypatch):
     monkeypatch.delenv("QAI_TELEMETRY", raising=False)
-    assert telemetry.is_enabled() is False
-
-
-def test_disabled_when_env_not_exactly_1(monkeypatch):
-    monkeypatch.setenv("QAI_TELEMETRY", "true")  # only the literal "1" enables it
-    assert telemetry.is_enabled() is False
-
-
-def test_enabled_when_env_is_1(monkeypatch):
-    monkeypatch.setenv("QAI_TELEMETRY", "1")
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
     assert telemetry.is_enabled() is True
 
 
-def test_track_tool_called_spawns_no_thread_when_disabled(monkeypatch):
+@pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "off", " 0 "])
+def test_qai_telemetry_opt_out_values_disable(monkeypatch, value):
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setenv("QAI_TELEMETRY", value)
+    assert telemetry.is_enabled() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes"])
+def test_do_not_track_disables(monkeypatch, value):
     monkeypatch.delenv("QAI_TELEMETRY", raising=False)
+    monkeypatch.setenv("DO_NOT_TRACK", value)
+    assert telemetry.is_enabled() is False
+
+
+@pytest.mark.parametrize("value", ["", "0", "false"])
+def test_do_not_track_off_values_keep_it_enabled(monkeypatch, value):
+    monkeypatch.delenv("QAI_TELEMETRY", raising=False)
+    monkeypatch.setenv("DO_NOT_TRACK", value)
+    assert telemetry.is_enabled() is True
+
+
+def test_startup_notice_goes_to_stderr_never_stdout(monkeypatch, capsys):
+    monkeypatch.setenv("QAI_TELEMETRY", "1")
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    telemetry.print_startup_notice()
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert "QAI_TELEMETRY=0" in err and "DO_NOT_TRACK=1" in err
+
+
+def test_startup_notice_silent_when_opted_out(monkeypatch, capsys):
+    monkeypatch.setenv("QAI_TELEMETRY", "0")
+    telemetry.print_startup_notice()
+    assert capsys.readouterr() == ("", "")
+
+
+def test_track_tool_called_spawns_no_thread_when_disabled(monkeypatch):
+    monkeypatch.setenv("QAI_TELEMETRY", "0")
     threads_before = threading.active_count()
     with patch("telemetry._send") as mock_send:
         telemetry.track_tool_called("retrieve_qa_knowledge", True, 12.3)
@@ -126,6 +155,7 @@ _ALLOWED_TOP_LEVEL_KEYS = {"api_key", "event", "distinct_id", "properties"}
 _ALLOWED_PROPERTY_KEYS = {
     "package_version", "python_minor_version", "os_family",
     "tool", "success", "duration_ms", "k", "category",
+    "$process_person_profile", "$geoip_disable",
 }
 _FORBIDDEN_SUBSTRINGS_IN_PAYLOAD = [
     "SECRET_QUERY_TEXT_SHOULD_NEVER_APPEAR",
@@ -170,21 +200,21 @@ def test_payload_never_contains_query_text_or_free_text_fields(monkeypatch):
         assert forbidden not in raw
 
 
-def test_install_id_is_a_stable_random_uuid(tmp_path, monkeypatch):
-    monkeypatch.setattr(telemetry, "_cache_dir", lambda: tmp_path)
-    id1 = telemetry._get_or_create_install_id()
-    id2 = telemetry._get_or_create_install_id()
-    assert id1 == id2, "install id must be stable across calls (persisted to disk)"
-    import uuid as uuid_module
-    uuid_module.UUID(id1)  # raises ValueError if not a valid UUID
+def test_distinct_id_is_a_per_process_uuid_and_nothing_is_written_to_disk(monkeypatch):
+    monkeypatch.setenv("QAI_TELEMETRY", "1")
+    captured = []
 
+    def _fake_urlopen(req, timeout=None):
+        captured.append(json.loads(req.data.decode("utf-8")))
+        return MagicMock()
 
-def test_install_id_survives_unreadable_cache_dir(tmp_path, monkeypatch):
-    """A cache dir that can't be created/written must not crash — a fresh id
-    is simply minted (and possibly re-minted) rather than persisted."""
-    unwritable = tmp_path / "does" / "not" / "exist_and_cannot_be_made"
-    monkeypatch.setattr(telemetry, "_cache_dir", lambda: unwritable)
-    with patch("pathlib.Path.mkdir", side_effect=OSError("permission denied")):
-        install_id = telemetry._get_or_create_install_id()  # must not raise
+    with patch("telemetry._urllib_request.urlopen", side_effect=_fake_urlopen),             patch("pathlib.Path.write_text") as mock_write, patch("builtins.open") as mock_open:
+        telemetry._send("server_start", {})
+        telemetry._send("server_start", {})
+    mock_write.assert_not_called()
+    mock_open.assert_not_called()
     import uuid as uuid_module
-    uuid_module.UUID(install_id)
+    uuid_module.UUID(captured[0]["distinct_id"])
+    assert captured[0]["distinct_id"] == captured[1]["distinct_id"] == telemetry._SESSION_ID
+    assert captured[0]["properties"]["$process_person_profile"] is False
+    assert captured[0]["properties"]["$geoip_disable"] is True
