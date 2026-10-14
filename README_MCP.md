@@ -45,6 +45,8 @@ claude mcp add qai-consultant -- uvx qai-consultant-mcp
 
 First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2`, served via `fastembed`'s ONNX Runtime) and builds a local index — a few seconds to a minute the first time, then it's cached.
 
+**Optional agent skill (Claude Code):** copy the [`skills/qai-consultant/`](https://github.com/gvasile29/qai-consultant/tree/master/skills/qai-consultant) folder into `~/.claude/skills/` (or your project's `.claude/skills/`). It tells the agent which tool fits a request and how to read the results, for example that an empty flaky-test list after only 1-2 runs means "not enough data", not "no flaky tests". Other agents that read `SKILL.md` files can use the same folder.
+
 ## Tools
 
 | Tool | What it does |
