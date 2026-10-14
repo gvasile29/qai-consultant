@@ -409,7 +409,10 @@ def analyze_test_results(
     test identities ("classname::name") expected to have run — any absent
     from the results are reported under never_run. Flaky = pass_rate
     strictly between flaky_min and flaky_max with at least 3 executions;
-    fewer executions is reported as insufficient data, not flaky.
+    ever-failing = zero passes (skipped/error count as not passed) across at
+    least 3 executions. Tests with fewer executions are left out of both
+    lists without a warning, so an empty flaky list on 1-2 runs means not
+    enough data, not a stable suite - check runs/per_run.
     Malformed/oversized input never raises — it returns a structured
     {"error": "invalid_argument", ...}. Returns the full ResultsAnalysis
     as JSON (runs, total_tests, executions, overall_pass_rate, flaky,

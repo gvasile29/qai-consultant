@@ -45,6 +45,10 @@ import uuid
 from typing import Optional
 from urllib import request as _urllib_request
 
+from kb_config import SOURCE_CATEGORIES
+
+_ALLOWED_CATEGORIES = frozenset(SOURCE_CATEGORIES.values())
+
 _POSTHOG_HOST = "https://eu.i.posthog.com"  # this project's PostHog org is on EU Cloud
 # Public write-only PostHog Project API Key (not a secret — see module
 # docstring). If this ever needs rotating, generate a new one from PostHog's
@@ -153,7 +157,9 @@ def track_tool_called(
     properties = {"tool": tool_name, "success": success, "duration_ms": round(duration_ms, 1)}
     if k is not None:
         properties["k"] = k
-    if category is not None:
+    # The raw argument arrives before LocalIndex.search() validates it, so an
+    # MCP client could put free text here; only a known category is sent.
+    if isinstance(category, str) and category in _ALLOWED_CATEGORIES:
         properties["category"] = category
     if extra:
         properties.update(extra)

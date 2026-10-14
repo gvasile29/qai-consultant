@@ -263,6 +263,7 @@ Full version history and rationale lives in `CHANGELOG.md` — this is a condens
 - **v3.6.2** ✅ Primary model → `ministral-14b-2512` (Free-plan 429 on mistral-small), `LLM_NUM_PREDICT` 4000→6500, bold-tolerant Risk Matrix header parser.
 - **v3.6.3** ✅ fastembed 0.8.0→0.8.1: KB-backed MCP tools crashed (numpy inhomogeneous shape) on a cached upstream model snapshot with fixed-128 padding below 256 truncation (#105).
 - **v3.7.0** ✅ Landing-page adoption strip (`adoption_metrics.py`), download/feedback counters, MCP telemetry default-on with opt-out + per-process id.
+- **v3.7.1** ✅ Telemetry drops unrecognized `category` values; `analyze_test_results` docstring fix; agent skill `skills/qai-consultant/SKILL.md`, kept in sync by `tests/test_skill_doc.py`.
 - **v4.0** Remote MCP + distribution: hosted Streamable HTTP server connectable from claude.ai, registry submissions, server-side usage metrics.
 
 > **MCP lens (governs all v3.x scope):** the client LLM is stronger than the internal one, so the server never exposes LLM generation — only what the client can't do alone (standards-grounded retrieval, deterministic estimation, validated QA process templates). `ask()`/`ask_streaming()`/document generation stay in Streamlit/CLI. Rationale: `MCP_PLAN.md`.

@@ -3,6 +3,15 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.7.1] - 2026-10-14
+
+### Added
+- An agent skill, `skills/qai-consultant/SKILL.md`, that tells Claude Code, Cursor and other skill-aware agents which of the MCP server's tools fits a request and how to read their results (for example, that an empty flaky-test list after only 1-2 runs means "not enough data", not "no flaky tests"). A new test fails the build if a tool is renamed or a default changes without the skill being updated.
+
+### Fixed
+- MCP telemetry could send free text: `retrieve_qa_knowledge` reported its `category` argument before checking it, so a client that put something other than one of the five known categories there (a project name, say) would have had that text sent. Only the five known category names are ever sent now; anything else is left out.
+- The `analyze_test_results` tool description said tests with fewer than 3 executions are "reported as insufficient data". They are actually left out of the flaky and ever-failing lists without a warning. The description now says so, and also that skipped or errored runs count as "not passed".
+
 ## [3.7.0] - 2026-10-13
 
 ### Added
