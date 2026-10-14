@@ -106,7 +106,7 @@ dependencies = [
     "tqdm==4.70.0",
     "typing-extensions==4.16.0",
     "typing-inspection==0.4.4",
-    "urllib3==2.7.0",
+    "urllib3==2.8.0",
     "uvicorn==0.52.4 ; sys_platform != 'emscripten'",
     "win32-setctime==1.2.0 ; sys_platform == 'win32'",
 ]
