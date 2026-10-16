@@ -21,12 +21,40 @@ functions below only ever add scoped CSS additions (e.g.
 .ledger-card:hover) that compose safely with theme.py's rules regardless
 of <style> tag load order.
 """
+import base64 as _base64
 import html as _html
 
 from risk_ledger import severity_tier
 
 
 # ── Ledger: score/severity HTML (Signal Ledger, Risk Ledger table) ─────────
+
+def inline_image_html(data: bytes, mime: str, alt: str, width_px: int, css_class: str = "") -> str:
+    """An <img> with the file embedded as a base64 data URI. Unlike st.image(),
+    which serves through Streamlit's media-file manager (entries can expire and
+    leave a broken image with the bare index "0" as alt text), nothing here can
+    go missing between reruns, and the alt text is ours."""
+    b64 = _base64.b64encode(data).decode("ascii")
+    cls = f' class="{_html.escape(css_class, quote=True)}"' if css_class else ""
+    return (
+        f'<img{cls} alt="{_html.escape(alt, quote=True)}" width="{int(width_px)}" '
+        f'src="data:{mime};base64,{b64}">'
+    )
+
+
+def header_logo_html(png_bytes: bytes, alt: str = "QAI Consultant", width_px: int = 280) -> str:
+    """The top-of-page logo as an inline base64 <img>. st.image() serves files
+    through Streamlit's media-file manager, whose entries can expire across
+    reruns/reconnects -- leaving a broken image whose alt text is the bare
+    index "0". A data URI has no server round-trip to break."""
+    b64 = _base64.b64encode(png_bytes).decode("ascii")
+    return (
+        '<div class="header-logo-wrap">'
+        f'<img class="header-logo" alt="{_html.escape(alt, quote=True)}" '
+        f'width="{int(width_px)}" src="data:image/png;base64,{b64}">'
+        "</div>"
+    )
+
 
 def score_tier(score: int) -> str:
     """Map a 0-100 score to a Signal Ledger tier. >=80 pass, 50-79 hold,
@@ -222,7 +250,7 @@ def build_landing_hero_html(tokens: dict) -> str:
 
 
 def build_landing_deliverables_html(tokens: dict) -> str:
-    """Pure function: token dict -> the "What you get in ~2 minutes"
+    """Pure function: token dict -> the "What you get in ~3-5 minutes"
     deliverable cards + stat tiles HTML block. Reuses
     build_landing_hero_html()'s .pom-card/.pom-cidx/.pom-ctitle/.pom-cbody
     classes and pom-card-in keyframe (defined above, always rendered
@@ -235,7 +263,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
         ("📝", "Test Plan", "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."),
     ]
     stats = [
-        ("Time to results", "~2 min", "vs. hours of manual work"),
+        ("Time to results", "~3-5 min", "vs. hours of manual work"),
         ("Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors"),
         ("Deliverables", "4 documents", "Risk · Effort · Strategy · Plan"),
         ("Cost", "Free", "No sign-up required"),
@@ -275,7 +303,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
   }}
 }}
 </style>
-<div class="pom-readout">&gt; what you get in ~2 minutes</div>
+<div class="pom-readout">&gt; what you get in ~3-5 minutes</div>
 <div class="pom-deliverables">{deliverable_cards}</div>
 <div class="pom-stats">{stat_tiles}</div>
 """

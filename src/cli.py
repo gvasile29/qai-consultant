@@ -194,7 +194,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summar
         for chunk in agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT):
             risk_buffer.append(chunk)
             live.update(Text("".join(risk_buffer)))
-    risk_register = clean_markdown_html("".join(risk_buffer))
+    risk_register = clean_markdown_html("".join(risk_buffer), source_text=risk_prompt)
     risk_register = append_execution_data_appendix(risk_register, results_summary)
     risk_path = risk_analyzer.save(risk_register, context)
     console.print(f"\n[bold green]✅ Risk Register generated[/bold green] ({len(risk_register)} chars)\n")
@@ -213,7 +213,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summar
         for chunk in agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT):
             strategy_buffer.append(chunk)
             live.update(Text("".join(strategy_buffer)))
-    strategy = clean_markdown_html("".join(strategy_buffer))
+    strategy = clean_markdown_html("".join(strategy_buffer), source_text=strategy_prompt)
     strategy_path = generator.save(strategy, context)
     console.print(f"\n[bold green]✅ Test Strategy generated[/bold green] ({len(strategy)} chars)\n")
 
@@ -225,7 +225,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summar
         for chunk in agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT):
             test_plan_buffer.append(chunk)
             live.update(Text("".join(test_plan_buffer)))
-    test_plan = clean_markdown_html("".join(test_plan_buffer))
+    test_plan = clean_markdown_html("".join(test_plan_buffer), source_text=test_plan_prompt)
     test_plan_path = test_plan_generator.save(test_plan, context)
     console.print(f"\n[bold green]✅ Test Plan generated[/bold green] ({len(test_plan)} chars)\n")
 
@@ -387,7 +387,7 @@ def run_review_mode(agent: QAIAgent, path: str, doc_type: str) -> None:
             for chunk in agent.ask_streaming(prompt, system_prompt=REVIEW_SYSTEM_PROMPT):
                 buffer.append(chunk)
                 live.update(Text("".join(buffer)))
-        narrative = clean_markdown_html("".join(buffer))
+        narrative = clean_markdown_html("".join(buffer), source_text=prompt)
 
     report_md = build_review_report_markdown(result, narrative)
     output_path = save_review_report(report_md, doc_path.stem)
@@ -491,7 +491,7 @@ def run_maturity_mode(agent: QAIAgent, path: str) -> None:
             for chunk in agent.ask_streaming(prompt, system_prompt=MATURITY_SYSTEM_PROMPT):
                 buffer.append(chunk)
                 live.update(Text("".join(buffer)))
-        narrative = clean_markdown_html("".join(buffer))
+        narrative = clean_markdown_html("".join(buffer), source_text=prompt)
 
     report_md = build_maturity_report_markdown(result, narrative)
     output_path = save_maturity_report(report_md, doc_path.stem)

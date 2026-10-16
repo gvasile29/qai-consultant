@@ -60,6 +60,7 @@ def main() -> int:
 
     from agent import MISTRAL_MODEL, QAIAgent
     from dialogue import ProjectContext
+    from output_guards import lint_output
     from risk_ledger import parse_risk_matrix
     from strategy_generator import StrategyGenerator
     from templates import TEMPLATES
@@ -69,6 +70,7 @@ def main() -> int:
         return 2
     fields = {k: v for k, v in TEMPLATES[args.template].items() if k != "label"}
     context = ProjectContext(**fields)
+    context_text = context.to_summary().lower()
 
     counter = _FallbackCounter()
     logging.getLogger("qai").addHandler(counter)
@@ -97,6 +99,7 @@ def main() -> int:
         hit = next((m for m in GARBAGE_MARKERS if m in text), None)
         if hit:
             problems.append(f"contains garbage marker {hit!r}")
+        problems += lint_output(text, context_text)
         if not path or not Path(path).is_file():
             problems.append("no saved file")
         elif len(Path(path).read_text(encoding="utf-8").strip()) < MIN_DOC_CHARS:

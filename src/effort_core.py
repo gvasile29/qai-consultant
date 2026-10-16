@@ -239,7 +239,9 @@ def apply_multipliers(context: ProjectContext, data: EstimationData) -> None:
         total_add += 15
 
     # Automation multipliers
-    no_automation = any(k in automation for k in ["no", "nothing", "none", "not yet", "greenfield"])
+    # Whole-word match: a bare substring "no" fired on "CANoe" and charged +20%
+    # "greenfield setup" to a project that lists CANoe test automation.
+    no_automation = bool(re.search(r"\b(?:no|nothing|none|not yet|greenfield)\b", automation))
     if no_automation:
         data.multipliers.append(("No existing automation — greenfield setup needed", 20))
         total_add += 20

@@ -222,8 +222,8 @@ def _reset_maturity_mode_state():
 # state (their session-state keys are disjoint) and resumes the strategy
 # flow at the step the user left. Streamlit drops a widget's key on any run
 # where the widget isn't rendered, so main() re-pins _PERSISTED_WIDGET_KEYS
-# every run. Not covered: answers typed into the dialogue's st.form but not
-# yet submitted (the browser only sends them on submit) and file uploads
+# every run. Not covered: answers typed into the dialogue but not yet committed (Enter/blur)
+# and file uploads
 # (st.file_uploader can't be set via session state). Start Over / Generate
 # Another Strategy remain the explicit "clear everything" actions.
 _PERSISTED_WIDGET_KEYS = (
@@ -398,7 +398,16 @@ def render_sidebar():
             if _theme_type == "dark"
             else "eu_ai_generated_icon.svg"
         )
-        st.image(str(EU_AI_ICON_DIR / _eu_icon_svg), width=140)
+        from components import inline_image_html
+        st.markdown(
+            inline_image_html(
+                (EU_AI_ICON_DIR / _eu_icon_svg).read_bytes(),
+                "image/svg+xml",
+                "EU AI Act: fully AI-generated content",
+                140,
+            ),
+            unsafe_allow_html=True,
+        )
         st.info(AI_INTERACTION_NOTICE)
 
         from components import APP_MODES, build_sidebar_nav_css
@@ -631,13 +640,16 @@ def render_dialogue():
     st.markdown("---")
 
     total = len(QUESTIONS)
-    answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
 
     from components import build_dialogue_header_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _dialogue_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
-    st.markdown(build_dialogue_header_html(_dialogue_tokens, answered, total), unsafe_allow_html=True)
+    # The progress header sits above the form, but answers only reach
+    # st.session_state.answers while the form widgets run below it. Counting
+    # before the form lagged one rerun behind (first Enter looked ignored,
+    # progress stayed 0/11), so reserve the slot now and fill it after.
+    _progress_slot = st.empty()
     st.markdown("###")
 
     selected_template = st.selectbox(
@@ -654,7 +666,10 @@ def render_dialogue():
                 st.session_state[f"input_{field}"] = value
         st.rerun()
 
-    with st.form("dialogue_form"):
+    # Plain container, not st.form: a form's first Enter raced the widget-value
+    # sync (stale value submitted, progress stuck at 0/11 until a 2nd Enter).
+    # Without a form every answer commits on Enter/blur and reruns.
+    with st.container():
         for idx, question in enumerate(QUESTIONS, start=1):
             key = question["key"]
             st.markdown(
@@ -686,7 +701,10 @@ def render_dialogue():
         )
         st.markdown("###")
 
-        submitted = st.form_submit_button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
+        submitted = st.button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
+
+    _answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
+    _progress_slot.markdown(build_dialogue_header_html(_dialogue_tokens, _answered, total), unsafe_allow_html=True)
 
     if submitted:
         # Validate all answers using InputValidator
@@ -1054,7 +1072,7 @@ def render_strategy():
             try:
                 risk_register = clean_markdown_html(st.write_stream(
                     agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
-                ))
+                ), source_text=risk_prompt)
                 risk_register = append_execution_data_appendix(risk_register, results_summary)
                 risk_path = risk_analyzer.save(risk_register, context)
             except (StopException, RerunException):
@@ -1107,7 +1125,7 @@ def render_strategy():
             try:
                 strategy = clean_markdown_html(st.write_stream(
                     agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
-                ))
+                ), source_text=strategy_prompt)
                 output_path = generator.save(strategy, context)
             except (StopException, RerunException):
                 raise
@@ -1132,7 +1150,7 @@ def render_strategy():
             try:
                 test_plan = clean_markdown_html(st.write_stream(
                     agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
-                ))
+                ), source_text=test_plan_prompt)
                 test_plan_path = test_plan_generator.save(test_plan, context)
             except (StopException, RerunException):
                 raise
@@ -1504,13 +1522,9 @@ def render_doc_review():
         unsafe_allow_html=True,
     )
 
-    dim_cols = st.columns(len(result.dimension_scores))
-    for col, (dim, score) in zip(dim_cols, result.dimension_scores.items()):
-        with col:
-            st.markdown(
-                signal_ledger_html(dim.replace("_", " ").title(), score),
-                unsafe_allow_html=True,
-            )
+    # 3 per row: 6 columns squeezed "Completeness"/"Traceability" mid-word at
+    # tablet widths.
+    _render_score_grid(result.dimension_scores, per_row=3)
 
     st.markdown("### Findings")
     if not result.findings:
@@ -1563,7 +1577,7 @@ def render_doc_review():
             try:
                 narrative = clean_markdown_html(st.write_stream(
                     agent.ask_streaming(prompt, system_prompt=REVIEW_SYSTEM_PROMPT)
-                ))
+                ), source_text=prompt)
             except (StopException, RerunException):
                 # Same rule as render_strategy()'s 4 stages — never swallow
                 # Streamlit's own stop/rerun control-flow signals.
@@ -1800,7 +1814,7 @@ def render_maturity_assessment():
             try:
                 narrative = clean_markdown_html(st.write_stream(
                     agent.ask_streaming(prompt, system_prompt=MATURITY_SYSTEM_PROMPT)
-                ))
+                ), source_text=prompt)
             except (StopException, RerunException):
                 raise
             except Exception as exc:
@@ -1892,7 +1906,8 @@ def main():
                 if st.context.theme.type == "dark"
                 else "qai_logo_horizontal_1680.png"
             )
-            st.image(str(BRAND_DIR / _header_logo), width=280)
+            from components import header_logo_html
+            st.markdown(header_logo_html((BRAND_DIR / _header_logo).read_bytes()), unsafe_allow_html=True)
 
     # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()

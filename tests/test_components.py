@@ -193,7 +193,7 @@ def test_build_landing_deliverables_html_has_a_pom_readout_eyebrow_label():
     # get in ~2 minutes" markdown heading. Must reuse the .pom-readout
     # class build_landing_hero_html() already defines, not a new one.
     html = build_landing_deliverables_html(LIGHT_TOKENS)
-    assert '<div class="pom-readout">&gt; what you get in ~2 minutes</div>' in html
+    assert '<div class="pom-readout">&gt; what you get in ~3-5 minutes</div>' in html
 
 
 def test_build_landing_deliverables_html_does_not_redefine_the_pom_card_in_keyframe():

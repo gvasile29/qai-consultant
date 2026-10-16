@@ -68,10 +68,12 @@ html, body, [class*="css"] {{
    also apply to the sidebar's EU AI-generated-content icon below.
    Carried over verbatim from the pre-Calibration-Bench inline CSS block
    -- see this plan's Global Constraints. */
-.st-key-header-logo [data-testid="stImage"] {{
+.st-key-header-logo [data-testid="stImage"],
+.st-key-header-logo .header-logo-wrap {{
     display: flex;
     justify-content: center;
 }}
+.st-key-header-logo .header-logo {{ max-width: 100%; height: auto; }}
 
 /* Intake ledger card (Task 6) */
 .ledger-card {{
@@ -105,8 +107,11 @@ html, body, [class*="css"] {{
 }}
 .signal-ledger .sl-label {{
     font-family: 'Plex Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.06em;
+    font-size: 0.64rem;
+    letter-spacing: 0.03em;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
     text-transform: uppercase;
     color: {tokens['ink_dim']};
     margin-bottom: 0.5rem;

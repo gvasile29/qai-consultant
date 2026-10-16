@@ -18,6 +18,7 @@ from agent import MISTRAL_MODEL
 from ai_disclosure import build_front_matter, with_ai_footer
 from review_core import ReviewResult
 from logger import get_logger
+from output_guards import CITATION_RULES, STANDARDS_RULES
 
 logger = get_logger(__name__)
 
@@ -58,6 +59,8 @@ FINDINGS (deterministic, already computed):
 RELEVANT QA KNOWLEDGE BASE:
 {knowledge_context}
 
+{CITATION_RULES}
+{STANDARDS_RULES}
 Generate the narrative review using EXACTLY this structure:
 
 # QA Document Quality Review
