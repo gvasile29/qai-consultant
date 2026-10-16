@@ -210,3 +210,10 @@ def test_app_has_no_st_image_calls_left():
     tree = ast.parse((SRC / "app.py").read_text(encoding="utf-8"))
     calls = [ast.unparse(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)]
     assert "st.image" not in calls
+
+def test_mandatory_attributed_to_standards_is_downgraded_only_there():
+    out = g.sanitize_llm_markdown(
+        "Risks are a mandatory element per IEEE 829 and ISTQB. Login is required for billing."
+    )
+    assert "mandatory" not in out and "recommended element" in out
+    assert "Login is required for billing" in out

@@ -137,9 +137,29 @@ def lint_output(text: str, context_text: str = "") -> list:
             problems.append(f"unqualified absence claim: {m.group(0)!r}")
     return problems
 
+_NORMATIVE = re.compile(r"\b(mandatory|mandated|required)\b", re.IGNORECASE)
+_STANDARD_IN_SENTENCE = re.compile(r"\b(?:ISTQB|IEEE\s*829|29119)\b", re.IGNORECASE)
+
+
+def _soften_normative_sentences(text: str) -> str:
+    """"X is a mandatory element ... per IEEE 829 and ISTQB": neither prescribes
+    mandatory sections, so downgrade the normative word in any sentence that
+    attributes it to those standards. Sentences without them are untouched."""
+
+    def _fix(sentence: str) -> str:
+        if _STANDARD_IN_SENTENCE.search(sentence):
+            return _NORMATIVE.sub(lambda m: "recommended", sentence)
+        return sentence
+
+    return "\n".join(
+        "".join(_fix(s) for s in re.split(r"(?<=[.!?])(\s+)", line)) for line in text.split("\n")
+    )
+
+
 def soften_standards_claims(text: str) -> str:
     """Rewrite known overstatements about what standards mandate."""
     text = _MANDATE.sub(lambda m: f"{m.group(1)}-recommended", text)
+    text = _soften_normative_sentences(text)
     return _UNUSABLE.sub("of limited use as written", text)
 
 
