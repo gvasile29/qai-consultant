@@ -194,6 +194,7 @@ def _reset_review_mode_state():
     st.session_state.pop("review_doc_uploader", None)
     st.session_state.pop("review_doc_pasted_text", None)
     st.session_state.pop("review_doc_type_select", None)
+    st.session_state.pop("review_narrative_pending", None)
 
 
 # Session-state keys owned by the "Assess QA Maturity" mode — same shared-
@@ -212,6 +213,79 @@ def _reset_maturity_mode_state():
             del st.session_state[key]
     st.session_state.pop("maturity_uploader", None)
     st.session_state.pop("maturity_pasted_text", None)
+    st.session_state.pop("maturity_narrative_pending", None)
+
+
+# ── Mode navigation (landing CTAs + sidebar) ──────────────────────────────────
+# The 3 modes (components.APP_MODES) are reachable from the landing page and
+# from the sidebar on every screen. Switching modes keeps each mode's own
+# state (their session-state keys are disjoint) and resumes the strategy
+# flow at the step the user left. Streamlit drops a widget's key on any run
+# where the widget isn't rendered, so main() re-pins _PERSISTED_WIDGET_KEYS
+# every run. Not covered: answers typed into the dialogue's st.form but not
+# yet submitted (the browser only sends them on submit) and file uploads
+# (st.file_uploader can't be set via session state). Start Over / Generate
+# Another Strategy remain the explicit "clear everything" actions.
+_PERSISTED_WIDGET_KEYS = (
+    "review_additional_context",
+    "review_doc_type_select",
+    "review_doc_pasted_text",
+    "maturity_pasted_text",
+)
+_STRATEGY_STEPS = ("dialogue", "review", "strategy")
+# Per-session LLM run cap, shared by render_strategy(), render_doc_review(),
+# render_maturity_assessment() and the mode-switch lock below.
+MAX_RUNS_PER_SESSION = 3
+
+
+def _current_mode(step) -> str | None:
+    """current_step -> mode id ("strategy" | "doc_review" | "maturity"),
+    or None on the landing page."""
+    if step in _STRATEGY_STEPS:
+        return "strategy"
+    if step in ("doc_review", "maturity"):
+        return step
+    return None
+
+
+def _generation_in_progress() -> bool:
+    """True while an LLM generation is running or about to run on this
+    rerun. Mode switching is locked then: a click would interrupt the
+    stream after run_count/the daily quota were already charged.
+    render_sidebar() evaluates this BEFORE the step renderer runs, so every
+    flag it reads is set by the click that starts the run, before its
+    st.rerun(): generation_started by render_review()'s Generate button,
+    the *_narrative_pending flags by the narrative buttons. A run the
+    quota or run cap refused never sets them, so it never locks."""
+    state = st.session_state
+    if (
+        state.get("current_step") == "strategy"
+        and state.get("generation_started", False)
+        and not state.get("results_complete", False)
+    ):
+        return True
+    return bool(state.get("review_narrative_pending") or state.get("maturity_narrative_pending"))
+
+
+# Landing-page wording for the mode buttons (the sidebar uses the shorter
+# components.APP_MODES labels).
+_LANDING_CTA_LABELS = {
+    "strategy": "Start: generate a test strategy →",
+    "doc_review": "Review an existing QA document",
+    "maturity": "Assess QA maturity",
+}
+
+
+def _go_to(mode: str) -> None:
+    """Switch to a mode's screen. The strategy flow resumes at the step the
+    user left it on (dialogue/review/strategy), or starts at the dialogue."""
+    current = st.session_state.get("current_step", "intro")
+    if _current_mode(current) == "strategy":
+        st.session_state.strategy_resume_step = current
+    if mode == "strategy":
+        st.session_state.current_step = st.session_state.get("strategy_resume_step") or "dialogue"
+    else:
+        st.session_state.current_step = mode
 
 
 # ── Load Agent ─────────────────────────────────────────────────────────────────
@@ -326,22 +400,28 @@ def render_sidebar():
         )
         st.image(str(EU_AI_ICON_DIR / _eu_icon_svg), width=140)
         st.info(AI_INTERACTION_NOTICE)
+
+        from components import APP_MODES, build_sidebar_nav_css
+        _active_mode = _current_mode(st.session_state.get("current_step", "intro"))
+        _nav_locked = _generation_in_progress()
+        st.markdown(build_sidebar_nav_css(_sidebar_tokens, _active_mode), unsafe_allow_html=True)
+        for _mode_id, _idx, _label in APP_MODES:
+            if st.button(
+                _label, key=f"nav-{_mode_id}", use_container_width=True,
+                disabled=_nav_locked or _mode_id == _active_mode,
+            ):
+                _go_to(_mode_id)
+                st.rerun()
+        if _nav_locked:
+            st.markdown(
+                '<div class="sidebar-nav-lock">&gt; generation in progress</div>',
+                unsafe_allow_html=True,
+            )
+
         with st.expander("📋 Release Notes"):
             st.markdown(load_changelog())
         with st.expander("🔌 Use QAI in your AI tools (MCP)"):
             st.markdown(MCP_ANNOUNCEMENT_BODY)
-        if st.button("📈 Assess QA Maturity", use_container_width=True):
-            st.session_state.current_step = "maturity"
-            st.rerun()
-        st.divider()
-
-        st.markdown("### How it works")
-        st.markdown("""
-1. **Describe** your project
-2. **Answer** clarifying questions
-3. **Receive** a tailored Test Strategy
-4. **Download** as Markdown or PDF
-        """)
 
         st.divider()
         st.markdown("### Knowledge Base")
@@ -356,7 +436,7 @@ def render_sidebar():
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
                         "generation_started", "results_complete",
-                        "results_analysis",
+                        "results_analysis", "strategy_resume_step",
                         "run_count", "current_step"]:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -480,17 +560,34 @@ def render_intro():
 
     st.markdown("---")
 
-    st.info(
-        "💡 **Best used at project kick-off** — when you don't yet have code, "
-        "architecture docs, or detailed specs to hand an AI assistant. "
-        "QAI Consultant generates a baseline **Risk Register**, **Effort Estimation**, and **Test Strategy** "
-        "grounded in ISTQB, OWASP, and ISO standards. "
-        "Then **feed those docs into Claude Code or your AI IDE** as project context "
-        "to get much more tailored, project-specific output."
+    from components import (
+        APP_MODES,
+        build_landing_cta_css,
+        build_landing_details_css,
+        build_landing_note_html,
+        build_output_eyebrow_html,
     )
+    st.markdown(build_landing_cta_css(_hero_tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(_hero_tokens, "ready when you are"), unsafe_allow_html=True)
+    with st.container(key="landing-cta"):
+        for _col, (_mode_id, _idx, _label) in zip(st.columns([2, 1, 1]), APP_MODES):
+            with _col:
+                if st.button(
+                    _LANDING_CTA_LABELS.get(_mode_id, _label),
+                    key=f"cta-{_mode_id}",
+                    use_container_width=True,
+                    type="primary" if _mode_id == "strategy" else "secondary",
+                ):
+                    _go_to(_mode_id)
+                    st.rerun()
 
-    with st.expander("📊 How is this different from just prompting Claude or Gemini?"):
-        st.markdown("""
+    st.markdown(build_landing_note_html(_hero_tokens), unsafe_allow_html=True)
+
+    st.markdown(build_landing_details_css(_hero_tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(_hero_tokens, "more detail"), unsafe_allow_html=True)
+    with st.container(key="landing-details"):
+        with st.expander("How is this different from prompting Claude or Gemini?"):
+            st.markdown("""
 |  | **QAI Consultant** (this app) | **Generic AI** (no tools) | **Claude + `qai-consultant-mcp`** |
 |---|---|---|---|
 | Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, EU AI Act, 17 AI SDLC case studies | General training data only | The same curated knowledge base's Markdown documents (the ISTQB/OWASP PDFs aren't bundled, for licensing reasons), retrieved live via `retrieve_qa_knowledge` |
@@ -506,26 +603,18 @@ The MCP server (v3.0+) is built from the same knowledge base and the same determ
 1. **Use QAI Consultant at kick-off** → generates your baseline documents in minutes
 2. **Feed those docs into Claude Code** (or Copilot / Cursor) as project context — or, if you're already there, **install `qai-consultant-mcp`** and skip straight to grounded retrieval + estimation as tools
 3. **Ask your AI assistant to refine** the strategy against your specific codebase, tickets, and architecture
-        """)
+            """)
 
-    with st.expander("📄 See an example of what QAI Consultant generates"):
-        ex_tab1, ex_tab2, ex_tab3, ex_tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
-        with ex_tab1:
-            st.markdown(EXAMPLE_RISK)
-        with ex_tab2:
-            st.markdown(EXAMPLE_EFFORT)
-        with ex_tab3:
-            st.markdown(EXAMPLE_STRATEGY)
-        with ex_tab4:
-            st.markdown(EXAMPLE_TEST_PLAN)
-
-    st.markdown("###")
-    if st.button("🚀 Start — Generate a Test Strategy", use_container_width=True, type="primary"):
-        st.session_state.current_step = "dialogue"
-        st.rerun()
-    if st.button("📝 Review an existing QA document instead", use_container_width=True):
-        st.session_state.current_step = "doc_review"
-        st.rerun()
+        with st.expander("See example output"):
+            ex_tab1, ex_tab2, ex_tab3, ex_tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
+            with ex_tab1:
+                st.markdown(EXAMPLE_RISK)
+            with ex_tab2:
+                st.markdown(EXAMPLE_EFFORT)
+            with ex_tab3:
+                st.markdown(EXAMPLE_STRATEGY)
+            with ex_tab4:
+                st.markdown(EXAMPLE_TEST_PLAN)
 
     # Last on the page: a cold cache fetches over the network (<=6s), and
     # nothing above — above all the Start button — should wait on it.
@@ -748,6 +837,14 @@ def render_review():
             else:
                 st.session_state.dialogue.set_additional_context(result.cleaned)
                 st.session_state["input_additional_context"] = result.cleaned
+                if st.session_state.get("run_count", 0) < MAX_RUNS_PER_SESSION:
+                    # Charge the run here, before the rerun, so the strategy
+                    # screen's sidebar already renders locked (see
+                    # _generation_in_progress()). Over the cap, render_strategy()
+                    # shows its run-cap warning instead.
+                    _enforce_daily_quota()
+                    st.session_state.generation_started = True
+                    st.session_state.run_count += 1
                 st.session_state.current_step = "strategy"
                 st.rerun()
 
@@ -808,7 +905,6 @@ def _enforce_daily_quota() -> None:
 
 
 def render_strategy():
-    MAX_RUNS_PER_SESSION = 3
 
     # Gated on an explicit completion flag, not on any single stage's output
     # (e.g. "strategy") — the pipeline has 4 sequential stages plus a PDF-bytes
@@ -1241,7 +1337,7 @@ def render_strategy():
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
                     "generation_started", "results_complete",
-                    "results_analysis"]:
+                    "results_analysis", "strategy_resume_step"]:
             if key in st.session_state:
                 del st.session_state[key]
         _reset_review_mode_state()
@@ -1317,7 +1413,6 @@ def render_doc_review():
     call. Step 2 (button) writes an LLM narrative around those already-
     computed findings and saves an Article-50(2)-marked report, mirroring
     render_strategy()'s save/PDF conventions."""
-    MAX_RUNS_PER_SESSION = 3  # mirrors render_strategy()'s per-session cap — narrative is an LLM call
 
     from components import build_content_polish_css, build_output_eyebrow_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
@@ -1340,7 +1435,6 @@ def render_doc_review():
             label = st.selectbox(
                 "Document type",
                 options=[label for label, _ in _REVIEW_DOC_TYPE_OPTIONS],
-                index=0,
                 key="review_doc_type_select",
             )
             doc_type = dict(_REVIEW_DOC_TYPE_OPTIONS)[label]
@@ -1434,7 +1528,11 @@ def render_doc_review():
                 f"⚠️ You've used all {MAX_RUNS_PER_SESSION} free runs for this session. "
                 "Refresh the page to start a new session."
             )
-        elif st.button("🤖 Generate narrative review", use_container_width=True, type="primary"):
+        elif st.session_state.pop("review_narrative_pending", False):
+            # Set by the button below + st.rerun(), so this run's sidebar
+            # already rendered with mode switching locked (see
+            # _generation_in_progress()). Popped up front: an interrupted
+            # run can never loop back into a second, quota-burning call.
             _enforce_daily_quota()
             st.session_state.run_count += 1
             agent = st.session_state.get("agent")
@@ -1476,6 +1574,9 @@ def render_doc_review():
                 f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
                 for c in chunks
             })
+            st.rerun()
+        elif st.button("🤖 Generate narrative review", use_container_width=True, type="primary"):
+            st.session_state.review_narrative_pending = True
             st.rerun()
     else:
         if st.session_state.review_narrative:
@@ -1555,7 +1656,6 @@ def render_maturity_assessment():
     LLM narrative around those already-computed findings and saves an
     Article-50(2)-marked report, mirroring render_doc_review()'s save/PDF
     conventions."""
-    MAX_RUNS_PER_SESSION = 3  # mirrors render_doc_review()'s per-session cap
 
     from components import build_content_polish_css, build_output_eyebrow_html
     from theme import DARK_TOKENS, LIGHT_TOKENS
@@ -1667,7 +1767,11 @@ def render_maturity_assessment():
                 f"⚠️ You've used all {MAX_RUNS_PER_SESSION} free runs for this session. "
                 "Refresh the page to start a new session."
             )
-        elif st.button("🤖 Generate narrative assessment", use_container_width=True, type="primary"):
+        elif st.session_state.pop("maturity_narrative_pending", False):
+            # Set by the button below + st.rerun(), so this run's sidebar
+            # already rendered with mode switching locked (see
+            # _generation_in_progress()). Popped up front: an interrupted
+            # run can never loop back into a second, quota-burning call.
             _enforce_daily_quota()
             st.session_state.run_count += 1
             agent = st.session_state.get("agent")
@@ -1705,6 +1809,9 @@ def render_maturity_assessment():
                 f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
                 for c in chunks
             })
+            st.rerun()
+        elif st.button("🤖 Generate narrative assessment", use_container_width=True, type="primary"):
+            st.session_state.maturity_narrative_pending = True
             st.rerun()
     else:
         if st.session_state.maturity_narrative:
@@ -1816,6 +1923,10 @@ def main():
             "Claude Desktop, and other MCP clients — see the sidebar's **Use QAI in your AI tools "
             "(MCP)** panel."
         )
+
+    for _key in _PERSISTED_WIDGET_KEYS:
+        if _key in st.session_state:
+            st.session_state[_key] = st.session_state[_key]
 
     render_sidebar()
 
