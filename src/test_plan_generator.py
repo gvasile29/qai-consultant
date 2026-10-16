@@ -14,6 +14,7 @@ from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 from logger import get_logger
+from output_guards import CITATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
 
@@ -49,6 +50,8 @@ RISK REGISTER (use this to inform test priorities and resource allocation):
 RELEVANT QA KNOWLEDGE BASE:
 {knowledge_context}
 
+{GROUNDING_RULES}
+{CITATION_RULES}
 Generate a Test Plan using EXACTLY this structure:
 
 # Test Plan — {context.project_name}

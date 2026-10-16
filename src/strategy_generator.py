@@ -22,6 +22,7 @@ from risk_analyzer import RiskAnalyzer
 from test_plan_generator import TestPlanGenerator
 from effort_estimator import EffortEstimator
 from logger import get_logger
+from output_guards import CITATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
 
@@ -55,6 +56,8 @@ PROJECT CONTEXT:
 RELEVANT QA KNOWLEDGE BASE:
 {knowledge_context}
 
+{GROUNDING_RULES}
+{CITATION_RULES}
 Generate a Test Strategy document using EXACTLY this structure:
 
 # Test Strategy — {context.project_name}

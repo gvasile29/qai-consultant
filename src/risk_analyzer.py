@@ -16,6 +16,7 @@ from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 from logger import get_logger
+from output_guards import CITATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
 
@@ -57,6 +58,8 @@ PROJECT CONTEXT:
 RELEVANT QA KNOWLEDGE BASE:
 {knowledge_context}
 {execution_data_block}
+{GROUNDING_RULES}
+{CITATION_RULES}
 Generate a Risk Register using EXACTLY this structure:
 
 # Risk Register — {context.project_name}

@@ -13,6 +13,7 @@ from langchain_core.documents import Document
 from pinecone import Pinecone
 from kb_config import EMBEDDING_MODEL
 from logger import get_logger, setup_logging
+from output_guards import sanitize_llm_markdown
 from mistralai.client import Mistral
 from openai import OpenAI
 
@@ -26,10 +27,12 @@ logger = get_logger(__name__)
 _BR_TAG = re.compile(r"</?br\s*/?>\s*-?\s*", re.IGNORECASE)
 
 
-def clean_markdown_html(text: str) -> str:
+def clean_markdown_html(text: str, source_text: Optional[str] = None) -> str:
     """Replace literal <br>/<br/>/</br> tags (optionally followed by a stray '-'
-    bullet marker) with a plain-text separator that reads fine inline."""
-    return _BR_TAG.sub("; ", text)
+    bullet marker) with a plain-text separator that reads fine inline, then apply
+    output_guards (stray ``**``, standards overstatements, and -- when
+    ``source_text`` is the prompt the text answers -- unverifiable section refs)."""
+    return sanitize_llm_markdown(_BR_TAG.sub("; ", text), source_text)
 
 
 def _get_secret(key: str) -> str:
@@ -406,7 +409,7 @@ class QAIAgent:
 
         logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)...")
         content = self._llm_client.chat(messages)
-        content = clean_markdown_html(content or "")
+        content = clean_markdown_html(content or "", source_text=prompt)
         logger.debug(f"Response received ({len(content)} chars)")
         return content
 
