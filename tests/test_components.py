@@ -404,3 +404,63 @@ def test_doc_review_input_tray_css_scopes_to_the_keyed_container():
     html = build_doc_review_input_tray_css(LIGHT_TOKENS)
     assert ".st-key-doc-review-input" in html
     assert LIGHT_TOKENS["surface"] in html
+
+
+# ── Landing CTAs, kick-off note & sidebar mode nav ─────────────────────────
+
+def test_app_modes_order_and_ids():
+    from components import APP_MODES
+    assert [m[0] for m in APP_MODES] == ["strategy", "doc_review", "maturity"]
+    assert [m[1] for m in APP_MODES] == ["01", "02", "03"]
+
+
+def test_landing_note_names_all_four_documents_without_em_dash():
+    from components import build_landing_note_html
+    for tokens in (LIGHT_TOKENS, DARK_TOKENS):
+        html = build_landing_note_html(tokens)
+        assert "four baseline documents" in html
+        for doc in ("Risk Register", "Effort Estimation", "Test Strategy", "Test Plan"):
+            assert doc in html
+        assert "—" not in html
+        assert tokens["accent"] in html
+
+
+def test_landing_cta_css_repaints_primary_with_accent_and_surface_label():
+    from components import build_landing_cta_css
+    for tokens in (LIGHT_TOKENS, DARK_TOKENS):
+        css = build_landing_cta_css(tokens)
+        assert ".st-key-landing-cta" in css
+        primary = [line for line in css.splitlines() if 'stBaseButton-primary"] {' in line][0]
+        assert f"background: {tokens['accent']}" in primary
+        assert f"color: {tokens['surface']}" in primary
+        hover = [line for line in css.splitlines() if 'stBaseButton-primary"]:hover' in line][0]
+        assert f"color: {tokens['surface']}" in hover
+        assert "#FF4B4B" not in css
+
+
+def test_landing_details_css_is_scoped():
+    from components import build_landing_details_css
+    css = build_landing_details_css(DARK_TOKENS)
+    rules = [line for line in css.splitlines() if "{" in line and "<style>" not in line]
+    assert rules and all(line.startswith(".st-key-landing-details") for line in rules)
+
+
+def test_sidebar_nav_css_indexes_every_mode():
+    from components import APP_MODES, build_sidebar_nav_css
+    css = build_sidebar_nav_css(DARK_TOKENS, None)
+    for mode_id, idx, _label in APP_MODES:
+        assert f'.st-key-nav-{mode_id} button p::before {{ content: "{idx}"' in css
+    assert "button:disabled" not in css  # no active mode on the landing page
+
+
+def test_sidebar_nav_css_marks_only_the_active_mode():
+    from components import build_sidebar_nav_css
+    css = build_sidebar_nav_css(LIGHT_TOKENS, "maturity")
+    assert ".st-key-nav-maturity button:disabled" in css
+    assert ".st-key-nav-strategy button:disabled" not in css
+    assert ".st-key-nav-doc_review button:disabled" not in css
+
+
+def test_sidebar_nav_css_ignores_unknown_mode():
+    from components import build_sidebar_nav_css
+    assert "button:disabled" not in build_sidebar_nav_css(LIGHT_TOKENS, "bogus")

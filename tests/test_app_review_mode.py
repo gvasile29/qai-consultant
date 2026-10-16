@@ -110,10 +110,13 @@ def test_reset_review_mode_state_safe_when_keys_absent():
 # ── Intro entry point ─────────────────────────────────────────────────────────────
 
 def test_intro_has_review_document_entry_point():
+    import app
     fn = extract_function(read_app_source(), "render_intro")
-    assert 'current_step = "doc_review"' in fn, \
-        "render_intro() must have a button that sets current_step to 'doc_review'"
-    assert "Review an existing QA document" in fn
+    assert "_go_to(_mode_id)" in fn, \
+        "render_intro() must route its mode buttons through _go_to()"
+    from components import APP_MODES
+    assert "doc_review" in [m[0] for m in APP_MODES]
+    assert app._LANDING_CTA_LABELS["doc_review"] == "Review an existing QA document"
 
 
 # ── main() dispatch ───────────────────────────────────────────────────────────────

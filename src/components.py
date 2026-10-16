@@ -577,3 +577,107 @@ def build_doc_review_input_tray_css(tokens: dict) -> str:
 }}
 </style>
 """
+
+
+# ── Landing CTAs, kick-off note & sidebar mode nav ─────────────────────────
+# Brings the last Streamlit-default widgets on the landing page (st.info,
+# the two st.expanders, the default-red buttons) into the Calibration Bench
+# look, and styles the sidebar's three-mode switcher. The buttons and
+# expanders stay real Streamlit widgets (they need on-click/rerun and tabs);
+# only their CSS changes, scoped per instance via st.container(key=...) ->
+# .st-key-<key> so nothing else in the app is affected.
+
+# (mode id, two-digit index, label) -- the order is the display order on
+# both the landing page and the sidebar. app.py owns what each mode does.
+APP_MODES = (
+    ("strategy", "01", "Generate a test strategy"),
+    ("doc_review", "02", "Review a QA document"),
+    ("maturity", "03", "Assess QA maturity"),
+)
+
+
+def build_landing_note_html(tokens: dict) -> str:
+    """Pure function: token dict -> the "best used at project kick-off"
+    note that replaces the landing page's st.info() callout."""
+    return f"""
+<style>
+.landing-note {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-left: 2px solid {tokens['accent']}; border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 0.4rem 0 1.6rem; }}
+.landing-note .ln-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.5rem; }}
+.landing-note p {{ font-family: 'Plex Sans', sans-serif; font-size: 0.9rem; line-height: 1.6; color: {tokens['ink']}; margin: 0; }}
+.landing-note p + p {{ margin-top: 0.5rem; color: {tokens['ink_dim']}; }}
+.landing-note strong {{ font-weight: 600; }}
+</style>
+<div class="landing-note">
+  <div class="ln-eyebrow">&gt; best used at project kick-off</div>
+  <p>Early on there's no code, no architecture doc and no detailed spec to hand an AI assistant. That's the gap this fills: <strong>four baseline documents</strong> (Risk Register, Effort Estimation, Test Strategy, Test Plan) grounded in ISTQB, OWASP and ISO, before the first sprint.</p>
+  <p>Then drop them into Claude Code or your AI IDE as project context. The next round of output gets specific to your project instead of generic.</p>
+</div>
+"""
+
+
+def build_landing_cta_css(tokens: dict) -> str:
+    """Pure function: token dict -> CSS for the landing page's three mode
+    buttons inside st.container(key="landing-cta"). The primary button is
+    repainted from Streamlit's default red (which reads as this palette's
+    "fail" signal) to the accent, with a `surface`-colored label so the
+    label/fill contrast holds in both themes, hover included -- unlike the
+    red-fill case build_content_polish_css() has to work around."""
+    return f"""
+<style>
+.st-key-landing-cta button {{ min-height: 3rem; border-radius: 8px; font-family: 'Plex Sans', sans-serif; }}
+.st-key-landing-cta button[data-testid="stBaseButton-primary"] {{ background: {tokens['accent']}; border: 1px solid {tokens['accent']}; color: {tokens['surface']}; }}
+.st-key-landing-cta button[data-testid="stBaseButton-primary"] p {{ font-weight: 600; color: {tokens['surface']}; }}
+.st-key-landing-cta button[data-testid="stBaseButton-primary"]:hover {{ filter: brightness(1.08); border-color: {tokens['accent']}; color: {tokens['surface']}; }}
+.st-key-landing-cta button[data-testid="stBaseButton-secondary"] {{ background: transparent; border: 1px solid {tokens['line']}; color: {tokens['ink']}; }}
+.st-key-landing-cta button[data-testid="stBaseButton-secondary"]:hover {{ border-color: {tokens['accent']}; color: {tokens['accent']}; transition: border-color 0.15s ease-out, color 0.15s ease-out; }}
+.st-key-landing-cta button[data-testid="stBaseButton-secondary"]:hover p {{ color: {tokens['accent']}; }}
+</style>
+"""
+
+
+def build_landing_details_css(tokens: dict) -> str:
+    """Pure function: token dict -> CSS for the landing page's two
+    st.expanders inside st.container(key="landing-details"): mono
+    uppercase summary labels (same treatment as the output screens' tab
+    bar), themed border, accent on hover."""
+    return f"""
+<style>
+.st-key-landing-details [data-testid="stExpander"] details {{ border: 1px solid {tokens['line']}; border-radius: 8px; }}
+.st-key-landing-details [data-testid="stExpander"] summary p {{ font-family: 'Plex Mono', monospace; font-size: 0.76rem; letter-spacing: 0.05em; text-transform: uppercase; }}
+.st-key-landing-details [data-testid="stExpander"] summary:hover,
+.st-key-landing-details [data-testid="stExpander"] summary:hover p {{ color: {tokens['accent']}; transition: color 0.15s ease-out; }}
+.st-key-landing-details [data-testid="stExpander"] details:hover {{ border-color: {tokens['accent']}; }}
+</style>
+"""
+
+
+def build_sidebar_nav_css(tokens: dict, active_mode: str | None) -> str:
+    """Pure function: token dict + the current mode id (or None on the
+    landing page) -> CSS for the sidebar's mode buttons, each rendered by
+    app.py with key=f"nav-{mode_id}". Adds the 01/02/03 index before each
+    label and paints the active mode's (disabled) button as "you are here";
+    any other disabled button (the generation lock) keeps Streamlit's
+    default greyed-out look."""
+    index_rules = "\n".join(
+        f'.st-key-nav-{mode_id} button p::before {{ content: "{idx}"; font-family: \'Plex Mono\', monospace; font-size: 0.68rem; color: {tokens["ink_dim"]}; margin-right: 0.55rem; }}'
+        for mode_id, idx, _label in APP_MODES
+    )
+    active_rule = ""
+    if active_mode in {m[0] for m in APP_MODES}:
+        active_rule = f"""
+.st-key-nav-{active_mode} button:disabled {{ opacity: 1; cursor: default; background: {tokens['surface']}; border: 1px solid {tokens['accent']}; border-left: 3px solid {tokens['accent']}; color: {tokens['accent']}; }}
+.st-key-nav-{active_mode} button:disabled p {{ color: {tokens['accent']}; font-weight: 600; }}
+.st-key-nav-{active_mode} button:disabled p::before {{ color: {tokens['accent']}; }}
+.st-key-nav-{active_mode} button:disabled::after {{ content: "\\25CF"; position: absolute; right: 0.8rem; font-size: 0.6rem; color: {tokens['accent']}; }}
+"""
+    return f"""
+<style>
+[class*="st-key-nav-"] button {{ justify-content: flex-start; text-align: left; position: relative; }}
+[class*="st-key-nav-"] button > div {{ justify-content: flex-start; width: 100%; }}
+{index_rules}
+{active_rule}
+.sidebar-nav-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.1rem; }}
+.sidebar-nav-lock {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; color: {tokens['hold']}; margin-top: 0.1rem; }}
+</style>
+<div class="sidebar-nav-eyebrow">&gt; modes</div>
+"""
