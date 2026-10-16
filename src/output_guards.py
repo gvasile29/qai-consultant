@@ -176,10 +176,43 @@ def strip_unverifiable_section_refs(text: str, source_text: Optional[str]) -> st
     return _SECTION_REF.sub(_repl, text)
 
 
+_SOURCE_LABEL = re.compile(r"\[Source (\d+) —")
+_SOURCE_CITE = re.compile(r"\s?\[Source (\d+)\]")
+_QUOTE = re.compile(r"[\"“]([^\"”\n]{40,300})[\"”]")
+
+
+def _normalize(s: str) -> str:
+    return re.sub(r"[\W_]+", " ", s.lower()).strip()
+
+
+def drop_invalid_source_citations(text: str, source_text: Optional[str]) -> str:
+    """Remove ``[Source N]`` markers whose N is not a source actually present in
+    the prompt's knowledge block (no-op when the prompt carried none)."""
+    valid = {int(n) for n in _SOURCE_LABEL.findall(source_text or "")}
+    if not valid:
+        return text
+    return _SOURCE_CITE.sub(lambda m: m.group(0) if int(m.group(1)) in valid else "", text)
+
+
+def unquote_unverified_quotes(text: str, source_text: Optional[str]) -> str:
+    """A long quoted passage that does not appear verbatim in the prompt (project
+    context or retrieved knowledge) was invented or reworded by the model, so
+    drop the quotation marks and let it read as the paraphrase it is."""
+    if not source_text or not _SOURCE_LABEL.search(source_text):
+        return text
+    haystack = _normalize(source_text)
+
+    def _repl(m: "re.Match") -> str:
+        return m.group(0) if _normalize(m.group(1)) in haystack else m.group(1)
+
+    return _QUOTE.sub(_repl, text)
+
 def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
     """Apply every deterministic guard. ``source_text`` is the prompt (or its
     knowledge block) the answer was generated from."""
     text = fix_stray_emphasis(text)
     text = soften_standards_claims(text)
     text = qualify_absence_claims(text, project_context_of(source_text))
-    return strip_unverifiable_section_refs(text, source_text)
+    text = strip_unverifiable_section_refs(text, source_text)
+    text = drop_invalid_source_citations(text, source_text)
+    return unquote_unverified_quotes(text, source_text)

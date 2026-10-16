@@ -217,3 +217,27 @@ def test_mandatory_attributed_to_standards_is_downgraded_only_there():
     )
     assert "mandatory" not in out and "recommended element" in out
     assert "Login is required for billing" in out
+
+
+_KB_PROMPT = (
+    "PROJECT CONTEXT:\nx\n\nRELEVANT QA KNOWLEDGE BASE:\n"
+    "[Source 1 — Standard: a.md]\nRisk based testing prioritises test effort by risk exposure.\n"
+    "[Source 2 — Standard: b.md]\nother"
+)
+
+
+def test_invalid_source_numbers_are_dropped_valid_kept():
+    out = g.sanitize_llm_markdown("Good [Source 1] and bad [Source 7].", _KB_PROMPT)
+    assert "[Source 1]" in out and "Source 7" not in out
+
+
+def test_unverified_long_quote_is_unquoted_verbatim_quote_kept():
+    fake = 'ISTQB says "every release must be preceded by a full regression of all modules always".'
+    real = 'KB says "Risk based testing prioritises test effort by risk exposure".'
+    assert '"' not in g.sanitize_llm_markdown(fake, _KB_PROMPT)
+    assert '"Risk based testing prioritises test effort by risk exposure"' in g.sanitize_llm_markdown(real, _KB_PROMPT)
+
+
+def test_quote_and_source_checks_are_noops_without_a_knowledge_block():
+    text = 'He said "this long quote has no knowledge block to be checked against at all" [Source 9]'
+    assert g.sanitize_llm_markdown(text, "no kb here") == text
