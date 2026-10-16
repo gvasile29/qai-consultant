@@ -22,6 +22,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 from logger import get_logger
+from output_guards import fix_stray_emphasis
 
 logger = get_logger(__name__)
 from typing import Optional
@@ -91,6 +92,11 @@ Write the following sections (keep each concise — 3-5 sentences max):
 """
         narrative = self.agent.ask(narrative_prompt)
         exec_summary, assumptions, recommendations = self._parse_narrative(narrative)
+        # Parsing strips section headers and can leave a lone ** behind after ask()
+        # already sanitized the whole narrative, so clean each parsed piece again.
+        exec_summary, assumptions, recommendations = (
+            fix_stray_emphasis(s) for s in (exec_summary, assumptions, recommendations)
+        )
 
         # Assemble final report
         report = f"""# Effort Estimation Report — {context.project_name}

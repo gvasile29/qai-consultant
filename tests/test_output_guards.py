@@ -159,3 +159,47 @@ def test_dialogue_does_not_use_st_form():
     fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "render_dialogue")
     calls = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
     assert "st.form" not in calls and "st.form_submit_button" not in calls
+
+
+def test_absence_contradicting_context_gets_contradiction_note():
+    prompt = "PROJECT CONTEXT:\nexisting_automation: Playwright E2E test suite\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    out = g.sanitize_llm_markdown("**No dedicated regression suite** here", prompt)
+    assert "related coverage" in out and "not stated" not in out
+    assert g.lint_output(out) == []
+
+
+def test_lint_flags_defects_and_passes_sanitized_text():
+    bad = "x -> **risk\nNo prior load data.\nISTQB-mandated"
+    assert len(g.lint_output(bad)) == 3
+    assert g.lint_output(g.sanitize_llm_markdown(bad)) == []
+
+
+def _multipliers(automation: str) -> list:
+    from effort_core import compute_estimation
+
+    ctx = ProjectContext(
+        project_name="P", project_description="d", project_type="Web Application",
+        tech_stack="x", methodology="Agile", timeline="6 months", team_qa_size="2",
+        team_dev_size="6", known_risks="r", existing_automation=automation,
+        compliance_requirements="GDPR",
+    )
+    return [name for name, _ in compute_estimation(ctx).multipliers]
+
+
+def test_canoe_does_not_trigger_greenfield_multiplier():
+    # "no" matched as a substring of "CANoe" and invented a +20% multiplier.
+    names = _multipliers("CANoe scripted test automation, Google Test")
+    assert not any("No existing automation" in n for n in names)
+
+
+def test_genuine_no_automation_still_triggers_greenfield_multiplier():
+    for text in ("None", "no automation yet", "Nothing", "greenfield"):
+        assert any("No existing automation" in n for n in _multipliers(text)), text
+
+
+def test_effort_narrative_sections_are_emphasis_clean():
+    import inspect
+
+    import effort_estimator
+
+    assert "fix_stray_emphasis" in inspect.getsource(effort_estimator)

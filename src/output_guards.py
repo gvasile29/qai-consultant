@@ -87,20 +87,54 @@ _ABSENCE_CLAIM = re.compile(
 _ABSENCE_QUALIFIER = " (not stated in the project context)"
 
 
-def qualify_absence_claims(text: str) -> str:
+_CONTEXT_BLOCK = re.compile(
+    r"PROJECT CONTEXT:\s*(.*?)(?=\n\s*(?:RELEVANT QA KNOWLEDGE BASE|RISK REGISTER|MEASURED EXECUTION DATA)|\Z)",
+    re.DOTALL,
+)
+_CLAIM_FILLER = {"dedicated", "prior", "existing", "formal", "documented"}
+_CONTRADICTION_NOTE = " (project context lists related coverage - assess its adequacy, not its absence)"
+
+
+def project_context_of(prompt: Optional[str]) -> str:
+    """The PROJECT CONTEXT block of a generator prompt ("" when absent)."""
+    m = _CONTEXT_BLOCK.search(prompt or "")
+    return m.group(1).lower() if m else ""
+
+
+def qualify_absence_claims(text: str, context_text: str = "") -> str:
     """The model keeps asserting unprovided absences as fact ("No dedicated
     security specialist"). Whether something is missing is unknowable from the
     intake, so append an explicit "not stated" qualifier -- turning a false
-    finding into an honest gap. Idempotent."""
+    finding into an honest gap. When the claim shares a content word with the
+    project context (e.g. "no dedicated regression suite" vs a listed "E2E test
+    suite"), the context actively contradicts it, so say that instead.
+    Idempotent."""
 
     def _repl(m: "re.Match") -> str:
-        tail = text[m.end():m.end() + 40].lstrip("* ")
-        if tail.startswith("(not stated") or "not stated" in m.group(0):
+        tail = text[m.end():m.end() + 80].lstrip("* ")
+        if tail.startswith(("(not stated", "(project context")) or "not stated" in m.group(0):
             return m.group(0)
+        words = {w for w in re.findall(r"[a-z0-9]{5,}", m.group(0).lower()) if w not in _CLAIM_FILLER}
+        if context_text and any(w in context_text for w in words):
+            return m.group(0) + _CONTRADICTION_NOTE
         return m.group(0) + _ABSENCE_QUALIFIER
 
     return _ABSENCE_CLAIM.sub(_repl, text)
 
+
+def lint_output(text: str, context_text: str = "") -> list:
+    """Problems that must never survive sanitizing (used by the live smoke
+    script and tests as the "won't happen again" gate)."""
+    problems = []
+    if any(line.count("**") % 2 for line in text.split("\n") if not line.lstrip().startswith("```")):
+        problems.append("lone ** markdown marker")
+    if _MANDATE.search(text) or _UNUSABLE.search(text):
+        problems.append("standards overstatement (mandated/unusable)")
+    for m in _ABSENCE_CLAIM.finditer(text):
+        tail = text[m.end():m.end() + 80].lstrip("* ")
+        if not tail.startswith(("(not stated", "(project context")) and "not stated" not in m.group(0):
+            problems.append(f"unqualified absence claim: {m.group(0)!r}")
+    return problems
 
 def soften_standards_claims(text: str) -> str:
     """Rewrite known overstatements about what standards mandate."""
@@ -126,5 +160,5 @@ def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
     knowledge block) the answer was generated from."""
     text = fix_stray_emphasis(text)
     text = soften_standards_claims(text)
-    text = qualify_absence_claims(text)
+    text = qualify_absence_claims(text, project_context_of(source_text))
     return strip_unverifiable_section_refs(text, source_text)
