@@ -222,8 +222,8 @@ def _reset_maturity_mode_state():
 # state (their session-state keys are disjoint) and resumes the strategy
 # flow at the step the user left. Streamlit drops a widget's key on any run
 # where the widget isn't rendered, so main() re-pins _PERSISTED_WIDGET_KEYS
-# every run. Not covered: answers typed into the dialogue's st.form but not
-# yet submitted (the browser only sends them on submit) and file uploads
+# every run. Not covered: answers typed into the dialogue but not yet committed (Enter/blur)
+# and file uploads
 # (st.file_uploader can't be set via session state). Start Over / Generate
 # Another Strategy remain the explicit "clear everything" actions.
 _PERSISTED_WIDGET_KEYS = (
@@ -657,7 +657,10 @@ def render_dialogue():
                 st.session_state[f"input_{field}"] = value
         st.rerun()
 
-    with st.form("dialogue_form"):
+    # Plain container, not st.form: a form's first Enter raced the widget-value
+    # sync (stale value submitted, progress stuck at 0/11 until a 2nd Enter).
+    # Without a form every answer commits on Enter/blur and reruns.
+    with st.container():
         for idx, question in enumerate(QUESTIONS, start=1):
             key = question["key"]
             st.markdown(
@@ -689,7 +692,7 @@ def render_dialogue():
         )
         st.markdown("###")
 
-        submitted = st.form_submit_button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
+        submitted = st.button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
 
     _answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
     _progress_slot.markdown(build_dialogue_header_html(_dialogue_tokens, _answered, total), unsafe_allow_html=True)

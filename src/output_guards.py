@@ -22,6 +22,9 @@ GROUNDING RULES (these override any instinct to sound specific):
   verify with the team", or "Assuming <x> (not stated in the project context)". Never
   write the absence of something as a finding ("X is not configured", "there is no Y",
   "no prior Z exists") unless the context literally says so.
+- Before writing that something is missing ("no dedicated X", "no regression suite"),
+  re-read the PROJECT CONTEXT: if it lists that thing (e.g. an existing automation suite),
+  the claim is false. Describe weaknesses of what IS listed instead of denying it exists.
 - Use markdown bold only in matched pairs; never leave a lone ** (e.g. after an arrow).
 - Risks may be conditional ("If <x> is not in place, ...") but must not assert that <x>
   is missing.
@@ -77,6 +80,28 @@ def fix_stray_emphasis(text: str) -> str:
     return "\n".join(out)
 
 
+_ABSENCE_CLAIM = re.compile(
+    r"\bno (?:dedicated|prior|existing|formal|documented) [^.\n;:*()|]{2,60}?(?=\s*[.\n;:*(),|]|$)",
+    re.IGNORECASE,
+)
+_ABSENCE_QUALIFIER = " (not stated in the project context)"
+
+
+def qualify_absence_claims(text: str) -> str:
+    """The model keeps asserting unprovided absences as fact ("No dedicated
+    security specialist"). Whether something is missing is unknowable from the
+    intake, so append an explicit "not stated" qualifier -- turning a false
+    finding into an honest gap. Idempotent."""
+
+    def _repl(m: "re.Match") -> str:
+        tail = text[m.end():m.end() + 40].lstrip("* ")
+        if tail.startswith("(not stated") or "not stated" in m.group(0):
+            return m.group(0)
+        return m.group(0) + _ABSENCE_QUALIFIER
+
+    return _ABSENCE_CLAIM.sub(_repl, text)
+
+
 def soften_standards_claims(text: str) -> str:
     """Rewrite known overstatements about what standards mandate."""
     text = _MANDATE.sub(lambda m: f"{m.group(1)}-recommended", text)
@@ -101,4 +126,5 @@ def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
     knowledge block) the answer was generated from."""
     text = fix_stray_emphasis(text)
     text = soften_standards_claims(text)
+    text = qualify_absence_claims(text)
     return strip_unverifiable_section_refs(text, source_text)

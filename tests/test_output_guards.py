@@ -134,3 +134,28 @@ def test_signal_ledger_label_never_breaks_mid_word():
 def test_landing_time_claim_is_not_two_minutes():
     text = (SRC / "components.py").read_text(encoding="utf-8")
     assert "~2 min" not in text
+
+
+def test_absence_claims_get_not_stated_qualifier_idempotently():
+    once = g.qualify_absence_claims("- **No dedicated security specialist**.\nNo Dedicated Security Expert: outsource")
+    assert once.count("(not stated in the project context)") == 2
+    assert g.qualify_absence_claims(once) == once
+
+
+def test_sanitizer_qualifies_absence_claims():
+    assert "not stated" in g.sanitize_llm_markdown("There is no prior load data.")
+
+
+def test_absence_qualifier_stays_inside_table_cell():
+    out = g.qualify_absence_claims("| Tool | No dedicated compliance tooling           |\n")
+    assert out.count("|") == 3
+    assert out.index("(not stated") < out.rindex("|")
+
+
+def test_dialogue_does_not_use_st_form():
+    # st.form's first Enter raced the widget-value sync (progress stuck at
+    # 0/11 until a second Enter); answers must commit on Enter/blur instead.
+    tree = ast.parse((SRC / "app.py").read_text(encoding="utf-8"))
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "render_dialogue")
+    calls = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert "st.form" not in calls and "st.form_submit_button" not in calls
