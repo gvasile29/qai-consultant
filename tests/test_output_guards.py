@@ -203,3 +203,10 @@ def test_effort_narrative_sections_are_emphasis_clean():
     import effort_estimator
 
     assert "fix_stray_emphasis" in inspect.getsource(effort_estimator)
+
+def test_app_has_no_st_image_calls_left():
+    # Every st.image() went through the media-file manager and could render as
+    # a broken image with alt text "0"; images are inlined as data URIs instead.
+    tree = ast.parse((SRC / "app.py").read_text(encoding="utf-8"))
+    calls = [ast.unparse(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    assert "st.image" not in calls

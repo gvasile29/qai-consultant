@@ -29,6 +29,19 @@ from risk_ledger import severity_tier
 
 # ── Ledger: score/severity HTML (Signal Ledger, Risk Ledger table) ─────────
 
+def inline_image_html(data: bytes, mime: str, alt: str, width_px: int, css_class: str = "") -> str:
+    """An <img> with the file embedded as a base64 data URI. Unlike st.image(),
+    which serves through Streamlit's media-file manager (entries can expire and
+    leave a broken image with the bare index "0" as alt text), nothing here can
+    go missing between reruns, and the alt text is ours."""
+    b64 = _base64.b64encode(data).decode("ascii")
+    cls = f' class="{_html.escape(css_class, quote=True)}"' if css_class else ""
+    return (
+        f'<img{cls} alt="{_html.escape(alt, quote=True)}" width="{int(width_px)}" '
+        f'src="data:{mime};base64,{b64}">'
+    )
+
+
 def header_logo_html(png_bytes: bytes, alt: str = "QAI Consultant", width_px: int = 280) -> str:
     """The top-of-page logo as an inline base64 <img>. st.image() serves files
     through Streamlit's media-file manager, whose entries can expire across

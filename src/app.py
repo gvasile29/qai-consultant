@@ -398,7 +398,16 @@ def render_sidebar():
             if _theme_type == "dark"
             else "eu_ai_generated_icon.svg"
         )
-        st.image(str(EU_AI_ICON_DIR / _eu_icon_svg), width=140)
+        from components import inline_image_html
+        st.markdown(
+            inline_image_html(
+                (EU_AI_ICON_DIR / _eu_icon_svg).read_bytes(),
+                "image/svg+xml",
+                "EU AI Act: fully AI-generated content",
+                140,
+            ),
+            unsafe_allow_html=True,
+        )
         st.info(AI_INTERACTION_NOTICE)
 
         from components import APP_MODES, build_sidebar_nav_css

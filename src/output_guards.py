@@ -116,7 +116,8 @@ def qualify_absence_claims(text: str, context_text: str = "") -> str:
             return m.group(0)
         words = {w for w in re.findall(r"[a-z0-9]{5,}", m.group(0).lower()) if w not in _CLAIM_FILLER}
         if context_text and any(w in context_text for w in words):
-            return m.group(0) + _CONTRADICTION_NOTE
+            # The context contradicts "no ..." outright, so don't keep the denial.
+            return re.sub(r"^no\b", "Limited", m.group(0), flags=re.I) + _CONTRADICTION_NOTE
         return m.group(0) + _ABSENCE_QUALIFIER
 
     return _ABSENCE_CLAIM.sub(_repl, text)
