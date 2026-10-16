@@ -1160,6 +1160,10 @@ def render_strategy():
         # All 4 stages (and the PDF-bytes precompute) finished this pass —
         # only NOW is it safe to stop re-entering this block on a rerun.
         st.session_state.results_complete = True
+        # The sidebar rendered at the start of this run with mode switching
+        # locked (_generation_in_progress()); rerun so it renders unlocked.
+        # Cheap: every stage and the PDF bytes are reused from session state.
+        st.rerun()
 
     # ── Executive Readout (deterministic "so what?" above the tabs) ───────
     from executive_readout import build_readout
