@@ -185,3 +185,13 @@ def test_both_full_reset_lists_clear_strategy_resume_step():
     source = APP_PY.read_text(encoding="utf-8")
     assert '"strategy_resume_step"' in extract_function(source, "render_sidebar")
     assert '"strategy_resume_step"' in extract_function(source, "render_strategy")
+
+
+def test_strategy_reruns_after_completion_so_the_sidebar_unlocks():
+    """The sidebar renders before render_strategy() finishes; without a rerun
+    after results_complete is set, it stays locked until the next click."""
+    body = extract_function(APP_PY.read_text(encoding="utf-8"), "render_strategy")
+    done = body.index("st.session_state.results_complete = True")
+    assert body[done:].lstrip().split("\n")[0].startswith("st.session_state.results_complete = True")
+    following = [line.strip() for line in body[done:].split("\n")[1:] if line.strip() and not line.strip().startswith("#")]
+    assert following[0] == "st.rerun()"
