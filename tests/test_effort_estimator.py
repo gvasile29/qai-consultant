@@ -555,7 +555,7 @@ def test_effort_tab_download_button():
     source = read_app_source()
     fn = extract_function(source, "render_strategy")
 
-    assert '"⬇️ Download (.md)"' in fn, \
+    assert '"⬇️ Download Effort Estimation (.md)"' in fn, \
         "Effort Estimation download button label not found"
     assert 'effort_estimation_' in fn, \
         "effort_estimation_ filename prefix not found"

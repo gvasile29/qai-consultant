@@ -4,6 +4,7 @@ Browser-based interface for generating Test Strategy documents.
 """
 
 import os
+import re
 import sys
 
 
@@ -356,7 +357,8 @@ def load_kb_sidebar_bullets() -> list[str]:
 MCP_ANNOUNCEMENT_BODY = """
 QAI Consultant is also available as a local MCP server — call it directly from
 Claude Code, Claude Desktop, or any other MCP client that runs local servers,
-no API keys required:
+no API keys required (keyless, runs locally after a one-time embedding model
+download):
 
 ```
 uvx qai-consultant-mcp
@@ -368,8 +370,15 @@ It exposes standards-grounded knowledge retrieval (`retrieve_qa_knowledge`,
 analysis (`analyze_test_results`) and QA maturity assessment
 (`assess_qa_maturity`) as MCP tools, plus prompts for the project-intake
 interview and Risk Register / Test Strategy / Test Plan structures — so your
-own AI assistant can ground its QA work in this app's knowledge base, fully
-offline and keyless.
+own AI assistant can ground its QA work in this app's knowledge base. It is
+keyless and runs locally; the only network access it needs is the one-time
+embedding model download.
+
+**Telemetry:** anonymous usage telemetry is on by default (since v3.7.0). Each
+tool call sends the tool name, a success flag, duration, retrieval `k` and
+category, a few fixed small-enum fields, the package and Python version and the
+OS family, under a random per-run ID that is never stored. Never your queries or
+documents. Opt out with `QAI_TELEMETRY=0` or `DO_NOT_TRACK=1`.
 
 See the [GitHub repo](https://github.com/gvasile29/qai-consultant) for setup
 and client configuration.
@@ -635,6 +644,24 @@ The MCP server (v3.0+) is built from the same knowledge base and the same determ
         st.markdown(_adoption_html, unsafe_allow_html=True)
 
 
+def _apply_template(template_key: str) -> None:
+    """Pre-fill the dialogue from a template, keeping an already-entered
+    project name. Updates both state layers (answers[key] and the
+    input_<key> widget key) -- see CLAUDE.md's Streamlit widget-state gotcha."""
+    existing_name = (
+        st.session_state.get("input_project_name")
+        or st.session_state.answers.get("project_name")
+        or ""
+    ).strip()
+    for field, value in TEMPLATES[template_key].items():
+        if field == "label":
+            continue
+        if field == "project_name" and existing_name:
+            value = existing_name
+        st.session_state.answers[field] = value
+        st.session_state[f"input_{field}"] = value
+
+
 def render_dialogue():
     st.markdown("## 📋 Project Discovery")
     st.markdown("Answer the questions below to help QAI understand your project.")
@@ -661,10 +688,7 @@ def render_dialogue():
         key="template_selector",
     )
     if selected_template and st.button("Apply template", key="apply_template"):
-        for field, value in TEMPLATES[selected_template].items():
-            if field != "label":
-                st.session_state.answers[field] = value
-                st.session_state[f"input_{field}"] = value
+        _apply_template(selected_template)
         st.rerun()
 
     # Plain container, not st.form: a form's first Enter raced the widget-value
@@ -835,6 +859,8 @@ def render_review():
                 st.rerun()
 
     st.markdown("---")
+    from components import GENERATION_TIME_ESTIMATE
+    st.caption(f"Generating all 4 documents takes {GENERATION_TIME_ESTIMATE}.")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("← Go Back & Edit", use_container_width=True):
@@ -943,7 +969,12 @@ def render_strategy():
         )
         st.stop()
 
-    from components import build_content_polish_css, build_output_eyebrow_html, build_stage_sequence_html
+    from components import (
+        GENERATION_TIME_ESTIMATE,
+        build_content_polish_css,
+        build_output_eyebrow_html,
+        build_stage_sequence_html,
+    )
     from theme import DARK_TOKENS, LIGHT_TOKENS
 
     _strategy_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
@@ -952,6 +983,7 @@ def render_strategy():
     st.markdown("## 📄 Generated Test Strategy")
     st.markdown("---")
 
+    progress_placeholder = st.empty()
     stage_placeholder = st.empty()
 
     def _render_stages(active_key=None):
@@ -961,6 +993,18 @@ def render_strategy():
             ("Strategy", "strategy"),
             ("Plan", "test_plan"),
         ]
+        _full_names = {
+            "risk_register": "Risk Register", "effort_report": "Effort Estimation",
+            "strategy": "Test Strategy", "test_plan": "Test Plan",
+        }
+        _active_idx = next((i for i, (_l, k) in enumerate(order, start=1) if k == active_key), None)
+        if _active_idx is not None:
+            progress_placeholder.info(
+                f"Step {_active_idx} of {len(order)}: generating {_full_names[active_key]}. "
+                f"The full run takes {GENERATION_TIME_ESTIMATE}; keep this tab open."
+            )
+        else:
+            progress_placeholder.empty()
         stages = []
         for label, key in order:
             value = st.session_state.get(key)
@@ -1193,6 +1237,7 @@ def render_strategy():
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
 
     project_name = st.session_state.dialogue.get_context().project_name
+    safe_name = re.sub(r"[^\w\-.]", "_", project_name.strip()) or "project"
     _output_animate_class = " animate" if not st.session_state.get("output_intro_animated") else ""
     st.session_state.output_intro_animated = True
 
@@ -1215,9 +1260,9 @@ def render_strategy():
         dl_col1, dl_col2 = st.columns(2)
         with dl_col1:
             st.download_button(
-                label="⬇️ Download (.md)",
+                label="⬇️ Download Risk Register (.md)",
                 data=with_ai_footer(st.session_state.risk_register),
-                file_name=f"risk_register_{project_name}.md",
+                file_name=f"risk_register_{safe_name}.md",
                 on_click=_track_download,
                 args=("risk_register", "md"),
                 mime="text/markdown",
@@ -1226,9 +1271,9 @@ def render_strategy():
         with dl_col2:
             pdf_bytes = st.session_state.risk_pdf_bytes
             st.download_button(
-                label="⬇️ Download (.pdf)",
+                label="⬇️ Download Risk Register (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"risk_register_{project_name}.pdf",
+                file_name=f"risk_register_{safe_name}.pdf",
                 on_click=_track_download,
                 args=("risk_register", "pdf"),
                 mime="application/pdf",
@@ -1258,9 +1303,9 @@ def render_strategy():
         dl_col1, dl_col2 = st.columns(2)
         with dl_col1:
             st.download_button(
-                label="⬇️ Download (.md)",
+                label="⬇️ Download Effort Estimation (.md)",
                 data=with_ai_footer(st.session_state.effort_report),
-                file_name=f"effort_estimation_{project_name}.md",
+                file_name=f"effort_estimation_{safe_name}.md",
                 on_click=_track_download,
                 args=("effort_estimation", "md"),
                 mime="text/markdown",
@@ -1269,9 +1314,9 @@ def render_strategy():
         with dl_col2:
             pdf_bytes = st.session_state.effort_pdf_bytes
             st.download_button(
-                label="⬇️ Download (.pdf)",
+                label="⬇️ Download Effort Estimation (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"effort_estimation_{project_name}.pdf",
+                file_name=f"effort_estimation_{safe_name}.pdf",
                 on_click=_track_download,
                 args=("effort_estimation", "pdf"),
                 mime="application/pdf",
@@ -1288,9 +1333,9 @@ def render_strategy():
         dl_col1, dl_col2 = st.columns(2)
         with dl_col1:
             st.download_button(
-                label="⬇️ Download (.md)",
+                label="⬇️ Download Test Strategy (.md)",
                 data=with_ai_footer(st.session_state.strategy),
-                file_name=f"test_strategy_{project_name}.md",
+                file_name=f"test_strategy_{safe_name}.md",
                 on_click=_track_download,
                 args=("test_strategy", "md"),
                 mime="text/markdown",
@@ -1300,9 +1345,9 @@ def render_strategy():
         with dl_col2:
             pdf_bytes = st.session_state.strategy_pdf_bytes
             st.download_button(
-                label="⬇️ Download (.pdf)",
+                label="⬇️ Download Test Strategy (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"test_strategy_{project_name}.pdf",
+                file_name=f"test_strategy_{safe_name}.pdf",
                 on_click=_track_download,
                 args=("test_strategy", "pdf"),
                 mime="application/pdf",
@@ -1319,9 +1364,9 @@ def render_strategy():
         dl_col1, dl_col2 = st.columns(2)
         with dl_col1:
             st.download_button(
-                label="⬇️ Download (.md)",
+                label="⬇️ Download Test Plan (.md)",
                 data=with_ai_footer(st.session_state.test_plan),
-                file_name=f"test_plan_{project_name}.md",
+                file_name=f"test_plan_{safe_name}.md",
                 on_click=_track_download,
                 args=("test_plan", "md"),
                 mime="text/markdown",
@@ -1331,9 +1376,9 @@ def render_strategy():
         with dl_col2:
             pdf_bytes = st.session_state.test_plan_pdf_bytes
             st.download_button(
-                label="⬇️ Download (.pdf)",
+                label="⬇️ Download Test Plan (.pdf)",
                 data=pdf_bytes or b"",
-                file_name=f"test_plan_{project_name}.pdf",
+                file_name=f"test_plan_{safe_name}.pdf",
                 on_click=_track_download,
                 args=("test_plan", "pdf"),
                 mime="application/pdf",
@@ -1343,7 +1388,41 @@ def render_strategy():
 
     # Generate Another button
     st.markdown("###")
-    if st.button("🔄 Generate Another Strategy", use_container_width=True):
+    _again_col, _reset_col = st.columns(2)
+    with _again_col:
+        _again = st.button(
+            "🔄 Generate Another Strategy (keep my answers)",
+            use_container_width=True,
+            help="Returns to the questions with your answers prefilled so you can tweak them and regenerate.",
+        )
+    with _reset_col:
+        _start_over = st.button("🗑️ Start Over (clear all answers)", use_container_width=True)
+
+    if _again:
+        # Keep "answers" and the input_<key> widget values: only generated
+        # outputs, run state and PDF caches are cleared. run_count is kept
+        # (it is a per-session quota, see the run_count gotchas).
+        _prev_extra = st.session_state.dialogue.get_context().additional_context
+        for key in ["dialogue", "strategy", "sources", "output_path",
+                    "risk_register", "risk_sources", "risk_path",
+                    "effort_report", "effort_path", "effort_data",
+                    "test_plan", "test_plan_path", "test_plan_sources",
+                    "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
+                    "feedback_submitted", "_feedback_partial",
+                    "generation_started", "results_complete",
+                    "results_analysis"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        # Widget keys of widgets not rendered on a run are dropped by
+        # Streamlit, so re-seed both layers for the dialogue (not rendered
+        # during this run, so setting the widget keys is safe).
+        for q in QUESTIONS:
+            st.session_state[f"input_{q['key']}"] = st.session_state.answers.get(q["key"], "")
+        st.session_state["input_additional_context"] = _prev_extra or ""
+        st.session_state.current_step = "dialogue"
+        st.rerun()
+
+    if _start_over:
         for key in ["dialogue", "answers", "strategy", "sources", "output_path",
                     "risk_register", "risk_sources", "risk_path",
                     "effort_report", "effort_path", "effort_data",
