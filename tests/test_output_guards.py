@@ -413,3 +413,11 @@ def test_unverified_syllabus_versions_stripped_verified_kept():
 
 def test_citation_rules_require_source_header_naming():
     assert "exactly as it appears" in g.CITATION_RULES
+
+
+def test_replace_dashes_turns_numeric_ranges_into_to():
+    from output_guards import replace_dashes
+    dash = chr(0x2013)
+    out = replace_dashes(f"| **Range** | 64.4 {dash} 181.8 person-days |\n- **QA %:** 20% {dash} 25% of effort")
+    assert "64.4 to 181.8" in out and "20% to 25%" in out
+    assert dash not in out and ", 181" not in out

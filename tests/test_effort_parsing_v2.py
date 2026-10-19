@@ -221,3 +221,9 @@ def test_unrecognised_project_type_warns():
     data = compute_estimation(_ctx(project_type="quantum blockchain thing"))
     assert data.project_type_detected == "default"
     assert any("project_type" in w and "not recognised" in w for w in data.warnings)
+
+
+def test_romanian_de_between_number_and_unit():
+    import effort_core as e
+    assert e.parse_duration('30 de zile', []) == 21
+

@@ -269,6 +269,10 @@ def _dash_to_punct(line: str) -> str:
     return _DASH.sub(_repl, line)
 
 
+# "64.4 – 181.8" / "20% – 25%": a spaced dash between two figures is a range
+_NUM_RANGE_DASH = re.compile(r"(\d(?:[\d.,]*\d)?[%a-z]{0,2}) [—–] (?=\d)")
+
+
 def replace_dashes(text: str) -> str:
     """No em/en dashes as punctuation in text written for the user. Headings
     ``A - B`` become ``A: B``; elsewhere a dash becomes ", " (": " after a bold
@@ -276,6 +280,7 @@ def replace_dashes(text: str) -> str:
     placeholder), are left alone."""
     out = []
     in_fence = False
+    text = _NUM_RANGE_DASH.sub(r"\1 to ", text)
     for line in text.split("\n"):
         if line.lstrip().startswith("```"):
             in_fence = not in_fence

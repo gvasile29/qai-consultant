@@ -1569,6 +1569,13 @@ def render_doc_review():
 
     result = st.session_state.review_result
 
+    if result.status in ("not_a_qa_document", "input_too_large"):
+        st.warning(f"⚠️ {result.stats.get('reason', 'This input cannot be reviewed.')}")
+        if st.button("← Try another document", use_container_width=True):
+            _reset_review_mode_state()
+            st.rerun()
+        return
+
     if result.doc_type == "insufficient_content":
         st.warning(
             f"⚠️ Document is too short to review ({result.stats.get('char_count', 0)} "
@@ -1584,7 +1591,11 @@ def render_doc_review():
     _doc_review_animate_class = " animate" if not st.session_state.get("doc_review_intro_animated") else ""
     st.session_state.doc_review_intro_animated = True
 
+    if result.language_warning:
+        st.warning(f"🌐 {result.language_warning}")
     st.markdown(f"**Detected document type:** `{result.doc_type}`")
+    if result.detection_note:
+        st.caption(result.detection_note)
     st.markdown(
         '<div class="output-tiles{}">{}</div>'.format(
             _doc_review_animate_class,
@@ -1815,6 +1826,10 @@ def render_maturity_assessment():
     _maturity_animate_class = " animate" if not st.session_state.get("maturity_intro_animated") else ""
     st.session_state.maturity_intro_animated = True
 
+    for _warn in (result.language_warning, result.keyword_list_warning):
+        if _warn:
+            st.warning(f"⚠️ {_warn}")
+    st.caption(result.detection_caveat)
     st.markdown(
         '<div class="output-tiles{}">{}</div>'.format(
             _maturity_animate_class,

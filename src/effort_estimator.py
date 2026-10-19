@@ -22,7 +22,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 from logger import get_logger
-from output_guards import fix_stray_emphasis
+from output_guards import fix_stray_emphasis, replace_dashes
 
 logger = get_logger(__name__)
 from typing import Optional
@@ -126,7 +126,7 @@ Write the following sections (keep each concise — 3-5 sentences max):
 | **Confidence Level** | {data.confidence_level} (score: {data.confidence_score}/100) |
 
 **How to read the range and gap:** {explain_effort_range(data)}
-
+{"" if not data.warnings else chr(10) + "**Input assumptions:**" + chr(10) + chr(10) + chr(10).join("- " + w for w in data.warnings) + chr(10)}
 ---
 
 ## 2. Baseline Calculation
@@ -181,7 +181,7 @@ Write the following sections (keep each concise — 3-5 sentences max):
 
 {recommendations}
 """
-        return report
+        return replace_dashes(report)
 
     @staticmethod
     def _utilization_text(data: EstimationData) -> str:

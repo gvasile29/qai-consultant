@@ -306,8 +306,13 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
     with overall_score=0 rather than an error. Each finding carries
     kb_citations resolved from the knowledge base for its citation queries —
     a finding with no resolvable source is returned with an empty
-    kb_citations list rather than a fabricated one. Returns {doc_type,
-    overall_score, dimension_scores, findings, stats, kb_version}."""
+    kb_citations list rather than a fabricated one. Non-QA input returns status="not_a_qa_document" (doc_type equals the
+    status, no score); oversize input returns status="input_too_large". Non-
+    English input is still scored but score_reliable=false and language_warning
+    explains the rubric is English-keyword based. detection_confidence says how
+    sure the "auto" type guess was. Returns {doc_type, overall_score,
+    dimension_scores, findings, stats, status, language, language_warning,
+    score_reliable, detection_confidence, detection_note, kb_version}."""
     start = time.monotonic()
 
     if doc_type not in _REVIEW_DOC_TYPES:
@@ -359,6 +364,12 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
         "dimension_scores": result.dimension_scores,
         "findings": findings,
         "stats": result.stats,
+        "status": result.status,
+        "language": result.language,
+        "language_warning": result.language_warning,
+        "score_reliable": result.score_reliable,
+        "detection_confidence": result.detection_confidence,
+        "detection_note": result.detection_note,
         "kb_version": index.kb_version,
     }
 
@@ -389,8 +400,11 @@ def assess_qa_maturity(project_description: str) -> dict:
     determination this tool does not make — the user/team must confirm
     that independently; ai_act_note is empty when ai_act_relevant=false.
     Returns {indicative_tmmi_level, tmmi_dimension_scores, ai_act_relevant,
-    ai_act_dimension_scores, ai_act_note, findings, disclaimer, stats,
-    kb_version}."""
+    ai_act_dimension_scores, ai_act_note, findings, disclaimer,
+    detection_caveat, language, language_warning, score_reliable,
+    keyword_list_warning, stats, kb_version}. Detection is keyword-based and
+    can under-score paraphrased practices (see detection_caveat); non-English
+    input sets score_reliable=false."""
     start = time.monotonic()
 
     too_long = _too_long("project_description", project_description)
@@ -435,6 +449,11 @@ def assess_qa_maturity(project_description: str) -> dict:
         "ai_act_note": result.ai_act_note,
         "findings": findings,
         "disclaimer": result.disclaimer,
+        "detection_caveat": result.detection_caveat,
+        "language": result.language,
+        "language_warning": result.language_warning,
+        "score_reliable": result.score_reliable,
+        "keyword_list_warning": result.keyword_list_warning,
         "stats": result.stats,
         "kb_version": index.kb_version,
     }

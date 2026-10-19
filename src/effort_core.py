@@ -690,7 +690,7 @@ _UNIT_PATTERNS = [  # order matters: more specific first
 _UNIT_RE = "|".join(f"(?P<{name}>{pat})" for name, pat in _UNIT_PATTERNS)
 _NUM = r"\d+(?:[.,]\d+)?"
 _DURATION_RE = re.compile(
-    rf"(?P<n1>{_NUM})(?:\s*(?:-|–|to|pana\s+la)\s*(?P<n2>{_NUM}))?\s*(?:{_UNIT_RE})\b"
+    rf"(?P<n1>{_NUM})(?:\s*(?:-|–|to|pana\s+la)\s*(?P<n2>{_NUM}))?\s*(?:de\s+)?(?:{_UNIT_RE})\b"
 )
 _SPRINT_LEN_RES = [
     re.compile(r"(\d+)[\s-]*(?:weeks?|wks?|saptamani)[\s-]+sprints?"),
