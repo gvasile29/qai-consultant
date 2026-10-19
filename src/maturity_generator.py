@@ -18,12 +18,12 @@ from agent import MISTRAL_MODEL
 from ai_disclosure import build_front_matter, with_ai_footer
 from maturity_core import MaturityResult
 from logger import get_logger
-from output_guards import CITATION_RULES, STANDARDS_RULES
+from output_guards import CITATION_RULES, STANDARDS_RULES, STYLE_RULES, replace_dashes
 
 logger = get_logger(__name__)
 
 MATURITY_SYSTEM_PROMPT = """You are QAI Consultant, a senior QA Architect performing a QA process
-maturity assessment. A deterministic rubric has already scored the process — you never invent,
+maturity assessment. A deterministic rubric has already scored the process, you never invent,
 change, or contradict the given indicative TMMi level, dimension scores, or findings. Your job is
 to explain why they matter (grounded in the TMMi/CMMI/EU AI Act knowledge base provided) and give
 the team concrete, prioritized next steps toward the next maturity level.
@@ -52,7 +52,7 @@ A deterministic rubric has already assessed a QA process description against a T
 maturity model{"and EU AI Act Articles 9-15 readiness" if result.ai_act_relevant else ""}. Write a
 narrative QA Maturity Assessment report explaining these already-computed results to the team and
 prioritizing what to address first toward the next maturity level. Do not invent a different level,
-score, or additional findings — use exactly what is given below.
+score, or additional findings, use exactly what is given below.
 
 INDICATIVE TMMI LEVEL: {result.indicative_tmmi_level}
 DISCLAIMER (include this verbatim in your Summary): {result.disclaimer}
@@ -70,8 +70,7 @@ RELEVANT QA KNOWLEDGE BASE:
 {knowledge_context}
 
 {CITATION_RULES}
-{STANDARDS_RULES}
-
+{STANDARDS_RULES}{STYLE_RULES}
 Generate the narrative using EXACTLY this structure:
 
 # QA Maturity Assessment
@@ -86,7 +85,7 @@ Bullet points on the process areas that scored well.
 ## Priority Gaps
 For each Critical and Major finding: explain why it matters (reference the standards in the
 knowledge base where relevant) and give a concrete, actionable next step. A finding names the one
-missing check within a process area (see its "evidence" field) — a process area can score partial
+missing check within a process area (see its "evidence" field), a process area can score partial
 credit when some of its checks passed. Never phrase a recommendation as "establish X" for a whole
 process area if any of its other checks passed (i.e. the area's score above is > 0); instead name
 the specific missing element the finding describes.
@@ -97,7 +96,7 @@ Briefly list the Minor findings with suggested next steps.
 ## References
 List the standards/methodologies referenced above.
 
-Be specific — reference the actual dimension/article names and evidence given above rather than
+Be specific, reference the actual dimension/article names and evidence given above rather than
 generic advice.
 """
 
@@ -135,19 +134,19 @@ def build_maturity_report_markdown(result: MaturityResult, narrative: str = "") 
     lines.append("## Findings")
     lines.append("")
     if not result.findings:
-        lines.append("No findings — every mechanical check in the rubric passed.")
+        lines.append("No findings: every mechanical check in the rubric passed.")
     else:
         for finding in result.findings:
             lines.append(
                 f"- **[{finding.severity.upper()}]** ({finding.framework}/{finding.dimension}) "
-                f"{finding.message} — _evidence: {finding.evidence}_"
+                f"{finding.message} (_evidence: {finding.evidence}_)"
             )
     if narrative:
         lines.append("")
         lines.append("---")
         lines.append("")
         lines.append(narrative)
-    return "\n".join(lines)
+    return replace_dashes("\n".join(lines))
 
 
 def save_maturity_report(markdown_text: str, source_label: str, output_dir: Optional[Path] = None) -> Path:

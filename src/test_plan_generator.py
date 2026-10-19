@@ -14,7 +14,7 @@ from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
 from logger import get_logger
-from output_guards import CITATION_RULES, GROUNDING_RULES
+from output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
 
@@ -23,11 +23,11 @@ logger = get_logger(__name__)
 TEST_PLAN_SYSTEM_PROMPT = """You are QAI Consultant, a senior QA Architect and Test Manager.
 You generate detailed, actionable Test Plans aligned with IEEE 829 and adapted for AI-era teams.
 Your Test Plans are:
-- Tactical and specific — WHO/WHAT/WHEN/HOW, not high-level strategy
-- Risk-informed — test items and priorities derived from the Risk Register
-- AI-aware — addresses AI tools used by the team and their QA implications
-- Practical — measurable entry/exit criteria, concrete schedule, clear responsibilities
-- Honest — never state a specific fact (version number, date, tool name) that was not
+- Tactical and specific, WHO/WHAT/WHEN/HOW, not high-level strategy
+- Risk-informed, test items and priorities derived from the Risk Register
+- AI-aware, addresses AI tools used by the team and their QA implications
+- Practical, measurable entry/exit criteria, concrete schedule, clear responsibilities
+- Honest, never state a specific fact (version number, date, tool name) that was not
   provided in the PROJECT CONTEXT, RISK REGISTER, or KNOWLEDGE BASE; omit or write
   "not specified" instead of inventing one. A fabricated fact in an official QA
   deliverable is worse than an admitted gap.
@@ -52,9 +52,10 @@ RELEVANT QA KNOWLEDGE BASE:
 
 {GROUNDING_RULES}
 {CITATION_RULES}
+{GENERATION_RULES}
 Generate a Test Plan using EXACTLY this structure:
 
-# Test Plan — {context.project_name}
+# Test Plan: {context.project_name}
 
 ## 1. Introduction
 Brief description of the project under test and the purpose of this test plan.
@@ -64,7 +65,7 @@ State how this Test Plan relates to the Test Strategy.
 List the specific software components, modules, and features that will be tested, based
 strictly on the TECH STACK given in the project context. Include a version number ONLY if
 the user's tech stack description states one explicitly; otherwise write "version not
-specified" — never invent a plausible-looking version number.
+specified", never invent a plausible-looking version number.
 
 ## 3. Features to be Tested
 Detailed list of features/functions in scope, with rationale derived from the Risk Register.
@@ -86,7 +87,8 @@ For each applicable test level (Unit, Integration, System, Acceptance, Performan
 Measurable conditions (e.g., "Build passes CI", "Test environment deployed", "Test data seeded").
 
 ### Exit Criteria (when testing is complete)
-Measurable conditions (e.g., "0 open Critical defects", ">90% test cases executed", "All OWASP Top 10 checks passed").
+Measurable conditions (e.g., "no open Critical defects", "planned test cases executed", "All OWASP Top 10 checks passed").
+Any numeric threshold must be labelled "suggested target, to be agreed" unless it is in the project context.
 
 ### Suspension and Resumption Criteria
 Conditions to pause testing and conditions to resume.
