@@ -66,6 +66,23 @@ def _default_cache_dir() -> Path:
 
 VALID_CATEGORIES = ("Standard", "Methodology", "Article", "Expert Knowledge", "Audit/Evaluation")
 
+STRONG_MATCH = 0.55
+MODERATE_MATCH = 0.40
+WEAK_MATCH_NOTE = (
+    "No strong match: the best chunk is only a moderate or weak semantic match, and chunks "
+    "tagged \"weak\" are often a different topic that merely shares vocabulary. Use only "
+    "chunks whose text actually answers the question; otherwise answer from your own "
+    "knowledge and say the knowledge base had no direct match."
+)
+
+
+def match_strength(score: float) -> str:
+    """Label a cosine score so callers need not guess what 0.456 means."""
+    if score >= STRONG_MATCH:
+        return "strong"
+    return "moderate" if score >= MODERATE_MATCH else "weak"
+
+
 LOW_RELEVANCE_NOTE = (
     "No sufficiently relevant match in the local knowledge base. The local index covers "
     "Markdown guides only (methodologies, selected standards, audit frameworks, case studies); "
@@ -415,7 +432,8 @@ class LocalIndex:
 
         result: dict = {
             "chunks": [
-                {"source": c.source, "category": c.category, "text": c.text, "score": round(score, 4)}
+                {"source": c.source, "category": c.category, "text": c.text, "score": round(score, 4),
+                 "match": match_strength(score)}
                 for score, c in top
             ],
             "kb_version": self.kb_version,
@@ -425,6 +443,8 @@ class LocalIndex:
         if not top and min_score > 0.0:
             result["low_relevance"] = True
             result["note"] = LOW_RELEVANCE_NOTE
+        elif top and top[0][0] < STRONG_MATCH:
+            result["note"] = WEAK_MATCH_NOTE
         return result
 
     # ── Background build ─────────────────────────────────────────────────────

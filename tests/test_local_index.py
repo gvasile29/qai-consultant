@@ -396,3 +396,11 @@ def test_empty_kb_does_not_crash(tmp_path):
     assert result["chunks"] == []
     sources = idx.list_sources()
     assert sources["doc_count"] == 0
+
+
+def test_match_strength_labels_and_weak_note():
+    import local_index as li
+
+    assert [li.match_strength(s) for s in (0.7, 0.55, 0.456, 0.40, 0.2)] == [
+        "strong", "strong", "moderate", "moderate", "weak",
+    ]

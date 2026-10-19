@@ -147,8 +147,11 @@ def retrieve_qa_knowledge(
     such as test design techniques (boundary value analysis), smoke vs sanity
     or test levels are often absent; the first call after server start may take
     ~30s while the index builds (usually done in the background by then).
-    Returns {"chunks": [{"source", "category", "text", "score"}], "kb_version",
-    "best_score", "low_relevance"[, "note"]}. Chunks scoring below min_score
+    Returns {"chunks": [{"source", "category", "text", "score", "match"}],
+    "kb_version", "best_score", "low_relevance"[, "note"]}; "match" is
+    strong (>=0.55), moderate (>=0.40) or weak, and when even the best chunk is
+    not strong a note says to use only chunks that really answer the question
+    (a 0.45 hit on an unrelated case study is vocabulary overlap). Chunks scoring below min_score
     (cosine similarity, default 0.40, 0 disables) are dropped; if nothing
     reaches it, chunks is empty, low_relevance is true and note says so - then
     answer from your own knowledge and tell the user the KB had no match
