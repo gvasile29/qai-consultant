@@ -1,4 +1,4 @@
-"""
+﻿"""
 QAI Consultant — Deterministic Effort Estimation Core.
 
 The PERT/multiplier/confidence calculation pipeline extracted out of
@@ -28,6 +28,8 @@ from typing import Optional
 
 from dialogue import ProjectContext
 from risk_ledger import parse_risk_matrix
+
+LOW_DATA_QUALITY_MAX = 8  # data_quality_score (0-20) at or below this caps confidence at Medium
 
 MAX_PLAUSIBLE_DURATION_DAYS = 1825  # ~5 working-years; a parsed timeline beyond this is
                                      # almost certainly a parsing error (e.g. a calendar
@@ -123,6 +125,15 @@ class EstimationData:
     data_quality_score: int = 20   # 0-20; calculated from dialogue completeness
     confidence_score: int = 0      # raw score 0-100 (for debugging/display)
 
+    # Human-readable notes about inputs that were assumed, defaulted, ignored or\n    # look implausible. Surfaced as warnings in the MCP tool's JSON (asdict).
+    warnings: list = field(default_factory=list)
+
+
+def warn(data: EstimationData, message: str) -> None:
+    """Append a warning to ``data.warnings`` (deduplicated, order preserved)."""
+    if message not in data.warnings:
+        data.warnings.append(message)
+
 
 # ── Step 1: Detect project type ────────────────────────────────────────────────
 
@@ -133,18 +144,26 @@ def detect_project_type(context: ProjectContext, data: EstimationData) -> None:
     # Detect project type
     if any(k in pt for k in ["embedded", "firmware", "automotive"]):
         data.project_type_detected = "embedded"
-    elif any(k in pt for k in ["mobile", "ios", "android"]):
+    elif any(k in pt for k in ["mobile", "android"]) or re.search(r"\bios\b", pt):
         data.project_type_detected = "mobile"
-    elif any(k in pt for k in ["api", "microservice", "backend", "rest"]):
+    elif any(k in pt for k in ["microservice", "backend"]) or re.search(r"\b(?:apis?|rest|restful)\b", pt):
         data.project_type_detected = "api"
     elif any(k in pt for k in ["web", "browser", "frontend"]):
         data.project_type_detected = "web"
     elif any(k in pt for k in ["desktop"]):
         data.project_type_detected = "desktop"
-    elif any(k in pt for k in ["data", "ml", "machine learning", "ai"]):
+    elif (
+        any(k in pt for k in ["data", "machine learning", "llm", "genai", "generative", "chatbot", "artificial intelligence"])
+        or re.search(r"\b(?:ai|ml|ai/ml)\b", pt)
+    ):
+        # AI/ML/LLM systems share the "data" benchmark band (20-30%).
         data.project_type_detected = "data"
     else:
         data.project_type_detected = "default"
+        if pt.strip():
+            warn(data, f"project_type '{context.project_type.strip()}' was not recognised; the default "
+                       "20-25% QA baseline was used (recognised: embedded/automotive, mobile, API/backend, "
+                       "web, desktop, data/AI/ML/LLM).")
 
     # Detect methodology
     if any(k in meth for k in ["v-model", "vmodel", "v model"]):
@@ -170,11 +189,11 @@ def calculate_baseline(context: ProjectContext, data: EstimationData) -> None:
     data.baseline_qa_percent_min, data.baseline_qa_percent_max = BASELINE_QA_PERCENT[key]
 
     # Parse project duration
-    data.project_duration_days = parse_duration(context.timeline)
+    data.project_duration_days = parse_duration(context.timeline, data.warnings)
 
     # Parse team sizes
-    data.qa_team_size = parse_team_size(context.team_qa_size)
-    dev_size = parse_team_size(context.team_dev_size)
+    data.qa_team_size = parse_team_size(context.team_qa_size, data.warnings, "team_qa_size")
+    dev_size = parse_team_size(context.team_dev_size, data.warnings, "team_dev_size")
     data.team_total_size = data.qa_team_size + dev_size
 
     # Total project effort estimate (dev + QA)
@@ -197,6 +216,45 @@ def calculate_baseline(context: ProjectContext, data: EstimationData) -> None:
 
 
 # ── Step 3: Apply multipliers ──────────────────────────────────────────────────
+
+# (label, regex on lower-cased compliance text, % added). Whole-word where the
+# token is short so e.g. "dora" does not match inside another word.
+EXTRA_COMPLIANCE_RULES = [
+    ("SOC 2", r"\bsoc[\s-]*2\b", 10),
+    ("PSD2", r"\bpsd[\s-]*2\b", 12),
+    ("ISO 27001", r"\b(?:iso[\s/-]*(?:iec[\s-]*)?)?27001\b", 10),
+    ("EU AI Act", r"\b(?:eu\s+)?ai\s+act\b", 15),
+    ("NIS2", r"\bnis[\s-]*2\b", 10),
+    ("DORA", r"\bdora\b", 12),
+]
+
+# Patterns for the regimes handled inline in apply_multipliers(), used only to
+# decide whether a compliance item was recognised.
+_CORE_COMPLIANCE_RE = re.compile(
+    r"asil|iso[\s-]*26262|spice|gdpr|\bpci\b|pci-dss|hipaa"
+)
+_NO_COMPLIANCE_RE = re.compile(
+    r"^(?:none|n/?a|na|no|nothing|nil|not applicable|tbd|unknown|not sure|-|none yet|no compliance)\b"
+)
+
+
+def _warn_unrecognised_compliance(compliance_text: str, data: EstimationData) -> None:
+    """Warn about compliance items that matched no known multiplier (they had no effect)."""
+    unknown = []
+    text = re.sub(r"\bn/a\b", "na", compliance_text, flags=re.IGNORECASE)
+    for raw_item in re.split(r"[,;/\n+&]|\band\b", text, flags=re.IGNORECASE):
+        raw_item = raw_item.strip(" .\t")
+        item = raw_item.lower()
+        if not item or _NO_COMPLIANCE_RE.match(item) or _CORE_COMPLIANCE_RE.search(item):
+            continue
+        if any(re.search(pattern, item) for _, pattern, _ in EXTRA_COMPLIANCE_RULES):
+            continue
+        unknown.append(raw_item)
+    if unknown:
+        warn(data, "Compliance item(s) not recognised and therefore had NO effect on the estimate: "
+                   + ", ".join(unknown)
+                   + ". Recognised: ISO 26262/ASIL, A-SPICE, GDPR, PCI-DSS, HIPAA, SOC 2, PSD2, "
+                     "ISO 27001, EU AI Act, NIS2, DORA.")
 
 def apply_multipliers(context: ProjectContext, data: EstimationData) -> None:
     compliance = (context.compliance_requirements or "").lower()
@@ -237,6 +295,15 @@ def apply_multipliers(context: ProjectContext, data: EstimationData) -> None:
     if "hipaa" in compliance:
         data.multipliers.append(("HIPAA compliance", 15))
         total_add += 15
+
+    # Additional regimes (benchmarks: audit-evidence and control-testing overhead
+    # on top of normal functional QA; deliberately a little below PCI/HIPAA).
+    for label, pattern, add in EXTRA_COMPLIANCE_RULES:
+        if re.search(pattern, compliance):
+            data.multipliers.append((f"{label} compliance", add))
+            total_add += add
+
+    _warn_unrecognised_compliance(context.compliance_requirements or "", data)
 
     # Automation multipliers
     # Whole-word match: a bare substring "no" fired on "CANoe" and charged +20%
@@ -462,7 +529,7 @@ def confidence_breakdown(data: EstimationData) -> list:
 
     Deterministic and derived from the same helper calculate_confidence()
     sums, so the explanation shown in the UI can never disagree with the score.
-    (The >5-year duration guard, when it fires, caps the total at 69 on top.)
+    (The >5-year duration guard and the plausibility caps, when they fire, lower the total below\n    the factor sum; each cap also adds a capped at ... entry to `data.warnings`.)
     """
     spread_pts, gap_pts, quality_pts, magnitude_pts = _confidence_components(data)
     expected = data.pert_total_expected
@@ -534,6 +601,46 @@ def calculate_confidence(data: EstimationData) -> str:
     if data.project_duration_days > MAX_PLAUSIBLE_DURATION_DAYS and score >= 70:
         score = 69
 
+    # ── Plausibility caps ────────────────────────────────────────────────────────
+    # The four factors are additive, so a strong spread + perfect data quality
+    # can outvote a hopeless capacity gap. These caps are ceilings, not factors:
+    #   * very vague answers (data quality <= 8/20) cannot read High
+    #   * a deficit > 30% of expected effort cannot read High; > 50% reads Low
+    #   * shortfall > 5x total capacity, or no QA capacity at all, reads Low
+    #   * QA team > 3x the dev team is an implausible ratio: cannot read High
+    expected = data.pert_total_expected
+    cap = 100
+    if data.data_quality_score <= LOW_DATA_QUALITY_MAX:
+        cap = min(cap, 69)
+        warn(data, f"Data quality is very low ({data.data_quality_score}/20: timeline, team sizes, compliance "
+                   "or automation answers are vague or missing); confidence is capped at Medium.")
+    if expected > 0:
+        gap_ratio = data.capacity_gap / expected
+        if gap_ratio < -0.5:
+            cap = min(cap, 39)
+            warn(data, f"Severe capacity shortfall: available capacity covers only "
+                       f"{max(0.0, 1 + gap_ratio) * 100:.0f}% of expected effort "
+                       f"({abs(data.capacity_gap):g} person-days short); confidence is capped at Low. "
+                       "Check team size and timeline for input errors.")
+        elif gap_ratio < -0.3:
+            cap = min(cap, 69)
+            warn(data, f"Capacity shortfall of {abs(data.capacity_gap):g} person-days exceeds 30% of expected "
+                       "effort; confidence is capped at Medium.")
+        if data.available_person_days > 0 and -data.capacity_gap > 5 * data.available_person_days:
+            cap = min(cap, 39)
+            warn(data, "Shortfall is more than 5x the available QA capacity; the team/duration inputs look "
+                       "implausible. Confidence is capped at Low.")
+        elif data.available_person_days <= 0 and data.project_duration_days > 0:
+            cap = min(cap, 39)
+            warn(data, "No QA capacity (QA team size or duration is zero) against non-zero expected effort; "
+                       "confidence is capped at Low.")
+    dev_size = data.team_total_size - data.qa_team_size
+    if dev_size > 0 and data.qa_team_size > 3 * dev_size:
+        cap = min(cap, 69)
+        warn(data, f"QA team ({data.qa_team_size}) is more than 3x the dev team ({dev_size}); check for swapped "
+                   "or mistyped team sizes. Confidence is capped at Medium.")
+    score = min(score, cap)
+
     # ── Map score to label ───────────────────────────────────────────────────────
     data.confidence_score = score
     if score >= 70:
@@ -546,58 +653,234 @@ def calculate_confidence(data: EstimationData) -> str:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────────
 
-def parse_duration(timeline: str) -> int:
-    """Parse timeline string to working days.
+# ── Duration / team-size parsing ───────────────────────────────────────────────
+# All timeline unit conversions live here (working days per unit).
+WORKING_DAYS_PER_DAY = 1
+WORKING_DAYS_PER_WEEK = 5
+WORKING_DAYS_PER_MONTH = 21
+WORKING_DAYS_PER_QUARTER = 63          # 3 months
+WORKING_DAYS_PER_YEAR = 230
+DEFAULT_SPRINT_WEEKS = 2               # a sprint is 2 weeks (10 working days) unless stated
+CALENDAR_TO_WORKING_RATIO = 5 / 7      # "90 days" (calendar) -> ~64 working days
+CALENDAR_DAYS_THRESHOLD = 10           # "N days" with N <= this is read as working days as written
+DEFAULT_DURATION_DAYS = 130            # ~6 months; used (with a warning) when nothing parses
+FEW_QUANTITY = 3                       # "a few" -> 3, "a couple" -> 2 (assumed, warned)
 
-    A bare 4+ digit number (e.g. "2026") is a calendar year mentioned
-    alongside a target date, never a month/week count — excluded via
-    `\\b(\\d{1,3})\\b` so "release in June 2026" doesn't parse as 2026
-    months. The final result is clamped to MAX_PLAUSIBLE_DURATION_DAYS
-    as a safety net against any other mis-parse.
+_NUMBER_WORDS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+    "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    # Romanian (diacritics are stripped before matching)
+    "doi": 2, "doua": 2, "trei": 3, "patru": 4, "cinci": 5, "sase": 6, "sapte": 7,
+    "opt": 8, "noua": 9, "zece": 10,
+}
+_NUMBER_WORD_RE = re.compile(r"\b(" + "|".join(_NUMBER_WORDS) + r")\b")
+
+_DIACRITICS = str.maketrans("ăâîșşțţ", "aaisstt")
+
+_UNIT_PATTERNS = [  # order matters: more specific first
+    ("workday", r"(?:working|business|work)[\s-]*days?|workdays?|zile\s+lucratoare"),
+    ("sprint", r"sprints?|sprinturi"),
+    ("quarter", r"quarters?|trimestr\w*"),
+    ("year", r"years?|yrs?|ani|an"),
+    ("month", r"months?|mos?|luni|luna"),
+    ("week", r"weeks?|wks?|saptamani|saptamana"),
+    ("day", r"days?|zile|zi"),
+]
+_UNIT_RE = "|".join(f"(?P<{name}>{pat})" for name, pat in _UNIT_PATTERNS)
+_NUM = r"\d+(?:[.,]\d+)?"
+_DURATION_RE = re.compile(
+    rf"(?P<n1>{_NUM})(?:\s*(?:-|–|to|pana\s+la)\s*(?P<n2>{_NUM}))?\s*(?:{_UNIT_RE})\b"
+)
+_SPRINT_LEN_RES = [
+    re.compile(r"(\d+)[\s-]*(?:weeks?|wks?|saptamani)[\s-]+sprints?"),
+    re.compile(r"sprints?\s+(?:of|de|lasting)\s+(\d+)\s*(?:weeks?|wks?|saptamani)"),
+]
+
+
+def _to_float(s: str) -> float:
+    return float(s.replace(",", "."))
+
+
+def _normalise_text(text: str) -> str:
+    return text.lower().translate(_DIACRITICS)
+
+
+def _add_warning(warnings: Optional[list], message: str) -> None:
+    if warnings is not None and message not in warnings:
+        warnings.append(message)
+
+
+_VAGUE_QUANTITIES = [  # (regex, assumed value)
+    (re.compile(r"\b(?:a\s+)?few\b"), FEW_QUANTITY),
+    (re.compile(r"\bseveral\b"), FEW_QUANTITY),
+    (re.compile(r"\b(?:a\s+)?couple(?:\s+of)?\b"), 2),
+]
+
+
+def _words_to_digits(text: str, warnings: Optional[list], label: str) -> str:
+    """Replace number words ("three", "trei", "a year") with digits.
+
+    Vague quantities ("a few", "several", "a couple") become a fixed assumed
+    number and add a warning.
     """
-    if not timeline:
-        return 130
-    tl = timeline.lower()
-    if any(k in tl for k in ["year", "yr"]):
-        match = re.search(r"(\d+\.?\d*)\s*(?:year|yr)", tl)
-        years = float(match.group(1)) if match else 1
-        days = int(years * 230)
-    else:
-        num_pattern = r"\b(\d{1,3})\b"  # 1-3 digits only; excludes 4-digit years
-        if "month" in tl:
-            match = re.search(num_pattern, tl)
-            months = int(match.group(1)) if match else 6
-            days = months * 21
-        elif "week" in tl:
-            match = re.search(num_pattern, tl)
-            weeks = int(match.group(1)) if match else 4
-            days = weeks * 5
-        else:
-            match = re.search(num_pattern, tl)
-            days = int(match.group(1)) * 21 if match else 130  # default: ~6 months
-    return min(days, MAX_PLAUSIBLE_DURATION_DAYS)
+    for rx, value in _VAGUE_QUANTITIES:
+        m = rx.search(text)
+        if m:
+            _add_warning(warnings, f"{label}: '{m.group(0)}' is vague; assumed {value}.")
+            text = rx.sub(str(value), text)
+    text = _NUMBER_WORD_RE.sub(lambda m: str(_NUMBER_WORDS[m.group(1)]), text)
+    return re.sub(r"\b(?:a|an|un|o)\s+(?=(?:year|month|week|quarter|sprint|day|an|luna|saptamana|trimestru|zi|sprint)s?\b)", "1 ", text)
+
+def _midpoint_up(lo: float, hi: float) -> float:
+    return float(-(-(lo + hi) // 2)) if float(lo).is_integer() and float(hi).is_integer() else (lo + hi) / 2
 
 
-def parse_team_size(team_str: str) -> int:
+def parse_duration(timeline: str, warnings: Optional[list] = None) -> int:
+    """Parse a timeline string to working days.
+
+    Recognised units (English and Romanian): working/business days (as written),
+    days ("N days" with N <= CALENDAR_DAYS_THRESHOLD is taken as working days,
+    larger values are treated as calendar days x 5/7), weeks, months (21 wd),
+    quarters (63 wd), years (230 wd) and sprints (DEFAULT_SPRINT_WEEKS weeks
+    unless "N-week sprints" is given). Several parts are summed ("1 year 3
+    months"); parenthesised restatements and "or" alternatives are ignored.
+    A range ("3-4 months") uses its midpoint rounded up.
+
+    Anything that cannot be parsed (e.g. "Dec 2026", "Q1 2027", "ASAP") falls
+    back to DEFAULT_DURATION_DAYS and appends a warning naming the default;
+    a bare number with no unit is read as months (legacy) with a warning.
+    Bare 4+ digit numbers are calendar years and never counts. The result is
+    clamped to MAX_PLAUSIBLE_DURATION_DAYS.
+
+    ``warnings`` (optional list) receives human-readable notes.
+    """
+    if not timeline or not timeline.strip():
+        _add_warning(warnings, f"timeline: empty; assumed the default {DEFAULT_DURATION_DAYS} working days (~6 months).")
+        return DEFAULT_DURATION_DAYS
+    original = timeline.strip()
+    tl = _words_to_digits(_normalise_text(original), warnings, "timeline")
+    tl = re.sub(r"(\d)\s*(?:-|–)\s*(?=\d)", r"\1-", tl)
+
+    # Sprint length ("2-week sprints", "sprints of 3 weeks"): consume it so the
+    # week count is not also read as a duration.
+    sprint_weeks = DEFAULT_SPRINT_WEEKS
+    for rx in _SPRINT_LEN_RES:
+        m = rx.search(tl)
+        if m:
+            sprint_weeks = int(m.group(1))
+            tl = rx.sub(" sprint", tl, count=1)
+            break
+
+    def _scan(text: str):
+        return list(_DURATION_RE.finditer(text))
+
+    matches = _scan(tl)
+    if matches:
+        # Drop "(...)" restatements and "or <alternative>" clauses when a main clause parses.
+        stripped = re.sub(r"\([^)]*\)", " ", tl)
+        stripped = re.split(r"\bor\b", stripped)[0]
+        main = _scan(stripped)
+        if main:
+            matches = main
+
+    if matches:
+        total = 0.0
+        for m in matches:
+            n1 = _to_float(m.group("n1"))
+            if m.group("n2"):
+                n2 = _to_float(m.group("n2"))
+                n = _midpoint_up(n1, n2)
+                _add_warning(warnings, f"timeline: range '{m.group(0).strip()}' interpreted as its midpoint "
+                                       f"({n:g}, rounded up).")
+            else:
+                n = n1
+            unit = m.lastgroup
+            if unit == "workday":
+                total += n * WORKING_DAYS_PER_DAY
+            elif unit == "day":
+                if n <= CALENDAR_DAYS_THRESHOLD:
+                    total += n * WORKING_DAYS_PER_DAY
+                else:
+                    total += n * CALENDAR_TO_WORKING_RATIO
+            elif unit == "week":
+                total += n * WORKING_DAYS_PER_WEEK
+            elif unit == "month":
+                total += n * WORKING_DAYS_PER_MONTH
+            elif unit == "quarter":
+                total += n * WORKING_DAYS_PER_QUARTER
+            elif unit == "year":
+                total += n * WORKING_DAYS_PER_YEAR
+            elif unit == "sprint":
+                total += n * sprint_weeks * WORKING_DAYS_PER_WEEK
+        days = max(1, round(total))
+        if days > MAX_PLAUSIBLE_DURATION_DAYS:
+            _add_warning(warnings, f"timeline: '{original}' parsed to {days} working days, above the "
+                                   f"{MAX_PLAUSIBLE_DURATION_DAYS}-day plausibility limit; clamped.")
+        return min(days, MAX_PLAUSIBLE_DURATION_DAYS)
+
+    # Bare 1-3 digit number with no unit: legacy "months" reading, flagged.
+    bare = re.search(r"(?<![\w.])(\d{1,3})(?![\w])", tl)
+    if bare:
+        months = int(bare.group(1))
+        _add_warning(warnings, f"timeline: '{original}' has no unit; the number {months} was read as months "
+                               f"({months * WORKING_DAYS_PER_MONTH} working days). State a unit "
+                               "(days/weeks/months/quarters/years/sprints).")
+        return min(months * WORKING_DAYS_PER_MONTH, MAX_PLAUSIBLE_DURATION_DAYS)
+
+    _add_warning(warnings, f"timeline: could not parse '{original}' (no duration such as '6 months'; calendar "
+                           f"dates and quarters like 'Q1 2027' need a start date to convert). Used the default "
+                           f"{DEFAULT_DURATION_DAYS} working days (~6 months).")
+    return DEFAULT_DURATION_DAYS
+
+
+_NO_TEAM_RE = re.compile(r"\b(?:no\s+dedicated|none|devs?\s+test|developers?\s+test|nobody|no\s+one)\b")
+
+
+def parse_team_size(team_str: str, warnings: Optional[list] = None, label: str = "team size") -> int:
     """Parse team size string to integer.
 
-    An "A, or B" clause restates the same team two ways (a headcount
-    alternative, e.g. "3 frontend + 2 backend, or 5 full-stack") rather
-    than describing additional people — only the numbers before the
-    first standalone "or" are summed, so a restatement isn't double-counted.
+    * Number words are understood ("three", "eight", Romanian "trei", "opt").
+    * A range ("2-3", "8 to 10") counts as its midpoint rounded up (3 and 9);
+      a warning notes the interpretation.
+    * Separate numbers are summed ("3 frontend + 2 backend" = 5), except that
+      an "A, or B" clause restates the same team another way, so only the part
+      before the first standalone "or" is summed.
+    * "none" / "no dedicated" / "developers test" (whole words) mean 0.
+    * Text with no number at all is read as 1, with a warning.
     """
-    if not team_str:
+    if not team_str or not team_str.strip():
+        _add_warning(warnings, f"{label}: empty; assumed 1 person.")
         return 1
-    ts = team_str.lower()
-    # Handle "no dedicated QA" etc.
-    if any(k in ts for k in ["no dedicated", "none", "developers test"]):
+    ts = _normalise_text(team_str)
+    if _NO_TEAM_RE.search(ts):
         return 0
-    first_alternative = re.split(r"\bor\b", ts)[0]
-    numbers = re.findall(r"\d+", first_alternative)
-    if numbers:
-        return sum(int(n) for n in numbers)
-    return 1
+    ts = _words_to_digits(ts, warnings, label)
+    first_alternative = re.split(r"\bor\b", ts)[0] if re.search(r"\d", re.split(r"\bor\b", ts)[0]) else ts
 
+    total = 0
+    found = False
+
+    def _range(m):
+        nonlocal total, found
+        lo, hi = int(m.group(1)), int(m.group(2))
+        if hi < lo:
+            lo, hi = hi, lo
+        mid = -(-(lo + hi) // 2)
+        total += mid
+        found = True
+        _add_warning(warnings, f"{label}: range '{m.group(0).strip()}' interpreted as {mid} "
+                               "(midpoint, rounded up).")
+        return " "
+
+    rest = re.sub(r"(\d+)\s*(?:-|–|to)\s*(\d+)", _range, first_alternative)
+    for n in re.findall(r"\d+", rest):
+        total += int(n)
+        found = True
+    if found:
+        return total
+    _add_warning(warnings, f"{label}: no number found in '{team_str.strip()}'; assumed 1 person.")
+    return 1
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
 

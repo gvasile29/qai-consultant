@@ -1,4 +1,4 @@
-"""Regression tests for the v3.7.2 live-QA findings: effort table totals,
+﻿"""Regression tests for the v3.7.2 live-QA findings: effort table totals,
 range/confidence explanations, and Knowledge Sources numbering/names."""
 import re
 import sys
@@ -105,7 +105,9 @@ def test_confidence_breakdown_sums_to_score(ctx):
     d = compute_estimation(ctx)
     parts = confidence_breakdown(d)
     assert [p[0] for p in parts] == ["PERT spread", "Capacity gap", "Data quality", "Multiplier magnitude"]
-    assert sum(p[1] for p in parts) == d.confidence_score  # no >5y guard in these inputs
+    raw = sum(p[1] for p in parts)
+    capped = any("capped at" in w for w in d.warnings)  # plausibility caps lower the score below the factor sum
+    assert (raw > d.confidence_score) if capped else (raw == d.confidence_score)
     assert all(0 <= p[1] <= p[2] for p in parts)
 
 
