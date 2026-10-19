@@ -264,6 +264,7 @@ Full version history and rationale lives in `CHANGELOG.md` — this is a condens
 - **v3.7.0-v3.7.1** ✅ Adoption strip, download/feedback counters, default-on opt-out MCP telemetry, agent skill `skills/qai-consultant/SKILL.md` (kept in sync by `tests/test_skill_doc.py`).
 - **v3.7.2** ✅ `effort_core` whole-word automation match; Streamlit honesty guards (`output_guards.py`) (PR #121).
 - **v3.8.0** ✅ MCP end-to-end QA fixes (effort parsing + `warnings`, review/maturity gates, retrieval `min_score`, tolerant results parsing) + Streamlit effort/sources/download fixes.
+- **v3.8.1** ✅ Output-guard tool/quantity markers, Download-all zip, retrieval `match` labels, effort-narrative figure guard.
 - **v4.0** Remote MCP + distribution: hosted Streamable HTTP server connectable from claude.ai, registry submissions, server-side usage metrics.
 
 > **MCP lens (governs all v3.x scope):** the client LLM is stronger than the internal one, so the server never exposes LLM generation — only what the client can't do alone (standards-grounded retrieval, deterministic estimation, validated QA process templates). `ask()`/`ask_streaming()`/document generation stay in Streamlit/CLI. Rationale: `MCP_PLAN.md`.
