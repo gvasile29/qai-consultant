@@ -36,7 +36,9 @@ from effort_core import (
     MAX_PLAUSIBLE_DURATION_DAYS,
     RISK_BUFFER,
     EstimationData,
+    capacity_utilization_pct,
     compute_estimation,
+    explain_effort_range,
 )
 
 # ── Effort Estimator ───────────────────────────────────────────────────────────
@@ -71,6 +73,10 @@ class EffortEstimator:
             f"ADDITIONAL CONTEXT FROM THE USER: {context.additional_context}\n"
             if context.additional_context else ""
         )
+        util_pct = capacity_utilization_pct(data)
+        utilization_line = (
+            f" (expected effort = {util_pct}% of capacity)" if util_pct is not None else ""
+        )
         narrative_prompt = f"""
 You are QAI Consultant, a senior QA Architect. Based on the following effort estimation data,
 write concise professional narrative for these sections:
@@ -83,7 +89,11 @@ COMPLIANCE: {context.compliance_requirements}
 {additional_ctx_line}TOTAL MULTIPLIERS APPLIED: {data.total_multiplier}%
 FINAL EFFORT RANGE: {data.final_effort_min}–{data.final_effort_max} person-days
 CONFIDENCE: {data.confidence_level}
+PERT EXPECTED EFFORT: {data.pert_total_expected} person-days
+AVAILABLE CAPACITY: {data.available_person_days} person-days{utilization_line}
 CAPACITY GAP: {"SURPLUS of " + str(data.capacity_gap) + " days" if data.capacity_gap >= 0 else "DEFICIT of " + str(abs(data.capacity_gap)) + " days"}
+
+Use only the figures given above; do not compute or restate any other totals or percentages.
 
 Write the following sections (keep each concise — 3-5 sentences max):
 1. EXECUTIVE_SUMMARY: Overall effort profile and key drivers
@@ -112,7 +122,10 @@ Write the following sections (keep each concise — 3-5 sentences max):
 | **Risk Buffer** | {data.risk_buffer_days} person-days |
 | **Available Capacity** | {data.available_person_days} person-days |
 | **Capacity Gap** | {"✅ Surplus: " + str(data.capacity_gap) + " days" if data.capacity_gap >= 0 else "⚠️ Deficit: " + str(abs(data.capacity_gap)) + " days"} |
+| **Expected Effort vs Capacity** | {self._utilization_text(data)} |
 | **Confidence Level** | {data.confidence_level} (score: {data.confidence_score}/100) |
+
+**How to read the range and gap:** {explain_effort_range(data)}
 
 ---
 
@@ -169,6 +182,13 @@ Write the following sections (keep each concise — 3-5 sentences max):
 {recommendations}
 """
         return report
+
+    @staticmethod
+    def _utilization_text(data: EstimationData) -> str:
+        pct = capacity_utilization_pct(data)
+        if pct is None:
+            return "n/a (no QA capacity)"
+        return f"{pct}% ({data.pert_total_expected} of {data.available_person_days} person-days)"
 
     def _build_multiplier_table(self, data: EstimationData) -> str:
         if not data.multipliers:

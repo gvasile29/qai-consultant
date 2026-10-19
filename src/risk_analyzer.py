@@ -15,6 +15,7 @@ from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
+from source_labels import build_source_labels
 from logger import get_logger
 from output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
@@ -172,10 +173,7 @@ class RiskAnalyzer:
         risk_register = append_execution_data_appendix(risk_register, results_summary)
         logger.info(f"Risk Register generated ({len(risk_register)} chars)")
 
-        sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in chunks
-        })
+        sources = build_source_labels(chunks)
 
         return risk_register, sources
 

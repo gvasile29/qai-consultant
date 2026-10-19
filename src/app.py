@@ -26,6 +26,7 @@ from templates import TEMPLATES, TEMPLATE_OPTIONS
 from pdf_export import markdown_to_pdf
 from test_plan_generator import TestPlanGenerator
 from kb_manifest import KB_MANIFEST
+from source_labels import build_source_labels
 from review_core import MIN_CONTENT_CHARS as REVIEW_MIN_CONTENT_CHARS, review_document
 from review_generator import (
     REVIEW_SYSTEM_PROMPT,
@@ -1039,18 +1040,9 @@ def render_strategy():
                     logger.warning("Test Plan RAG prefetch failed: %s", exc)
                     test_plan_chunks = []
 
-        risk_sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in risk_chunks
-        })
-        sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in strategy_chunks
-        })
-        test_plan_sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in test_plan_chunks
-        })
+        risk_sources = build_source_labels(risk_chunks)
+        sources = build_source_labels(strategy_chunks)
+        test_plan_sources = build_source_labels(test_plan_chunks)
 
         # Risk Register (streaming) — save to session state immediately after
         # Each step below is isolated in its own try/except, mirroring
@@ -1588,10 +1580,7 @@ def render_doc_review():
                 narrative = ""
 
             st.session_state.review_narrative = narrative
-            st.session_state.review_narrative_sources = list({
-                f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-                for c in chunks
-            })
+            st.session_state.review_narrative_sources = build_source_labels(chunks)
             st.rerun()
         elif st.button("🤖 Generate narrative review", use_container_width=True, type="primary"):
             st.session_state.review_narrative_pending = True
@@ -1823,10 +1812,7 @@ def render_maturity_assessment():
                 narrative = ""
 
             st.session_state.maturity_narrative = narrative
-            st.session_state.maturity_narrative_sources = list({
-                f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-                for c in chunks
-            })
+            st.session_state.maturity_narrative_sources = build_source_labels(chunks)
             st.rerun()
         elif st.button("🤖 Generate narrative assessment", use_container_width=True, type="primary"):
             st.session_state.maturity_narrative_pending = True

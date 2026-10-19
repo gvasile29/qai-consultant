@@ -139,7 +139,13 @@ def executive_readout_html(readout) -> str:
             f"{_html.escape(readout.risk_breakdown)}</td></tr>"
         )
     if readout.effort_range:
-        rows.append(f'<tr><td class="rid">QA effort</td><td>{_html.escape(readout.effort_range)}</td></tr>')
+        why = ""
+        if getattr(readout, "range_explanation", ""):
+            why = (
+                "<details><summary>Why this range, and how the gap is computed</summary>"
+                f"<p>{_html.escape(readout.range_explanation)}</p></details>"
+            )
+        rows.append(f'<tr><td class="rid">QA effort</td><td>{_html.escape(readout.effort_range)}{why}</td></tr>')
     if readout.capacity:
         cap_tier = "fail" if readout.capacity_deficit else "pass"
         rows.append(
@@ -147,7 +153,18 @@ def executive_readout_html(readout) -> str:
             f'{"Deficit" if readout.capacity_deficit else "OK"}</span> {_html.escape(readout.capacity)}</td></tr>'
         )
     if readout.confidence:
-        rows.append(f'<tr><td class="rid">Confidence</td><td>{_html.escape(readout.confidence)}</td></tr>')
+        how = ""
+        factors = getattr(readout, "confidence_factors", None) or []
+        if factors:
+            items = "".join(
+                f"<li><strong>{_html.escape(label)}</strong>: {pts}/{mx} -- {_html.escape(detail)}</li>"
+                for label, pts, mx, detail in factors
+            )
+            how = (
+                "<details><summary>How this is calculated</summary>"
+                f"<p>Score out of 100 = the sum of four factors (High 70+, Medium 40-69, Low below 40):</p><ul>{items}</ul></details>"
+            )
+        rows.append(f'<tr><td class="rid">Confidence</td><td>{_html.escape(readout.confidence)}{how}</td></tr>')
     for i, (risk_id, description) in enumerate(readout.address_first):
         label = "Address first" if i == 0 else ""
         rows.append(
