@@ -22,6 +22,7 @@ from rich import print as rprint
 
 from agent import QAIAgent, QAIConnectionError, QAIModelError, QAIKnowledgeBaseError, clean_markdown_html
 from dialogue import DialogueManager
+from source_labels import build_source_labels
 from strategy_generator import StrategyGenerator
 from logger import setup_logging, get_logger
 from version import __version__
@@ -173,18 +174,9 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summar
     risk_knowledge = agent.format_knowledge_context(risk_chunks)
     strategy_knowledge = agent.format_knowledge_context(strategy_chunks)
     test_plan_knowledge = agent.format_knowledge_context(test_plan_chunks)
-    test_plan_sources = list({
-        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-        for c in test_plan_chunks
-    })
-    risk_sources = list({
-        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-        for c in risk_chunks
-    })
-    sources = list({
-        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-        for c in strategy_chunks
-    })
+    test_plan_sources = build_source_labels(test_plan_chunks)
+    risk_sources = build_source_labels(risk_chunks)
+    sources = build_source_labels(strategy_chunks)
 
     # === Step 1/4: Risk Register (streaming) ===
     console.print(Panel("[bold yellow]⚠️  Generating Risk Register...[/bold yellow]", border_style="yellow"))
@@ -321,6 +313,13 @@ def run_review_mode(agent: QAIAgent, path: str, doc_type: str) -> None:
     text = doc_path.read_text(encoding="utf-8", errors="ignore")
     result = review_document(text, doc_type=doc_type)
 
+    if result.status in ("not_a_qa_document", "input_too_large"):
+        console.print(f"[yellow]⚠️  {result.stats.get('reason', 'This input cannot be reviewed.')}[/yellow]")
+        return
+
+    if result.language_warning:
+        console.print(f"[yellow]🌐 {result.language_warning}[/yellow]")
+
     if result.doc_type == "insufficient_content":
         console.print(
             f"[yellow]⚠️  Document is too short to review "
@@ -427,6 +426,10 @@ def run_maturity_mode(agent: QAIAgent, path: str) -> None:
         f"indicative TMMi level: {result.indicative_tmmi_level}[/dim]",
         border_style="cyan",
     ))
+    for warn in (result.language_warning, result.keyword_list_warning):
+        if warn:
+            console.print(f"[yellow]⚠️  {warn}[/yellow]")
+    console.print(f"[dim]{result.detection_caveat}[/dim]")
     console.print(f"[dim]{result.disclaimer}[/dim]\n")
 
     tmmi_table = Table(title="TMMi Process Area Scores", border_style="cyan", show_header=True)

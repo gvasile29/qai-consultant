@@ -35,11 +35,12 @@ Several requests need more than one tool. A new Test Plan usually wants an effor
 
 ## Tool notes
 
-### retrieve_qa_knowledge(query, category=None, k=5)
+### retrieve_qa_knowledge(query, category=None, k=5, min_score=0.40)
 
 - Write the query as the concept you need ("entry and exit criteria for system testing"), not the user's whole message.
 - `category` must be exactly one of `Standard`, `Methodology`, `Article`, `Expert Knowledge`, `Audit/Evaluation`. Leave it out when unsure.
 - `k` goes from 1 to 20. Use 3-5 for a focused fact and 8-10 when building a whole document section.
+- When nothing scores at least `min_score`, `chunks` is empty and `low_relevance` is true with a `note`: answer from your own knowledge and say the knowledge base had no match.
 - Cite what you use as `[Source N]` with the returned `source` file name. If nothing relevant comes back, say that the knowledge base doesn't cover it. Don't invent a citation.
 - The knowledge base holds Markdown summaries the project wrote. It does not bundle the ISTQB syllabus or OWASP guide PDFs, so don't quote those as if you'd retrieved them.
 

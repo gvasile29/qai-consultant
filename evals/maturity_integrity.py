@@ -106,6 +106,19 @@ def check_level_ordering(assess_maturity) -> tuple[Finding, ...]:
     else:
         findings.append(Finding("level_ordering", "level1_no_process case in maturity_golden.jsonl", "missing"))
 
+    # Any other golden case declaring expect_min_level (e.g. the
+    # paraphrased-wording mature org) must reach that level too.
+    for case_id, case in cases.items():
+        if case_id == "level3_strong" or "expect_min_level" not in case:
+            continue
+        result = assess_maturity(_case_text(case))
+        if result.indicative_tmmi_level < case["expect_min_level"]:
+            findings.append(Finding(
+                case=case_id,
+                expected=f"indicative_tmmi_level >= {case['expect_min_level']}",
+                actual=f"indicative_tmmi_level={result.indicative_tmmi_level}",
+            ))
+
     return tuple(findings)
 
 

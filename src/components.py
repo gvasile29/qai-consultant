@@ -139,7 +139,13 @@ def executive_readout_html(readout) -> str:
             f"{_html.escape(readout.risk_breakdown)}</td></tr>"
         )
     if readout.effort_range:
-        rows.append(f'<tr><td class="rid">QA effort</td><td>{_html.escape(readout.effort_range)}</td></tr>')
+        why = ""
+        if getattr(readout, "range_explanation", ""):
+            why = (
+                "<details><summary>Why this range, and how the gap is computed</summary>"
+                f"<p>{_html.escape(readout.range_explanation)}</p></details>"
+            )
+        rows.append(f'<tr><td class="rid">QA effort</td><td>{_html.escape(readout.effort_range)}{why}</td></tr>')
     if readout.capacity:
         cap_tier = "fail" if readout.capacity_deficit else "pass"
         rows.append(
@@ -147,7 +153,18 @@ def executive_readout_html(readout) -> str:
             f'{"Deficit" if readout.capacity_deficit else "OK"}</span> {_html.escape(readout.capacity)}</td></tr>'
         )
     if readout.confidence:
-        rows.append(f'<tr><td class="rid">Confidence</td><td>{_html.escape(readout.confidence)}</td></tr>')
+        how = ""
+        factors = getattr(readout, "confidence_factors", None) or []
+        if factors:
+            items = "".join(
+                f"<li><strong>{_html.escape(label)}</strong>: {pts}/{mx} -- {_html.escape(detail)}</li>"
+                for label, pts, mx, detail in factors
+            )
+            how = (
+                "<details><summary>How this is calculated</summary>"
+                f"<p>Score out of 100 = the sum of four factors (High 70+, Medium 40-69, Low below 40):</p><ul>{items}</ul></details>"
+            )
+        rows.append(f'<tr><td class="rid">Confidence</td><td>{_html.escape(readout.confidence)}{how}</td></tr>')
     for i, (risk_id, description) in enumerate(readout.address_first):
         label = "Address first" if i == 0 else ""
         rows.append(
@@ -249,8 +266,14 @@ def build_landing_hero_html(tokens: dict) -> str:
 """
 
 
+# Single source of truth for the full 4-document generation time shown in the
+# UI (observed live: 8-10 min on the free providers). Never hardcode it elsewhere.
+GENERATION_TIME_ESTIMATE = "~5-10 min"
+GENERATION_TIME_ESTIMATE_LONG = GENERATION_TIME_ESTIMATE.replace(" min", " minutes")
+
+
 def build_landing_deliverables_html(tokens: dict) -> str:
-    """Pure function: token dict -> the "What you get in ~3-5 minutes"
+    """Pure function: token dict -> the "What you get in ~5-10 minutes"
     deliverable cards + stat tiles HTML block. Reuses
     build_landing_hero_html()'s .pom-card/.pom-cidx/.pom-ctitle/.pom-cbody
     classes and pom-card-in keyframe (defined above, always rendered
@@ -263,7 +286,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
         ("📝", "Test Plan", "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."),
     ]
     stats = [
-        ("Time to results", "~3-5 min", "vs. hours of manual work"),
+        ("Time to results", GENERATION_TIME_ESTIMATE, "vs. hours of manual work"),
         ("Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors"),
         ("Deliverables", "4 documents", "Risk · Effort · Strategy · Plan"),
         ("Cost", "Free", "No sign-up required"),
@@ -274,7 +297,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
         for icon, title, body in deliverables
     )
     deliverable_delay_rules = "\n".join(
-        f".pom-deliverables .pom-card:nth-child({i}) {{ animation-delay: {2.15 + (i - 1) * 0.15:.2f}s; }}"
+        f".pom-deliverables .pom-card:nth-child({i}) {{ animation-delay: {2.15 + (i - 1) * 0.1:.2f}s; }}"
         for i in range(1, len(deliverables) + 1)
     )
     stat_tiles = "".join(
@@ -303,7 +326,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
   }}
 }}
 </style>
-<div class="pom-readout">&gt; what you get in ~3-5 minutes</div>
+<div class="pom-readout">&gt; what you get in {GENERATION_TIME_ESTIMATE_LONG}</div>
 <div class="pom-deliverables">{deliverable_cards}</div>
 <div class="pom-stats">{stat_tiles}</div>
 """

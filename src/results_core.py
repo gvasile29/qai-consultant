@@ -43,7 +43,7 @@ class ResultsAnalysis:
     runs: int
     total_tests: int              # distinct test identities
     executions: int
-    overall_pass_rate: float
+    overall_pass_rate: float      # passed / (passed + failed + error); skipped executions are excluded
     flaky: list = field(default_factory=list)             # [{"test", "pass_rate", "runs"}]
     ever_failing: list = field(default_factory=list)       # [{"test", "runs"}]
     never_run: list = field(default_factory=list)          # [{"test"}] — only when reference_tests given
@@ -51,6 +51,8 @@ class ResultsAnalysis:
     failure_clusters: list = field(default_factory=list)   # [{"signature", "count", "sample_tests", "sample_message"}]
     per_run: list = field(default_factory=list)            # [{"run_id", "passed", "failed", "skipped", "duration_s"}]
     warnings: list = field(default_factory=list)           # parsing issues, ignored files, etc.
+    skipped_executions: int = 0                              # executions with status "skipped" (never counted as failures)
+    skipped: list = field(default_factory=list)            # [{"test", "skipped", "runs"}] tests with >= 1 skipped execution
 
 
 # ── Test identity normalization ───────────────────────────────────────────────
@@ -80,11 +82,23 @@ def parse_junit_xml(content: str, run_id: str) -> list[TestRecord]:
 
     Never raises: malformed/unparseable XML returns an empty list. A
     <testcase> missing its `time` attribute defaults to duration_s=0.0.
+    Use parse_junit_xml_detailed() to also get the reason when empty.
     """
+    return parse_junit_xml_detailed(content, run_id)[0]
+
+
+def parse_junit_xml_detailed(content: str, run_id: str) -> tuple[list[TestRecord], list[str]]:
+    """Like parse_junit_xml() but also returns human-readable warnings, so a
+    caller can tell "valid report with zero tests" from "not a JUnit report
+    at all" (e.g. an HTML error page) instead of seeing an empty success."""
+    if not (content or "").strip():
+        return [], [f"Run {run_id!r}: the XML input is empty."]
     try:
         root = DefusedET.fromstring(content)
-    except ET.ParseError:
-        return []
+    except ET.ParseError as exc:
+        return [], [f"Run {run_id!r}: the input is not well-formed XML ({exc})."]
+    except Exception as exc:  # defusedxml raises its own types for entity bombs etc.
+        return [], [f"Run {run_id!r}: the XML was rejected ({type(exc).__name__})."]
 
     records: list[TestRecord] = []
     for tc in root.iter("testcase"):
@@ -115,52 +129,194 @@ def parse_junit_xml(content: str, run_id: str) -> list[TestRecord]:
             run_id=run_id, name=name, classname=classname,
             status=status, duration_s=duration_s, message=message,
         ))
-    return records
+
+    warnings: list[str] = []
+    if not records:
+        warnings.append(
+            f"Run {run_id!r}: well-formed XML but no <testcase> elements were found "
+            f"(root element: <{root.tag}>). Expected a JUnit <testsuites>/<testsuite> report."
+        )
+    return records, warnings
 
 
 # ── CSV parsing ────────────────────────────────────────────────────────────────
 
+_COLUMN_ALIASES = {
+    "name": ("name", "test_name", "testname", "test", "testcase", "test_case", "case",
+             "title", "scenario", "test_title"),
+    "classname": ("classname", "class_name", "class", "suite", "test_suite", "test_class",
+                  "module", "file"),
+    "status": ("status", "result", "outcome", "state", "test_status", "test_result", "verdict"),
+    "duration": ("duration_s", "duration", "time", "time_s", "elapsed", "elapsed_s",
+                 "time_taken", "duration_sec", "seconds"),
+    "duration_ms": ("duration_ms", "time_ms", "elapsed_ms", "millis", "milliseconds"),
+    "run_id": ("run_id", "run", "build", "build_id", "run_name"),
+    "message": ("message", "error_message", "failure_message", "error", "details",
+                "reason", "stack_trace", "failure"),
+}
+
+_STATUS_SYNONYMS = {
+    "passed": ("pass", "passed", "ok", "success", "successful", "succeeded", "green"),
+    "failed": ("fail", "failed", "failure", "ko", "red"),
+    "error": ("err", "error", "errored", "broken", "exception", "crashed"),
+    "skipped": ("skip", "skipped", "ignored", "ignore", "pending", "not_run", "notrun",
+                "disabled", "xfail"),
+}
+_STATUS_LOOKUP = {syn: canon for canon, syns in _STATUS_SYNONYMS.items() for syn in syns}
+
+_DURATION_RE = re.compile(
+    r"^\s*([0-9]*\.?[0-9]+)\s*(ms|msec|s|sec|secs|seconds?|m|min)?\s*$", re.IGNORECASE,
+)
+
+
+def _norm_header(raw: str) -> str:
+    return re.sub(r"[\s\-./]+", "_", (raw or "").strip().lower()).strip("_")
+
+
+def _map_columns(fieldnames: list) -> tuple[dict[str, str], list[str]]:
+    """Map canonical field -> original header (alias priority decides, not
+    column order); also return the headers that matched nothing."""
+    by_norm: dict[str, str] = {}
+    for original in fieldnames:
+        if original is None:
+            continue
+        by_norm.setdefault(_norm_header(original), original)
+    mapping: dict[str, str] = {}
+    for canon, aliases in _COLUMN_ALIASES.items():
+        for alias in aliases:
+            if alias in by_norm:
+                mapping[canon] = by_norm[alias]
+                break
+    used = set(mapping.values())
+    unrecognised = [h for h in fieldnames if h is not None and h not in used]
+    return mapping, unrecognised
+
+
+def _parse_duration(raw: object, assume_ms: bool) -> float:
+    text = str(raw or "").strip()
+    if not text:
+        return 0.0
+    m = _DURATION_RE.match(text)
+    if not m:
+        return 0.0
+    value = float(m.group(1))
+    unit = (m.group(2) or "").lower()
+    if unit in ("ms", "msec") or (not unit and assume_ms):
+        return value / 1000.0
+    if unit in ("m", "min"):
+        return value * 60.0
+    return value
+
+
+def normalize_status(raw: object) -> Optional[str]:
+    """Map a free-form status string to passed/failed/error/skipped, or None."""
+    key = re.sub(r"[\s\-]+", "_", str(raw or "").strip().lower())
+    return _STATUS_LOOKUP.get(key)
+
+
 def parse_results_csv(content: str) -> list[TestRecord]:
-    """Parse a CSV of test results.
+    """Parse a CSV of test results into TestRecords; see
+    parse_results_csv_detailed() for the tolerant column/status contract and
+    the warnings explaining dropped rows. Never raises."""
+    return parse_results_csv_detailed(content)[0]
 
-    Column contract:
-      - required: `name`, `classname`, `status` (one of passed/failed/error/skipped)
-      - optional: `run_id` (default "csv" — use this when the whole file is one run),
-                  `duration_s` (default 0.0), `message` (default "")
 
-    Rows missing a required column, an empty name, or an unrecognized status
-    are skipped. Never raises — a completely malformed CSV just yields [].
+def parse_results_csv_detailed(content: str) -> tuple[list[TestRecord], list[str]]:
+    """Parse a CSV of test results, returning (records, warnings).
+
+    Headers are matched tolerantly (case/space/dash-insensitive, with
+    aliases; see _COLUMN_ALIASES): test name = name|test_name|test|testcase|
+    title, status = status|result|outcome, duration = duration_s|duration|
+    time|elapsed (seconds; a `*_ms` header or an `ms` suffix means
+    milliseconds), classname|suite, run_id|run|build, message|error|details.
+    Status values are matched via synonyms (pass/ok/success, fail/failure/ko,
+    err, skip/ignored/pending ...). Only the test-name and status columns are
+    required; classname, run_id (default "csv"), duration and message are
+    optional. `,` `;` and tab delimiters are detected.
+
+    Never raises. Dropped rows and unrecognised columns are listed in the
+    returned warnings; an empty record list always comes with a warning
+    explaining why.
     """
+    text = (content or "").lstrip("﻿")
+    if not text.strip():
+        return [], ["The CSV input is empty."]
+
+    first_line = text.lstrip().splitlines()[0]
+    delimiter = ","
+    if "," not in first_line:
+        if ";" in first_line:
+            delimiter = ";"
+        elif "\t" in first_line:
+            delimiter = "\t"
+
     try:
-        reader = csv.DictReader(io.StringIO(content))
-    except Exception:
-        return []
-    if not reader.fieldnames:
-        return []
+        reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+        fieldnames = list(reader.fieldnames or [])
+    except Exception as exc:
+        return [], [f"The CSV could not be read ({type(exc).__name__})."]
+    if not fieldnames:
+        return [], ["The CSV has no header row."]
+
+    mapping, unrecognised = _map_columns(fieldnames)
+    missing = [c for c in ("name", "status") if c not in mapping]
+    if missing:
+        labels = {"name": "a test-name column (name/test_name/test/testcase/title)",
+                  "status": "a status column (status/result/outcome)"}
+        return [], [
+            "The CSV is missing " + " and ".join(labels[m] for m in missing)
+            + f". Columns found: {', '.join(repr(f) for f in fieldnames)}."
+        ]
+
+    warnings: list[str] = []
+    if unrecognised:
+        warnings.append(
+            "Ignored unrecognised CSV column(s): " + ", ".join(repr(u) for u in unrecognised) + ".",
+        )
+
+    ms_header = "duration_ms" in mapping and "duration" not in mapping
+    dur_col = mapping.get("duration_ms") if ms_header else mapping.get("duration")
 
     records: list[TestRecord] = []
+    empty_name = 0
+    bad_status: dict[str, int] = {}
     for row in reader:
         try:
-            name = (row.get("name") or "").strip()
+            name = (row.get(mapping["name"]) or "").strip()
+            raw_status = (row.get(mapping["status"]) or "").strip()
+            if not name and not raw_status:
+                continue  # blank line
             if not name:
+                empty_name += 1
                 continue
-            status = (row.get("status") or "").strip().lower()
-            if status not in VALID_STATUSES:
+            status = normalize_status(raw_status)
+            if status is None:
+                label = raw_status or "<empty>"
+                bad_status[label] = bad_status.get(label, 0) + 1
                 continue
-            classname = (row.get("classname") or "").strip()
-            run_id = (row.get("run_id") or "").strip() or "csv"
-            try:
-                duration_s = float(row.get("duration_s") or 0.0)
-            except (TypeError, ValueError):
-                duration_s = 0.0
-            message = row.get("message") or ""
+            classname = (row.get(mapping["classname"]) or "").strip() if "classname" in mapping else ""
+            run_id = (row.get(mapping["run_id"]) or "").strip() if "run_id" in mapping else ""
+            duration_s = _parse_duration(row.get(dur_col), ms_header) if dur_col else 0.0
+            message = (row.get(mapping["message"]) or "") if "message" in mapping else ""
             records.append(TestRecord(
-                run_id=run_id, name=name, classname=classname,
+                run_id=run_id or "csv", name=name, classname=classname,
                 status=status, duration_s=duration_s, message=message,
             ))
         except Exception:
             continue
-    return records
+
+    if empty_name:
+        warnings.append(f"Dropped {empty_name} row(s) with an empty test name.")
+    if bad_status:
+        shown = ", ".join(f"{k!r} x{v}" for k, v in sorted(bad_status.items())[:10])
+        warnings.append(
+            f"Dropped {sum(bad_status.values())} row(s) with an unrecognised status: {shown}. "
+            "Recognised: pass/passed/ok/success, fail/failed/failure/ko, error/err, "
+            "skip/skipped/ignored/pending.",
+        )
+    if not records:
+        warnings.append("No test rows could be parsed from the CSV (header-only file or no usable rows).")
+    return records, warnings
 
 
 # ── Failure clustering ─────────────────────────────────────────────────────────
@@ -209,6 +365,12 @@ def analyze(
     (flaky_min, flaky_max) AND executions >= min_runs_for_verdict — a test
     with 1 fail out of 2 runs is "insufficient data", not flaky.
     Ever-failing: >= min_runs_for_verdict executions and zero passes.
+
+    Skipped executions are not failures and carry no pass/fail signal: they
+    are excluded from pass rates, the flaky and ever-failing verdicts and the
+    minimum-execution counts, and reported separately (`skipped`,
+    `skipped_executions`). pass,pass,skip is therefore a stable test, not
+    "flaky at 0.67".
     """
     groups: dict[str, list[TestRecord]] = defaultdict(list)
     for r in records:
@@ -216,15 +378,21 @@ def analyze(
 
     executions = len(records)
     passed_count = sum(1 for r in records if r.status == "passed")
-    overall_pass_rate = round(passed_count / executions, 4) if executions else 0.0
+    skipped_total = sum(1 for r in records if r.status == "skipped")
+    verdict_executions = executions - skipped_total
+    overall_pass_rate = round(passed_count / verdict_executions, 4) if verdict_executions else 0.0
 
     flaky = []
     ever_failing = []
     slowest = []
+    skipped: list[dict] = []
     for identity, recs in groups.items():
-        n = len(recs)
+        n_skipped = sum(1 for r in recs if r.status == "skipped")
+        n = len(recs) - n_skipped  # executions that carry a pass/fail signal
         p = sum(1 for r in recs if r.status == "passed")
         pass_rate = p / n if n else 0.0
+        if n_skipped:
+            skipped.append({"test": identity, "skipped": n_skipped, "runs": len(recs)})
 
         if n >= min_runs_for_verdict and flaky_min < pass_rate < flaky_max:
             flaky.append({"test": identity, "pass_rate": round(pass_rate, 4), "runs": n})
@@ -240,6 +408,7 @@ def analyze(
             "max_s": round(max(durations), 4) if durations else 0.0,
         })
 
+    skipped.sort(key=lambda e: (-e["skipped"], e["test"]))
     slowest.sort(key=_slowest_sort_key, reverse=True)
     slowest = slowest[:slowest_n]
 
@@ -289,6 +458,8 @@ def analyze(
         failure_clusters=failure_clusters,
         per_run=per_run,
         warnings=[],
+        skipped_executions=skipped_total,
+        skipped=skipped[:50],
     )
 
 

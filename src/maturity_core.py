@@ -32,6 +32,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from text_checks import detect_language, is_sentence_like
+
 MIN_CONTENT_CHARS = 200
 MAX_INPUT_CHARS = 500_000
 TMMI_LEVEL_THRESHOLD = 60
@@ -41,6 +43,21 @@ _DISCLAIMER = (
     "not a certified TMMi appraisal — a real appraisal requires evidence "
     "and interviews reviewed by an accredited assessor, and levels cannot "
     "be skipped."
+)
+
+DETECTION_CAVEAT = (
+    "Evidence detection is keyword-based (no LLM): it can under-score practices "
+    "that are described in different words than the rubric expects, and cannot "
+    "judge whether a stated practice is actually followed. Treat the level as a "
+    "conversation starter, and read 'No evidence found' as 'not found in the "
+    "wording provided', not 'absent'."
+)
+
+KEYWORD_LIST_WARNING = (
+    "The input looks like a bare list of QA keywords rather than a description "
+    "of how the team works. Fragments that are not full sentences were ignored "
+    "as evidence (a keyword list is not evidence of practice). Describe what "
+    "the team actually does, in sentences, for a meaningful result."
 )
 
 _AI_ACT_NOTE = (
@@ -73,6 +90,14 @@ class MaturityResult:
     findings: list = field(default_factory=list)
     disclaimer: str = ""
     stats: dict = field(default_factory=dict)
+    # F7: language heuristic (rubric is English-keyword based).
+    language: str = "unknown"
+    language_warning: str = ""
+    score_reliable: bool = True
+    # F22: set when the input looks like a keyword list rather than prose.
+    keyword_list_warning: str = ""
+    # F4: always present on scored results - detection is keyword-based.
+    detection_caveat: str = ""
 
 
 # ── Input hygiene (same convention as review_core.py, redefined locally —
@@ -93,6 +118,20 @@ def _strip_front_matter_and_footer(text: str) -> str:
 
 _REQ_ID_RE = re.compile(r"\b(?:REQ|US|STORY|JIRA)-?\d+\b|\b[A-Z]{2,10}-\d+\b")
 
+def _nf_pattern(word: str) -> str:
+    """Regex keyword (see 're:' in _keyword_present_without_negation) matching
+    `word` in the same sentence as a testing verb or a 'non-functional' cue,
+    in either order - catches 'performance, security and usability testing'
+    and 'non-functional testing covers performance' which the fixed
+    '<word> test' phrases missed. Whole-word on both sides."""
+    t = r"(?:test|tests|testing|tested)"
+    w = r"\b" + word + r"\b"
+    return ("re:" + w + r"[^.\n]{0,60}\b" + t + r"\b"
+            + r"|\b" + t + r"\b[^.\n]{0,40}" + w
+            + r"|\bnon-?functional\b[^.\n]{0,80}" + w)
+
+
+
 # level -> {area_key: [(check_name, keywords), ...]}
 _TMMI_CHECKS = {
     2: {
@@ -108,11 +147,16 @@ _TMMI_CHECKS = {
         ],
         "test_monitoring_and_control": [
             ("progress_tracking", ["defect log", "defect tracking", "status report", "progress report",
-                                    "defect triage", "triage of defects", "pass rate"]),
-            ("corrective_action", ["corrective action", "tracked against plan", "monitored against the plan", "report status"]),
+                                    "defect triage", "triage of defects", "pass rate",
+                                    "dashboard", "defect metrics", "test metrics", "weekly report",
+                                    r"re:\bmonitor(?:ed|ing)\b[^.\n]{0,40}\b(?:weekly|daily|through|via|using|with)\b"]),
+            ("corrective_action", ["corrective action", "tracked against plan", "monitored against the plan", "report status",
+                                    "escalat", "deviations from the plan", "re-plan", "replan"]),
         ],
         "test_design_and_execution": [
-            ("test_design_technique", ["test design technique", "test case design", "structured test design"]),
+            ("test_design_technique", ["test design technique", "test case design", "structured test design",
+                                       "equivalence partitioning", "boundary value", "decision table",
+                                       "state transition testing", "pairwise"]),
             ("entry_exit_criteria", ["entry criteria", "exit criteria", "entry/exit criteria"]),
         ],
         "test_environment": [
@@ -122,11 +166,13 @@ _TMMI_CHECKS = {
     },
     3: {
         "test_organization": [
-            ("independent_test_team", ["test team", "qa team", "independent test", "test organization", "test department"]),
+            ("independent_test_team", ["test team", "qa team", "independent test", "test organization", "test organisation",
+                                       "test department", "dedicated test", "dedicated qa", "qa department"]),
             ("defined_roles", ["test manager", "test lead", "qa lead", "roles and responsibilities"]),
         ],
         "test_training_program": [
-            ("training_program", ["training program", "training curriculum", "certification program"]),
+            ("training_program", ["training program", "training curriculum", "certification program",
+                                  "istqb", "certified tester", "training plan"]),
             ("onboarding", ["onboarding", "skills development"]),
         ],
         "test_lifecycle_and_integration": [
@@ -134,13 +180,16 @@ _TMMI_CHECKS = {
             ("integrated_from_requirements", ["from the requirements phase", "integrated into the software lifecycle", "shift-left", "early test involvement"]),
         ],
         "non_functional_testing": [
-            ("performance", ["performance test", "load test", "stress test"]),
-            ("security", ["security test", "penetration test"]),
-            ("usability_or_reliability", ["usability test", "reliability test", "accessibility test"]),
+            ("performance", ["performance test", "load test", "stress test", _nf_pattern("performance")]),
+            ("security", ["security test", "penetration test", _nf_pattern("security")]),
+            ("usability_or_reliability", ["usability test", "reliability test", "accessibility test",
+                                          _nf_pattern("usability"), _nf_pattern("reliability"),
+                                          _nf_pattern("accessibility")]),
         ],
         "peer_reviews": [
             ("review_type", ["code review", "peer review", "inspection", "walkthrough", "technical review"]),
-            ("applied_to_requirements_or_design", ["requirements review", "design review"]),
+            ("applied_to_requirements_or_design", ["requirements review", "design review",
+                                                    r"re:\breviews?\b[^.\n]{0,40}\b(?:requirements?|design)\b"]),
         ],
     },
 }
@@ -161,7 +210,8 @@ def _keyword_present_without_negation(text: str, keyword: str) -> bool:
     "none of") immediately before it. A description that explicitly denies
     having something (e.g. "we have no test plan") must not score that
     keyword as evidence just because it appears as a substring."""
-    for match in re.finditer(re.escape(keyword), text):
+    pattern = keyword[3:] if keyword.startswith("re:") else re.escape(keyword)
+    for match in re.finditer(pattern, text):
         window_start = max(0, match.start() - _NEGATION_WINDOW_CHARS)
         window = text[window_start:match.start()]
         if not any(neg in window for neg in _NEGATORS):
@@ -172,7 +222,7 @@ def _keyword_present_without_negation(text: str, keyword: str) -> bool:
 _TRACEABILITY_PHRASES = [
     "requirement traceability", "traceability from requirements",
     "traceable to requirements", "linked to requirements",
-    "requirements to test cases", "traced to test cases",
+    "requirements to test cases", "traced to test cases", "traceability matrix",
 ]
 
 
@@ -310,6 +360,25 @@ def _score_ai_act(lower_text: str) -> tuple:
     return scores, findings
 
 
+# Sentence ends, blank lines, and bullet starts (a bare newline is NOT a
+# boundary: hard-wrapped prose must stay one segment).
+_SEGMENT_SPLIT_RE = re.compile(r"[.!?;]+|\n\s*\n|\n\s*[-*•]\s")
+
+
+def _keyword_list_filter(cleaned: str) -> tuple:
+    """(evidence_text, looks_like_keyword_list). When most of the input is
+    not prose (a bare comma/newline-separated list of QA terms), only the
+    sentence-like segments are kept as evidence - listing keywords is not
+    evidence of practice."""
+    segments = [seg.strip() for seg in _SEGMENT_SPLIT_RE.split(cleaned) if seg.strip()]
+    prose = [seg for seg in segments if is_sentence_like(seg)]
+    total = sum(len(seg) for seg in segments)
+    prose_chars = sum(len(seg) for seg in prose)
+    if total and len(cleaned.split()) >= 8 and prose_chars / total < 0.4:
+        return "\n".join(prose), True
+    return cleaned, False
+
+
 def assess_maturity(text: str) -> MaturityResult:
     """Deterministically assess QA process maturity from a free-text
     description or pasted document. No LLM anywhere in this call path."""
@@ -332,12 +401,19 @@ def assess_maturity(text: str) -> MaturityResult:
                    "reason": f"content is under {MIN_CONTENT_CHARS} characters after cleanup"},
         )
 
-    lower_text = cleaned.lower()
+    lang = detect_language(cleaned)
+    if lang["reliable"]:
+        evidence_text, keyword_list = _keyword_list_filter(cleaned)
+    else:
+        # The prose heuristic is English-based; don't misflag foreign text.
+        evidence_text, keyword_list = cleaned, False
 
-    tmmi_scores, tmmi_findings = _score_tmmi(cleaned, lower_text)
+    lower_text = evidence_text.lower()
+
+    tmmi_scores, tmmi_findings = _score_tmmi(evidence_text, lower_text)
     indicative_level = _indicative_level(tmmi_scores)
 
-    ai_act_relevant = _is_ai_act_relevant(lower_text)
+    ai_act_relevant = _is_ai_act_relevant(cleaned.lower())
     ai_act_scores, ai_act_findings = ({}, [])
     ai_act_note = ""
     if ai_act_relevant:
@@ -355,4 +431,9 @@ def assess_maturity(text: str) -> MaturityResult:
         findings=tmmi_findings + ai_act_findings,
         disclaimer=_DISCLAIMER,
         stats={"char_count": len(cleaned), "word_count": word_count, "ai_act_relevant": ai_act_relevant},
+        language=lang["language"],
+        language_warning=lang["warning"],
+        score_reliable=lang["reliable"],
+        keyword_list_warning=KEYWORD_LIST_WARNING if keyword_list else "",
+        detection_caveat=DETECTION_CAVEAT,
     )

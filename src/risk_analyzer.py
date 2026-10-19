@@ -15,8 +15,9 @@ from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
+from source_labels import build_source_labels
 from logger import get_logger
-from output_guards import CITATION_RULES, GROUNDING_RULES
+from output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
 
@@ -30,10 +31,10 @@ You analyze software projects and identify testing risks based on:
 - Team size and experience relative to project complexity
 
 Your risk analysis is:
-- Specific to the project — never generic
+- Specific to the project, never generic
 - Honest about likelihood and impact
-- Actionable — every risk has a concrete mitigation
-- Prioritized — Critical risks are called out clearly
+- Actionable, every risk has a concrete mitigation
+- Prioritized, Critical risks are called out clearly
 """
 
 # ── Risk Prompt Builder ────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ def build_risk_prompt(context: ProjectContext, knowledge_context: str, results_s
     execution_data_block = ""
     if results_summary:
         execution_data_block = f"""
-MEASURED EXECUTION DATA (deterministic, from the user's own attached test results —
+MEASURED EXECUTION DATA (deterministic, from the user's own attached test results,
 not from the knowledge base): treat this as direct evidence for specific risks (e.g.
 a flaky test suite is evidence of an "unreliable regression signal" risk; ever-failing
 tests are evidence of an untested/broken area; a failure cluster is evidence of a
@@ -60,9 +61,10 @@ RELEVANT QA KNOWLEDGE BASE:
 {execution_data_block}
 {GROUNDING_RULES}
 {CITATION_RULES}
+{GENERATION_RULES}
 Generate a Risk Register using EXACTLY this structure:
 
-# Risk Register — {context.project_name}
+# Risk Register: {context.project_name}
 
 ## Executive Summary
 2-3 sentences summarizing the overall risk profile of this project.
@@ -76,18 +78,18 @@ Provide a summary table:
 |---|---|---|---|---|---|
 | R01 | ... | High/Medium/Low | High/Medium/Low | Critical/High/Medium/Low | 1/2/3/... |
 
-(List the 5-7 MOST CRITICAL risks, sorted by priority — a shorter register where every
+(List the 5-7 MOST CRITICAL risks, sorted by priority, a shorter register where every
 listed risk gets full detail below beats a longer one that runs out of space partway through)
 
 ## Detailed Risk Analysis
 
 For each risk listed in the matrix above, provide:
 
-### R01 — [Risk Title]
+### R01: [Risk Title]
 - **Category:** [Technical / Process / Compliance / Resource / External]
 - **Description:** What is the risk and why does it exist for this project?
-- **Likelihood:** High / Medium / Low — explain why
-- **Impact:** High / Medium / Low — explain what happens if it materializes
+- **Likelihood:** High / Medium / Low: explain why
+- **Impact:** High / Medium / Low: explain what happens if it materializes
 - **Risk Level:** Critical / High / Medium / Low
 - **Early Warning Signs:** What signals indicate this risk is materializing?
 - **Mitigation Strategy:** Concrete, specific actions to reduce this risk
@@ -171,10 +173,7 @@ class RiskAnalyzer:
         risk_register = append_execution_data_appendix(risk_register, results_summary)
         logger.info(f"Risk Register generated ({len(risk_register)} chars)")
 
-        sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in chunks
-        })
+        sources = build_source_labels(chunks)
 
         return risk_register, sources
 

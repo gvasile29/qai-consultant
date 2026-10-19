@@ -18,11 +18,12 @@ from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
+from source_labels import build_source_labels
 from risk_analyzer import RiskAnalyzer
 from test_plan_generator import TestPlanGenerator
 from effort_estimator import EffortEstimator
 from logger import get_logger
-from output_guards import CITATION_RULES, GROUNDING_RULES
+from output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
 
@@ -35,8 +36,8 @@ You generate professional, actionable Test Strategy documents based on:
 - Industry best practices and real-world experience
 
 Your Test Strategy documents are:
-- Practical and tailored to the specific project — never generic
-- Based on risk — you prioritize what matters most
+- Practical and tailored to the specific project, never generic
+- Based on risk, you prioritize what matters most
 - Honest about constraints (team size, timeline, budget)
 - Written in clear, professional English
 
@@ -58,21 +59,22 @@ RELEVANT QA KNOWLEDGE BASE:
 
 {GROUNDING_RULES}
 {CITATION_RULES}
+{GENERATION_RULES}
 Generate a Test Strategy document using EXACTLY this structure:
 
-# Test Strategy — {context.project_name}
+# Test Strategy: {context.project_name}
 
 ## 1. Project Overview
 Brief description of the project, its goals, and the testing scope.
 
-## 2. Scope — What Will Be Tested
+## 2. Scope: What Will Be Tested
 List the features, modules, and systems that are in scope for testing.
 
-## 3. Scope — What Will NOT Be Tested
+## 3. Scope: What Will NOT Be Tested
 List what is explicitly excluded from testing and the reason why.
 
 ## 4. Risk Assessment
-Identify and rate the top 5-7 risks (High/Medium/Low) based on the project context —
+Identify and rate the top 5-7 risks (High/Medium/Low) based on the project context,
 prioritize covering fewer risks completely over listing more and running out of space.
 For each risk: describe it, rate its likelihood and impact, and suggest mitigation.
 
@@ -259,10 +261,7 @@ class StrategyGenerator:
             raise ValueError(f"LLM returned empty Test Strategy for '{context.project_name}'")
         logger.info(f"Test Strategy generated ({len(strategy)} chars)")
 
-        sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in chunks
-        })
+        sources = build_source_labels(chunks)
 
         return strategy, sources
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for src/effort_estimator.py — v0.6 Confidence Level Algorithm.
 
 Four-factor score-based algorithm (0-100 pts):
@@ -116,13 +116,13 @@ def make_context(**overrides) -> ProjectContext:
 # To isolate a single factor, set the other three to zero:
 #
 #   Factor 1 = 0 → spread ≥ 3.0: O=50, E=100, P=350 → spread = 3.0
-#   Factor 2 = 0 → gap_ratio ≤ -0.3: gap=-100 (with E=100) → gap_ratio = -1.0
+#   Factor 2 = 0 → gap_ratio ≤ -0.3: gap=-30 (with E=100) → gap_ratio = -0.3 (exactly at the severe-deficit edge; below -0.3 the plausibility cap would also bound the label)
 #   Factor 3 = 0 → quality = 0
 #   Factor 4 = 0 → mult = 100
 #
 # Used in all factor isolation tests below.
 _ZERO_SPREAD = dict(o=50, e=100, p=350)     # spread=3.0 → Factor 1 = 0
-_ZERO_GAP    = dict(gap=-100)               # gap_ratio=-1.0 → Factor 2 = 0  (with e=100)
+_ZERO_GAP    = dict(gap=-30)               # gap_ratio=-0.3 → Factor 2 = 0  (with e=100)
 
 
 # ── FACTOR 1: PERT Spread Ratio (0-40 pts) ────────────────────────────────────
@@ -130,8 +130,8 @@ _ZERO_GAP    = dict(gap=-100)               # gap_ratio=-1.0 → Factor 2 = 0  (
 def test_spread_below_1_gives_40pts():
     """spread_ratio < 1.0 → +40 pts from Factor 1."""
     # O=90, E=100, P=100 → spread = (100-90)/100 = 0.1 < 1.0 → Factor 1 = 40
-    # Isolation: gap=-100 (Factor 2=0), quality=0 (Factor 3=0), mult=100 (Factor 4=0)
-    data = make_confidence_data(o=90, e=100, p=100, gap=-100, quality=0, mult=100)
+    # Isolation: gap=-30 (Factor 2=0), quality=0 (Factor 3=0), mult=100 (Factor 4=0)
+    data = make_confidence_data(o=90, e=100, p=100, gap=-30, quality=0, mult=100)
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 40, \
         f"spread=0.1 → expected 40 pts from Factor 1 only, got {data.confidence_score}"
@@ -144,7 +144,7 @@ def test_spread_1_5_gives_30pts():
     Formula: int(40 - (1.5 - 1.0) * 20) = int(40 - 10) = 30
     """
     # O=50, E=100, P=200 → spread = 150/100 = 1.5 → int(40 - 0.5*20) = 30
-    data = make_confidence_data(o=50, e=100, p=200, gap=-100, quality=0, mult=100)
+    data = make_confidence_data(o=50, e=100, p=200, gap=-30, quality=0, mult=100)
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 30, \
         f"spread=1.5 → expected 30 pts from Factor 1 only, got {data.confidence_score}"
@@ -157,7 +157,7 @@ def test_spread_2_5_gives_12pts():
     Formula: int(20 - (2.5 - 2.0) * 15) = int(20 - 7.5) = 12
     """
     # O=50, E=100, P=300 → spread = 250/100 = 2.5 → int(20 - 0.5*15) = 12
-    data = make_confidence_data(o=50, e=100, p=300, gap=-100, quality=0, mult=100)
+    data = make_confidence_data(o=50, e=100, p=300, gap=-30, quality=0, mult=100)
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 12, \
         f"spread=2.5 → expected 12 pts from Factor 1 only, got {data.confidence_score}"
@@ -167,7 +167,7 @@ def test_spread_2_5_gives_12pts():
 def test_spread_3_or_more_gives_0pts():
     """spread_ratio ≥ 3.0 → +0 pts from Factor 1."""
     # O=50, E=100, P=350 → spread = 300/100 = 3.0 → 0 pts
-    data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=100)
+    data = make_confidence_data(o=50, e=100, p=350, gap=-30, quality=0, mult=100)
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 0, \
         f"spread=3.0 → expected 0 pts from Factor 1 only, got {data.confidence_score}"
@@ -322,8 +322,8 @@ def test_multiplier_0pct_gives_10pts():
 
     Formula: max(0, 10 - int(0 / 10)) = max(0, 10 - 0) = 10
     """
-    # spread=3.0, gap=-100 (both zero), quality=0 → isolate Factor 4
-    data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=0)
+    # spread=3.0, gap=-30 (both zero), quality=0 → isolate Factor 4
+    data = make_confidence_data(o=50, e=100, p=350, gap=-30, quality=0, mult=0)
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 10, \
         f"mult=0% → expected 10 pts from Factor 4 only, got {data.confidence_score}"
@@ -335,7 +335,7 @@ def test_multiplier_50pct_gives_5pts():
 
     Formula: max(0, 10 - int(50 / 10)) = max(0, 10 - 5) = 5
     """
-    data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=50)
+    data = make_confidence_data(o=50, e=100, p=350, gap=-30, quality=0, mult=50)
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 5, \
         f"mult=50% → expected 5 pts from Factor 4 only, got {data.confidence_score}"
@@ -347,7 +347,7 @@ def test_multiplier_100pct_gives_0pts():
 
     Formula: max(0, 10 - int(100 / 10)) = max(0, 10 - 10) = 0
     """
-    data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=100)
+    data = make_confidence_data(o=50, e=100, p=350, gap=-30, quality=0, mult=100)
     effort_core.calculate_confidence(data)
     assert data.confidence_score == 0, \
         f"mult=100% → expected 0 pts from Factor 4 only, got {data.confidence_score}"
@@ -415,7 +415,7 @@ def test_score_39_is_low():
 def test_score_0_is_low():
     """Minimum possible score (0) → 'Low' confidence."""
     # spread=3.0 (→0) + gap_ratio=-1.0 (→0) + quality=0 + mult=100% (→0) = 0
-    data = make_confidence_data(o=50, e=100, p=350, gap=-100, quality=0, mult=100)
+    data = make_confidence_data(o=50, e=100, p=350, gap=-30, quality=0, mult=100)
     label = effort_core.calculate_confidence(data)
     assert label == "Low", f"score=0 → expected 'Low', got '{label}'"
     assert data.confidence_score == 0, \

@@ -26,6 +26,7 @@ _EXPECTED_PY_MODULES = {
     "mcp_server.py", "dialogue.py", "effort_core.py", "local_index.py",
     "telemetry.py", "prompts.py", "kb_config.py", "logger.py", "version.py",
     "review_core.py", "results_core.py", "maturity_core.py", "risk_ledger.py",
+    "text_checks.py",
 }
 
 # Must match pyproject.toml's [tool.setuptools.package-data] whitelist exactly —
@@ -102,6 +103,10 @@ def test_all_dependencies_are_exact_pinned():
 
 @pytest.fixture(scope="module")
 def built_wheel(tmp_path_factory) -> Path:
+    # `build` (PyPA) is a dev-only tool; without it (or setuptools, used by
+    # --no-isolation) the wheel cannot be built here - skip, don't error.
+    pytest.importorskip("build", reason="PyPA `build` is not installed; cannot build the wheel")
+    pytest.importorskip("setuptools", reason="setuptools is not installed; cannot build the wheel")
     out_dir = tmp_path_factory.mktemp("qai_mcp_dist")
     result = subprocess.run(
         [sys.executable, "-m", "build", "--wheel", "--no-isolation", "--outdir", str(out_dir)],

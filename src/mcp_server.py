@@ -28,6 +28,7 @@ registration for any tool with a non-trivial type hint (Optional[str], etc.).
 """
 
 import json
+import re
 import sys
 import time
 from dataclasses import asdict
@@ -83,17 +84,86 @@ def _get_index() -> LocalIndex:
 
 # ── Tool: retrieve_qa_knowledge ─────────────────────────────────────────────────
 
+# Calibrated against the real index (all-MiniLM-L6-v2, 2026-10): off-topic or
+# gibberish queries score 0.11-0.34 ("how to cook pasta carbonara" 0.17,
+# "asdfgh qwerty zxcv" 0.34, "python list comprehension" 0.30, "what is boundary
+# value analysis" 0.34 - a topic the Markdown-only index genuinely lacks), while
+# on-topic queries land at 0.45-0.75 ("risk-based testing" 0.75, "exploratory
+# testing charter" 0.68, "OWASP top 10 injection" 0.61).
+DEFAULT_MIN_SCORE = 0.40
+
+# Tool-boundary input cap for free-text/document arguments (characters).
+MAX_INPUT_CHARS = 200_000
+
+# review_qa_document / assess_qa_maturity citation policy (F11).
+_CITATION_MIN_SCORE = 0.45
+_AI_REGULATION_RE = re.compile(
+    r"\b(?:AI|A\.I\.|artificial intelligence|machine[- ]learning|LLMs?|GPT|generative|"
+    r"EU AI Act|AI Act|regulat\w*|GDPR|high-risk)\b",
+    re.IGNORECASE,
+)
+
+
+def _too_long(name: str, value: Optional[str]) -> Optional[dict]:
+    """Structured invalid_argument error for an over-long text argument, else None."""
+    if isinstance(value, str) and len(value) > MAX_INPUT_CHARS:
+        return {
+            "error": "invalid_argument",
+            "message": f"{name} is {len(value)} characters; the limit is {MAX_INPUT_CHARS}.",
+            "max_chars": MAX_INPUT_CHARS,
+        }
+    return None
+
+
+def _resolve_citations(index, queries, *, allow_regulation: bool) -> list[dict]:
+    """KB citations for a finding's citation_queries: only chunks scoring at
+    least _CITATION_MIN_SCORE, regulation (EU AI Act) sources only when
+    allow_regulation is True, one entry per source (best score)."""
+    best: dict[str, dict] = {}
+    for query in queries:
+        search_result = index.search(query, k=3, min_score=_CITATION_MIN_SCORE)
+        if "error" in search_result:
+            continue
+        for c in search_result["chunks"]:
+            if not allow_regulation and "eu_ai_act" in c["source"].lower():
+                continue
+            entry = {"source": c["source"], "category": c["category"], "score": c["score"]}
+            if c["source"] not in best or entry["score"] > best[c["source"]]["score"]:
+                best[c["source"]] = entry
+    return sorted(best.values(), key=lambda e: e["score"], reverse=True)
+
+
 @mcp.tool()
-def retrieve_qa_knowledge(query: str, category: Optional[str] = None, k: int = 5) -> dict:
-    """Retrieve grounding chunks from the QA knowledge base (ISTQB, OWASP, IEEE,
-    ISO standards; testing methodologies; audit/evaluation frameworks; the EU AI
-    Act). Returns {"chunks": [{"source", "category", "text", "score"}], "kb_version"}.
-    category, if given, must be one of: Standard, Methodology, Article,
-    Expert Knowledge, Audit/Evaluation — an unrecognized value returns a
-    structured {"error": "invalid_argument", ...} rather than raising. k is
+def retrieve_qa_knowledge(
+    query: str,
+    category: Optional[str] = None,
+    k: int = 5,
+    min_score: float = 0.40,  # literal (keep == DEFAULT_MIN_SCORE; tests/test_skill_doc.py parses it)
+) -> dict:
+    """Retrieve grounding chunks from the local QA knowledge base (Markdown
+    guides: testing methodologies, IEEE/ISO/OWASP Markdown standards,
+    audit/evaluation frameworks, AI-SDLC case studies, the EU AI Act). NOT
+    included: the ISTQB and OWASP PDF syllabi (licensing) - so fundamentals
+    such as test design techniques (boundary value analysis), smoke vs sanity
+    or test levels are often absent; the first call after server start may take
+    ~30s while the index builds (usually done in the background by then).
+    Returns {"chunks": [{"source", "category", "text", "score"}], "kb_version",
+    "best_score", "low_relevance"[, "note"]}. Chunks scoring below min_score
+    (cosine similarity, default 0.40, 0 disables) are dropped; if nothing
+    reaches it, chunks is empty, low_relevance is true and note says so - then
+    answer from your own knowledge and tell the user the KB had no match
+    (best_score shows how close the best miss was). Near-duplicate overlapping
+    chunks of one document are collapsed. category, if given, must be one of:
+    Standard, Methodology, Article, Expert Knowledge, Audit/Evaluation; an
+    empty query, an unrecognized category or an out-of-range min_score returns
+    a structured {"error": "invalid_argument", ...} rather than raising. k is
     clamped to [1, 20]."""
     start = time.monotonic()
-    result = _get_index().search(query, category=category, k=k)
+    too_long = _too_long("query", query)
+    if too_long is not None:
+        telemetry.track_tool_called("retrieve_qa_knowledge", success=False, duration_ms=0.0)
+        return too_long
+    result = _get_index().search(query, category=category, k=k, min_score=min_score)
     duration_ms = (time.monotonic() - start) * 1000
     telemetry.track_tool_called(
         "retrieve_qa_knowledge", success="error" not in result,
@@ -236,8 +306,13 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
     with overall_score=0 rather than an error. Each finding carries
     kb_citations resolved from the knowledge base for its citation queries —
     a finding with no resolvable source is returned with an empty
-    kb_citations list rather than a fabricated one. Returns {doc_type,
-    overall_score, dimension_scores, findings, stats, kb_version}."""
+    kb_citations list rather than a fabricated one. Non-QA input returns status="not_a_qa_document" (doc_type equals the
+    status, no score); oversize input returns status="input_too_large". Non-
+    English input is still scored but score_reliable=false and language_warning
+    explains the rubric is English-keyword based. detection_confidence says how
+    sure the "auto" type guess was. Returns {doc_type, overall_score,
+    dimension_scores, findings, stats, status, language, language_warning,
+    score_reliable, detection_confidence, detection_note, kb_version}."""
     start = time.monotonic()
 
     if doc_type not in _REVIEW_DOC_TYPES:
@@ -249,19 +324,22 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
             "valid_doc_types": list(_REVIEW_DOC_TYPES),
         }
 
+    too_long = _too_long("document_text", document_text)
+    if too_long is not None:
+        telemetry.track_tool_called("review_qa_document", success=False, duration_ms=0.0)
+        return too_long
+
     result = review_core.review_document(document_text, doc_type=doc_type)
     index = _get_index()
 
+    # EU AI Act chunks are only cited for documents that are themselves about
+    # AI/regulation - generic findings ("no stated objectives") must not cite them.
+    allow_regulation = bool(_AI_REGULATION_RE.search(document_text or ""))
     findings = []
     for finding in result.findings:
-        kb_citations: list[dict] = []
-        for query in finding.citation_queries:
-            search_result = index.search(query, k=2)
-            if "error" not in search_result:
-                kb_citations.extend(
-                    {"source": c["source"], "category": c["category"], "score": c["score"]}
-                    for c in search_result["chunks"]
-                )
+        kb_citations = _resolve_citations(
+            index, finding.citation_queries, allow_regulation=allow_regulation,
+        )
         findings.append({
             "dimension": finding.dimension,
             "severity": finding.severity,
@@ -286,6 +364,12 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
         "dimension_scores": result.dimension_scores,
         "findings": findings,
         "stats": result.stats,
+        "status": result.status,
+        "language": result.language,
+        "language_warning": result.language_warning,
+        "score_reliable": result.score_reliable,
+        "detection_confidence": result.detection_confidence,
+        "detection_note": result.detection_note,
         "kb_version": index.kb_version,
     }
 
@@ -316,23 +400,27 @@ def assess_qa_maturity(project_description: str) -> dict:
     determination this tool does not make — the user/team must confirm
     that independently; ai_act_note is empty when ai_act_relevant=false.
     Returns {indicative_tmmi_level, tmmi_dimension_scores, ai_act_relevant,
-    ai_act_dimension_scores, ai_act_note, findings, disclaimer, stats,
-    kb_version}."""
+    ai_act_dimension_scores, ai_act_note, findings, disclaimer,
+    detection_caveat, language, language_warning, score_reliable,
+    keyword_list_warning, stats, kb_version}. Detection is keyword-based and
+    can under-score paraphrased practices (see detection_caveat); non-English
+    input sets score_reliable=false."""
     start = time.monotonic()
+
+    too_long = _too_long("project_description", project_description)
+    if too_long is not None:
+        telemetry.track_tool_called("assess_qa_maturity", success=False, duration_ms=0.0)
+        return too_long
 
     result = maturity_core.assess_maturity(project_description)
     index = _get_index()
 
     findings = []
     for finding in result.findings:
-        kb_citations: list[dict] = []
-        for query in finding.citation_queries:
-            search_result = index.search(query, k=2)
-            if "error" not in search_result:
-                kb_citations.extend(
-                    {"source": c["source"], "category": c["category"], "score": c["score"]}
-                    for c in search_result["chunks"]
-                )
+        kb_citations = _resolve_citations(
+            index, finding.citation_queries,
+            allow_regulation=bool(result.ai_act_relevant) or finding.framework == "eu_ai_act",
+        )
         findings.append({
             "framework": finding.framework,
             "dimension": finding.dimension,
@@ -361,6 +449,11 @@ def assess_qa_maturity(project_description: str) -> dict:
         "ai_act_note": result.ai_act_note,
         "findings": findings,
         "disclaimer": result.disclaimer,
+        "detection_caveat": result.detection_caveat,
+        "language": result.language,
+        "language_warning": result.language_warning,
+        "score_reliable": result.score_reliable,
+        "keyword_list_warning": result.keyword_list_warning,
         "stats": result.stats,
         "kb_version": index.kb_version,
     }
@@ -368,21 +461,31 @@ def assess_qa_maturity(project_description: str) -> dict:
 
 # ── Tool: analyze_test_results ───────────────────────────────────────────────────
 
-_MAX_RESULTS_INPUT_BYTES = 10 * 1024 * 1024  # 10 MB — plan section 3.3 clamp
+_MAX_RESULTS_INPUT_BYTES = 10 * 1024 * 1024  # 10 MB — plan section 3.3 clamp (real JUnit reports are far larger than prose documents, so this tool is not held to MAX_INPUT_CHARS)
 _MAX_RESULTS_EXECUTIONS = 500_000            # plan section 3.3 clamp
+_MAX_RUN_ENTRIES = 1_000
+_MAX_REFERENCE_TESTS = 50_000
 
 
 def _records_from_run_entries(entries) -> tuple:
-    """Parse a list of {"run_id", "xml"} dicts into TestRecords, skipping
-    (with a warning, never raising) any malformed entry."""
+    """Parse a list of {"run_id", "xml"} dicts into (TestRecords, warnings),
+    skipping (with a warning, never raising) any malformed entry."""
     records = []
     warnings = []
     for entry in entries:
         if not isinstance(entry, dict) or "run_id" not in entry or "xml" not in entry:
             warnings.append("Skipped a malformed run entry (missing run_id/xml).")
             continue
-        records.extend(results_core.parse_junit_xml(str(entry["xml"]), str(entry["run_id"])))
+        run_records, run_warnings = results_core.parse_junit_xml_detailed(
+            str(entry["xml"]), str(entry["run_id"]),
+        )
+        records.extend(run_records)
+        warnings.extend(run_warnings)
     return records, warnings
+
+
+def _valid_fraction(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 0.0 <= value <= 1.0
 
 
 @mcp.tool()
@@ -403,35 +506,63 @@ def analyze_test_results(
     of {"run_id": "...", "xml": "<testsuites>...</testsuites>"} objects
     instead — either as a genuine JSON array/list argument, or as a string
     starting with "[" (some MCP clients stringify array arguments; both
-    forms are accepted). csv_text columns: required
-    name/classname/status (passed|failed|error|skipped), optional
-    run_id/duration_s/message. reference_tests, if given, is a list of
-    test identities ("classname::name") expected to have run — any absent
-    from the results are reported under never_run. Flaky = pass_rate
-    strictly between flaky_min and flaky_max with at least 3 executions;
-    ever-failing = zero passes (skipped/error count as not passed) across at
-    least 3 executions. Tests with fewer executions are left out of both
-    lists without a warning, so an empty flaky list on 1-2 runs means not
-    enough data, not a stable suite - check runs/per_run.
-    Malformed/oversized input never raises — it returns a structured
-    {"error": "invalid_argument", ...}. Returns the full ResultsAnalysis
-    as JSON (runs, total_tests, executions, overall_pass_rate, flaky,
-    ever_failing, never_run, slowest, failure_clusters, per_run,
-    warnings)."""
+    forms are accepted). csv_text needs a test-name column (name | test_name
+    | test | testcase | title) and a status column (status | result |
+    outcome); headers are matched case-insensitively. Status synonyms are
+    accepted (pass/ok/success, fail/failure/ko, error/err,
+    skip/ignored/pending). Optional columns: classname (or suite), run_id
+    (or run/build; default "csv"), duration_s (or duration/time/elapsed, in
+    seconds; a *_ms header or "350ms" values mean milliseconds), message
+    (or error/details). Dropped rows and unrecognised columns are listed in
+    `warnings`. If NO test could be parsed (wrong columns, empty or
+    header-only CSV, HTML or non-JUnit XML, malformed XML) the call returns
+    {"error": "no_tests_found", "message", "warnings"} instead of an empty
+    0% result. reference_tests, if given, is a list of test identities
+    ("classname::name", or just "name" when there is no classname) expected
+    to have run — any absent from the results are reported under never_run.
+    Skipped tests are NOT failures: they are excluded from pass rates and from
+    the flaky/ever-failing verdicts and are reported separately (skipped,
+    skipped_executions). Flaky = pass_rate (over non-skipped executions)
+    strictly between flaky_min and flaky_max with at least 3 such executions;
+    ever-failing = zero passes across at least 3 non-skipped executions.
+    flaky_min/flaky_max must satisfy 0 <= flaky_min < flaky_max <= 1. Tests
+    with fewer executions are left out of both lists without a warning, so an
+    empty flaky list on 1-2 runs means not enough data, not a stable suite -
+    check runs/per_run. Malformed/oversized input never raises — it returns
+    a structured {"error": "invalid_argument" | "no_tests_found", ...}.
+    Returns the full ResultsAnalysis as JSON (runs, total_tests, executions,
+    overall_pass_rate, flaky, ever_failing, never_run, slowest,
+    failure_clusters, per_run, warnings, skipped_executions, skipped)."""
     start = time.monotonic()
 
-    def _fail(message: str) -> dict:
+    def _fail(message: str, error: str = "invalid_argument", **extra) -> dict:
         duration_ms = (time.monotonic() - start) * 1000
         telemetry.track_tool_called("analyze_test_results", success=False, duration_ms=duration_ms)
-        return {"error": "invalid_argument", "message": message}
+        return {"error": error, "message": message, **extra}
 
     provided = [v for v in (junit_xml, csv_text) if v is not None]
     if len(provided) != 1:
         return _fail("Provide exactly one of junit_xml or csv_text.")
 
+    if not _valid_fraction(flaky_min) or not _valid_fraction(flaky_max):
+        return _fail("flaky_min and flaky_max must be numbers between 0 and 1.")
+    if flaky_min >= flaky_max:
+        return _fail(
+            f"flaky_min ({flaky_min}) must be smaller than flaky_max ({flaky_max}); "
+            "the flaky band is the open interval between them.",
+        )
+    if reference_tests is not None and len(reference_tests) > _MAX_REFERENCE_TESTS:
+        return _fail(f"reference_tests exceeds the {_MAX_REFERENCE_TESTS}-entry limit.")
+
     parse_warnings: list = []
 
     if isinstance(junit_xml, list):
+        if len(junit_xml) > _MAX_RUN_ENTRIES:
+            return _fail(f"junit_xml has more than {_MAX_RUN_ENTRIES} run entries.")
+        total_bytes = sum(len(str(e.get("xml", "")).encode("utf-8", errors="ignore"))
+                          for e in junit_xml if isinstance(e, dict))
+        if total_bytes > _MAX_RESULTS_INPUT_BYTES:
+            return _fail(f"Input exceeds the {_MAX_RESULTS_INPUT_BYTES}-byte limit.")
         records, parse_warnings = _records_from_run_entries(junit_xml)
     elif junit_xml is not None:
         if len(junit_xml.encode("utf-8", errors="ignore")) > _MAX_RESULTS_INPUT_BYTES:
@@ -447,16 +578,25 @@ def analyze_test_results(
                     'junit_xml starting with "[" must be a JSON array of '
                     '{"run_id", "xml"} objects.'
                 )
+            if len(parsed) > _MAX_RUN_ENTRIES:
+                return _fail(f"junit_xml has more than {_MAX_RUN_ENTRIES} run entries.")
             records, parse_warnings = _records_from_run_entries(parsed)
         else:
-            records = results_core.parse_junit_xml(junit_xml, "run1")
+            records, parse_warnings = results_core.parse_junit_xml_detailed(junit_xml, "run1")
     else:
         # Reached only when junit_xml is None; the `len(provided) != 1` guard
         # above already ensured exactly one of junit_xml/csv_text is non-None.
         assert csv_text is not None
         if len(csv_text.encode("utf-8", errors="ignore")) > _MAX_RESULTS_INPUT_BYTES:
             return _fail(f"Input exceeds the {_MAX_RESULTS_INPUT_BYTES}-byte limit.")
-        records = results_core.parse_results_csv(csv_text)
+        records, parse_warnings = results_core.parse_results_csv_detailed(csv_text)
+
+    if not records:
+        reason = parse_warnings[0] if parse_warnings else "No test results could be parsed from the input."
+        return _fail(
+            "No test results could be parsed from the input. " + reason,
+            error="no_tests_found", warnings=parse_warnings,
+        )
 
     if len(records) > _MAX_RESULTS_EXECUTIONS:
         return _fail(f"Input exceeds the {_MAX_RESULTS_EXECUTIONS}-execution cap.")
@@ -550,6 +690,17 @@ def main() -> None:
     except Exception as exc:
         print(f"FATAL: could not initialize the embedding model: {exc}", file=sys.stderr)
         raise SystemExit(1)
+    # Pre-build the corpus index on a daemon thread so the first real tool call
+    # doesn't pay ~30s. Safe w.r.t. the deadlock above: the native runtime's
+    # first init already happened on this thread (warmup_embedder), and a
+    # later call from another thread is exactly what FastMCP's worker threads
+    # do anyway. Non-blocking: mcp.run() starts immediately; a tool call that
+    # arrives mid-build waits on LocalIndex's build lock instead of rebuilding.
+    # Best-effort: a failure here is retried lazily by the first real call.
+    try:
+        index.start_background_build()
+    except Exception:
+        pass
     mcp.run()
 
 

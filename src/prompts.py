@@ -68,7 +68,7 @@ def risk_register_structure() -> str:
     risk_analyzer.build_risk_prompt()'s structural section."""
     return f"""Generate a Risk Register for the project using EXACTLY this structure:
 
-# Risk Register — {{project_name}}
+# Risk Register: {{project_name}}
 
 ## Executive Summary
 2-3 sentences summarizing the overall risk profile. State clearly if the project is
@@ -87,7 +87,7 @@ listed risk gets full detail below beats a longer one that runs out of space par
 
 For each risk listed in the matrix above:
 
-### R01 — [Risk Title]
+### R01: [Risk Title]
 - **Category:** Technical / Process / Compliance / Resource / External
 - **Description:** what the risk is and why it exists for this project
 - **Likelihood:** High / Medium / Low — explain why
@@ -117,7 +117,7 @@ def test_strategy_structure() -> str:
     strategy_generator.build_strategy_prompt()'s structural section."""
     return f"""Generate a Test Strategy document using EXACTLY this structure:
 
-# Test Strategy — {{project_name}}
+# Test Strategy: {{project_name}}
 
 ## 1. Project Overview
 ## 2. Scope — What Will Be Tested
@@ -153,7 +153,7 @@ def test_plan_structure() -> str:
     test_plan_generator.build_test_plan_prompt()'s structural section."""
     return f"""Generate a Test Plan aligned with IEEE 829, using EXACTLY this structure:
 
-# Test Plan — {{project_name}}
+# Test Plan: {{project_name}}
 
 ## 1. Introduction
 State how this Test Plan relates to the Test Strategy.
