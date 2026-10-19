@@ -21,8 +21,13 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from text_checks import detect_language, looks_like_qa_document
+
 MIN_CONTENT_CHARS = 200
 MAX_INPUT_CHARS = 500_000
+# Hard cap: above this, review_document() returns status "input_too_large"
+# instead of silently truncating and scoring a partial document.
+MAX_REVIEW_CHARS = 200_000
 
 DOC_TYPES = ("test_plan", "test_strategy", "test_cases")
 
@@ -99,13 +104,44 @@ class ReviewFinding:
     citation_queries: list = field(default_factory=list)
 
 
+# Weights for the test-case-list rubric. Plan-level criteria (objectives,
+# scope, entry/exit criteria, risk coverage) do not apply to a list of test
+# cases and are omitted rather than scored as false zeros.
+TEST_CASE_WEIGHTS = {
+    "structure_completeness": 35,
+    "measurability": 30,
+    "traceability": 15,
+    "test_design_coverage": 20,
+}
+
+# Result statuses (ReviewResult.status). doc_type mirrors the non-"ok" ones.
+STATUS_OK = "ok"
+STATUS_INSUFFICIENT = "insufficient_content"
+STATUS_NOT_QA = "not_a_qa_document"
+STATUS_TOO_LARGE = "input_too_large"
+
+
 @dataclass
 class ReviewResult:
-    doc_type: str                  # resolved type (after auto-detection), or "insufficient_content"
+    doc_type: str                  # resolved type (after auto-detection), or a non-"ok" status string
     overall_score: int              # 0-100
     dimension_scores: dict = field(default_factory=dict)
     findings: list = field(default_factory=list)
     stats: dict = field(default_factory=dict)
+    # "ok" | "insufficient_content" | "not_a_qa_document" | "input_too_large"
+    status: str = STATUS_OK
+    # F7: language heuristic. language_warning is non-empty (and
+    # score_reliable False) when the input looks non-English.
+    language: str = "unknown"
+    language_warning: str = ""
+    score_reliable: bool = True
+    # F20: auto-detection transparency. detected_type is None when the
+    # caller passed an explicit doc_type; detection_confidence is then
+    # "explicit", else "high" | "medium" | "low".
+    detected_type: Optional[str] = None
+    detection_confidence: str = "explicit"
+    detection_signals: dict = field(default_factory=dict)
+    detection_note: str = ""
 
 
 # ── Input hygiene ──────────────────────────────────────────────────────────────
@@ -126,9 +162,13 @@ def _strip_front_matter_and_footer(text: str) -> str:
 
 # ── Cheap doc_type classifier ──────────────────────────────────────────────────
 
-def _detect_doc_type(lower_text: str) -> str:
-    """Heading-keyword vote across the three checklists; ties default to
-    'test_plan' (the most structurally demanding checklist)."""
+_TC_ID_RE = re.compile(r"\b(?:tc|tcase|test[-_ ]?case)[-_ ]?\d+\b", re.IGNORECASE)
+_EXPECTED_MENTION_RE = re.compile(r"expected[ _-]?(?:result|outcome|behaviou?r)s?", re.IGNORECASE)
+_NUMBERED_STEP_RE = re.compile(r"^\s*(?:[|>*-]\s*)?\d+[.)]\s+\S", re.MULTILINE)
+_STEP_WORD_RE = re.compile(r"\bsteps?\b|\bprocedure\b", re.IGNORECASE)
+
+
+def _detection_signals(lower_text: str) -> dict:
     votes = {}
     for doc_type, sections in SECTION_SYNONYMS.items():
         count = 0
@@ -140,8 +180,41 @@ def _detect_doc_type(lower_text: str) -> str:
     # when it clearly dominates (its own distinguishing keywords present).
     if any(k in lower_text for k in ["test case id", "tc id", "precondition"]):
         votes["test_cases"] += 2
+    tc_ids = len({re.sub(r"[-_ ]", "", m).lower() for m in _TC_ID_RE.findall(lower_text)})
+    expected = len(_EXPECTED_MENTION_RE.findall(lower_text))
+    if re.search(r"^\s*\|[^\n]*\bexpected\b", lower_text, re.MULTILINE):
+        expected += 1
+    step_markers = len(_NUMBERED_STEP_RE.findall(lower_text)) + len(_STEP_WORD_RE.findall(lower_text))
+    return {"votes": votes, "tc_ids": tc_ids, "expected_result_mentions": expected,
+            "step_markers": step_markers}
+
+
+def _classify(signals: dict) -> tuple:
+    """(doc_type, confidence). Ties/zero evidence fall back to 'test_plan'
+    (the most structurally demanding checklist) with confidence 'low'."""
+    votes = signals["votes"]
+    tc_evidence = (signals["tc_ids"]
+                   + (2 if signals["expected_result_mentions"] >= 2 else 0)
+                   + (1 if signals["step_markers"] >= 1 else 0))
+    other_best = max(votes["test_plan"], votes["test_strategy"])
+    if tc_evidence >= 3 and tc_evidence * 2 >= other_best:
+        conf = "high" if (signals["tc_ids"] >= 3 or tc_evidence >= 5) else "medium"
+        return "test_cases", conf
     best = max(votes, key=lambda k: (votes[k], k == "test_plan"))
-    return best
+    ranked = sorted(votes.values(), reverse=True)
+    margin = ranked[0] - ranked[1]
+    if ranked[0] >= 4 and margin >= 3:
+        conf = "high"
+    elif ranked[0] >= 3 and margin >= 1:
+        conf = "medium"
+    else:
+        conf = "low"
+    return best, conf
+
+
+def _detect_doc_type(lower_text: str) -> str:
+    """Heading-keyword + test-case-signal vote; ties default to 'test_plan'."""
+    return _classify(_detection_signals(lower_text))[0]
 
 
 # ── Dimension: structure_completeness ──────────────────────────────────────────
@@ -272,7 +345,30 @@ def _traceability(text: str, lower_text: str) -> tuple:
 
 # ── Dimension: measurability ────────────────────────────────────────────────────
 
-_EXPECTED_STATEMENT_RE = re.compile(r"[^.\n]*expected (?:result|outcome)[^.\n]*", re.IGNORECASE)
+_EXPECTED_MARK_RE = re.compile(r"expected (?:result|outcome)", re.IGNORECASE)
+_STATEMENT_WINDOW = 300
+
+
+class _ExpectedStatements:
+    """Linear-time replacement for the old `[^.\n]*expected result[^.\n]*`
+    findall, which backtracked quadratically on a long delimiter-free line.
+    Statement = the sentence/line around each mark, bounded to a window."""
+
+    @staticmethod
+    def findall(text: str) -> list:
+        out = []
+        for m in _EXPECTED_MARK_RE.finditer(text):
+            lo = max(0, m.start() - _STATEMENT_WINDOW)
+            hi = min(len(text), m.end() + _STATEMENT_WINDOW)
+            start = max(text.rfind(".", lo, m.start()), text.rfind("\n", lo, m.start())) + 1
+            if start == 0:
+                start = lo
+            ends = [e for e in (text.find(".", m.end(), hi), text.find("\n", m.end(), hi)) if e != -1]
+            out.append(text[start:min(ends) if ends else hi])
+        return out
+
+
+_EXPECTED_STATEMENT_RE = _ExpectedStatements()
 
 
 def _measurability(text: str, lower_text: str) -> tuple:
@@ -352,56 +448,233 @@ def _risk_coverage(lower_text: str) -> tuple:
     return score, findings
 
 
+# ── Test-case-list rubric (doc_type == "test_cases") ───────────────────────────
+
+_PRECONDITION_RE = re.compile(r"precondition|prerequisite|\bgiven\b|\bsetup\b|\bset-up\b", re.IGNORECASE)
+_NEGATIVE_RE = re.compile(
+    r"invalid|negative|incorrect|wrong|\berror\b|lock(?:ed|out)|reject|denied|unauthori[sz]ed|\bfail(?:s|ed|ure)?\b|empty|missing|expired",
+    re.IGNORECASE,
+)
+_BOUNDARY_RE = re.compile(
+    r"boundary|\bedge[- ]case|equivalence|\bmin(?:imum)?\b|\bmax(?:imum)?\b|upper limit|lower limit|off-by-one|exactly \d+|\d+ characters",
+    re.IGNORECASE,
+)
+_TRACE_MENTION_RE = re.compile(r"requirement|traceab|user story|traces? to|covers", re.IGNORECASE)
+
+
+def _test_case_expected_statements(text: str) -> list:
+    """Expected-result statements in prose lines, 'Expected:' lines, and
+    markdown-table 'Expected ...' column cells."""
+    statements = []
+    expected_col = None
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("|"):
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
+                continue
+            idx = next((i for i, c in enumerate(cells) if "expected" in c.lower()), None)
+            if idx is not None and expected_col is None:
+                expected_col = idx          # header row
+                continue
+            if expected_col is not None and expected_col < len(cells):
+                statements.append(cells[expected_col])
+            continue
+        expected_col = None
+        m = re.match(r"^\W*expected\W*(?:result|outcome|behaviou?r)?s?\s*[:\-]\s*(.*)$", stripped, re.IGNORECASE)
+        if m:
+            statements.append(m.group(1) or stripped)
+        else:
+            statements.extend(_EXPECTED_STATEMENT_RE.findall(line))
+    return statements
+
+
+def _tc_structure(text: str, lower_text: str) -> tuple:
+    checks = {
+        "test_case_id": bool(_TC_ID_RE.search(text)) or "test case id" in lower_text or "tc id" in lower_text,
+        "steps": bool(_NUMBERED_STEP_RE.search(text)) or bool(_STEP_WORD_RE.search(text)),
+        "expected_result": bool(_EXPECTED_MENTION_RE.search(text)) or "| expected" in lower_text,
+        "preconditions": bool(_PRECONDITION_RE.search(text)),
+    }
+    severity = {"test_case_id": "major", "steps": "major", "expected_result": "major", "preconditions": "minor"}
+    findings = []
+    for key, present in checks.items():
+        if not present:
+            findings.append(ReviewFinding(
+                "structure_completeness", severity[key],
+                f"Missing expected test case element: {key.replace('_', ' ')}.", key,
+                [f"test case {key.replace('_', ' ')}", "IEEE 829 test case specification"],
+            ))
+    return round(100 * sum(checks.values()) / len(checks)), findings
+
+
+def _tc_measurability(text: str) -> tuple:
+    statements = _test_case_expected_statements(text)
+    total = len(statements)
+    findings = []
+    if total == 0:
+        findings.append(ReviewFinding(
+            "measurability", "major", "No expected results found for the test cases.",
+            "expected results", ["ISTQB measurable expected results"],
+        ))
+        return 20, findings
+    vague = sum(1 for st in statements
+                if not st.strip() or any(p in st.lower() for p in _VAGUE_EXPECTED_RESULT_PHRASES))
+    if vague:
+        ratio = vague / total
+        findings.append(ReviewFinding(
+            "measurability", "major" if ratio > 0.5 else "minor",
+            f"{vague}/{total} expected-result statements are vague or empty "
+            f"(e.g. 'works correctly', 'as expected') rather than measurable.",
+            "vague expected results",
+            ["ISTQB measurable test objectives acceptance criteria"],
+        ))
+    return round((1 - vague / total) * 100), findings
+
+
+_TC_PREFIXES = {"TC", "TCS", "TS", "TEST", "TCASE", "TCID"}
+
+
+def _has_requirement_ids(text: str) -> bool:
+    """Requirement-style IDs, ignoring the test cases' own IDs (TC-001 is
+    not a link to a requirement)."""
+    for m in _REQ_ID_RE.finditer(text):
+        if m.group(0).split("-")[0].upper().rstrip("0123456789") not in _TC_PREFIXES:
+            return True
+    return False
+
+
+def _tc_traceability(text: str, lower_text: str) -> tuple:
+    if _has_requirement_ids(text):
+        return 100, []
+    if _TRACE_MENTION_RE.search(lower_text):
+        return 50, [ReviewFinding(
+            "traceability", "minor",
+            "Requirements are mentioned but no requirement identifiers (REQ-, US-, ticket keys) link the test cases to them.",
+            "requirement IDs", ["ISTQB traceability requirements to test cases"],
+        )]
+    return 0, [ReviewFinding(
+        "traceability", "major",
+        "No requirement/user-story identifiers found linking test cases to requirements.",
+        "requirement IDs", ["ISTQB traceability requirements to test cases"],
+    )]
+
+
+def _tc_design_coverage(text: str, signals: dict) -> tuple:
+    checks = {
+        "multiple_cases": signals["tc_ids"] >= 3 or signals["expected_result_mentions"] >= 3,
+        "negative_cases": bool(_NEGATIVE_RE.search(text)),
+        "boundary_cases": bool(_BOUNDARY_RE.search(text)),
+    }
+    findings = []
+    if not checks["multiple_cases"]:
+        findings.append(ReviewFinding(
+            "test_design_coverage", "minor", "Fewer than 3 distinct test cases found.",
+            "case count", ["ISTQB test case design coverage"]))
+    if not checks["negative_cases"]:
+        findings.append(ReviewFinding(
+            "test_design_coverage", "major",
+            "No negative / error-path test cases (invalid input, lockout, rejection) found.",
+            "negative cases", ["ISTQB negative testing error guessing"]))
+    if not checks["boundary_cases"]:
+        findings.append(ReviewFinding(
+            "test_design_coverage", "minor",
+            "No boundary-value or equivalence-partitioning cases found.",
+            "boundary cases", ["ISTQB boundary value analysis equivalence partitioning"]))
+    return round(100 * sum(checks.values()) / len(checks)), findings
+
+
 # ── Orchestrator ───────────────────────────────────────────────────────────────
+
+def _early_result(status: str, stats: dict) -> ReviewResult:
+    return ReviewResult(doc_type=status, overall_score=0, dimension_scores={},
+                        findings=[], stats=stats, status=status)
+
 
 def review_document(text: str, doc_type: str = "auto") -> ReviewResult:
     """Deterministically review an existing QA document. No LLM anywhere in
-    this call path — see the module docstring."""
+    this call path — see the module docstring.
+
+    Non-"ok" `status` values (no score is produced, overall_score is 0 and
+    doc_type mirrors the status): "insufficient_content", "not_a_qa_document",
+    "input_too_large"."""
     raw_len = len(text or "")
+    if raw_len > MAX_REVIEW_CHARS:
+        return _early_result(STATUS_TOO_LARGE, {
+            "char_count": raw_len, "raw_char_count": raw_len, "max_chars": MAX_REVIEW_CHARS,
+            "reason": f"input is {raw_len} characters; the maximum is {MAX_REVIEW_CHARS}. "
+                      "Split the document and review the parts separately."})
     cleaned = _strip_front_matter_and_footer(text or "")
-    if len(cleaned) > MAX_INPUT_CHARS:
-        cleaned = cleaned[:MAX_INPUT_CHARS]
 
     if len(cleaned) < MIN_CONTENT_CHARS:
-        return ReviewResult(
-            doc_type="insufficient_content",
-            overall_score=0,
-            dimension_scores={},
-            findings=[],
-            stats={"char_count": len(cleaned), "raw_char_count": raw_len,
-                   "reason": f"content is under {MIN_CONTENT_CHARS} characters after cleanup"},
-        )
+        return _early_result(STATUS_INSUFFICIENT, {
+            "char_count": len(cleaned), "raw_char_count": raw_len,
+            "reason": f"content is under {MIN_CONTENT_CHARS} characters after cleanup"})
+
+    lang = detect_language(cleaned)
+    explicit_type = doc_type in DOC_TYPES
+    if lang["reliable"]:
+        # An explicit doc_type means the caller vouches for the document: only
+        # require a core QA term. Auto-detect needs >= MIN_QA_TERMS distinct ones.
+        is_qa, hits = looks_like_qa_document(cleaned, min_terms=1 if explicit_type else 2)
+        if not is_qa:
+            return _early_result(STATUS_NOT_QA, {
+                "char_count": len(cleaned), "raw_char_count": raw_len, "qa_terms_found": hits,
+                "reason": "the input does not look like a QA document (a test plan, test "
+                          "strategy or test case list): too few QA-domain terms. No score "
+                          "was produced."})
 
     lower_text = cleaned.lower()
+    signals = _detection_signals(lower_text)
+    auto = doc_type == "auto" or doc_type not in DOC_TYPES
+    if auto:
+        resolved_doc_type, confidence = _classify(signals)
+        detected_type = resolved_doc_type
+    else:
+        resolved_doc_type, confidence, detected_type = doc_type, "explicit", None
+    note = ""
+    if auto and confidence == "low":
+        note = ("Document type detection confidence is LOW (few or conflicting structural "
+                f"signals); defaulted to '{resolved_doc_type}'. Pass doc_type explicitly "
+                "(test_plan, test_strategy or test_cases) for a reliable review.")
 
-    resolved_doc_type = doc_type
-    if doc_type == "auto" or doc_type not in DOC_TYPES:
-        resolved_doc_type = _detect_doc_type(lower_text)
+    if resolved_doc_type == "test_cases":
+        s_score, s_findings = _tc_structure(cleaned, lower_text)
+        m_score, m_findings = _tc_measurability(cleaned)
+        t_score, t_findings = _tc_traceability(cleaned, lower_text)
+        d_score, d_findings = _tc_design_coverage(cleaned, signals)
+        dimension_scores = {
+            "structure_completeness": s_score,
+            "measurability": m_score,
+            "traceability": t_score,
+            "test_design_coverage": d_score,
+        }
+        weights = TEST_CASE_WEIGHTS
+        findings = s_findings + m_findings + t_findings + d_findings
+    else:
+        structure_score, structure_findings = _structure_completeness(lower_text, resolved_doc_type)
+        scope_score, scope_findings = _objectives_scope_clarity(lower_text)
+        entry_exit_score, entry_exit_findings = _entry_exit_criteria(cleaned, lower_text)
+        traceability_score, traceability_findings = _traceability(cleaned, lower_text)
+        measurability_score, measurability_findings = _measurability(cleaned, lower_text)
+        risk_score, risk_findings = _risk_coverage(lower_text)
+        dimension_scores = {
+            "structure_completeness": structure_score,
+            "objectives_scope_clarity": scope_score,
+            "entry_exit_criteria": entry_exit_score,
+            "traceability": traceability_score,
+            "measurability": measurability_score,
+            "risk_coverage": risk_score,
+        }
+        weights = WEIGHTS
+        findings = (
+            structure_findings + scope_findings + entry_exit_findings
+            + traceability_findings + measurability_findings + risk_findings
+        )
 
-    structure_score, structure_findings = _structure_completeness(lower_text, resolved_doc_type)
-    scope_score, scope_findings = _objectives_scope_clarity(lower_text)
-    entry_exit_score, entry_exit_findings = _entry_exit_criteria(cleaned, lower_text)
-    traceability_score, traceability_findings = _traceability(cleaned, lower_text)
-    measurability_score, measurability_findings = _measurability(cleaned, lower_text)
-    risk_score, risk_findings = _risk_coverage(lower_text)
-
-    dimension_scores = {
-        "structure_completeness": structure_score,
-        "objectives_scope_clarity": scope_score,
-        "entry_exit_criteria": entry_exit_score,
-        "traceability": traceability_score,
-        "measurability": measurability_score,
-        "risk_coverage": risk_score,
-    }
-
-    total_weight = sum(WEIGHTS.values())
+    total_weight = sum(weights.values())
     overall_score = round(
-        sum(dimension_scores[dim] * (WEIGHTS[dim] / total_weight) for dim in dimension_scores)
-    )
-
-    findings = (
-        structure_findings + scope_findings + entry_exit_findings
-        + traceability_findings + measurability_findings + risk_findings
+        sum(dimension_scores[dim] * (weights[dim] / total_weight) for dim in dimension_scores)
     )
 
     word_count = len(cleaned.split())
@@ -416,6 +689,14 @@ def review_document(text: str, doc_type: str = "auto") -> ReviewResult:
             "char_count": len(cleaned),
             "word_count": word_count,
             "heading_count": heading_count,
-            "auto_detected": doc_type == "auto" or doc_type not in DOC_TYPES,
+            "auto_detected": auto,
         },
+        status=STATUS_OK,
+        language=lang["language"],
+        language_warning=lang["warning"],
+        score_reliable=lang["reliable"],
+        detected_type=detected_type,
+        detection_confidence=confidence,
+        detection_signals=signals if auto else {},
+        detection_note=note,
     )

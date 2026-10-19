@@ -26,6 +26,7 @@ _EXPECTED_PY_MODULES = {
     "mcp_server.py", "dialogue.py", "effort_core.py", "local_index.py",
     "telemetry.py", "prompts.py", "kb_config.py", "logger.py", "version.py",
     "review_core.py", "results_core.py", "maturity_core.py", "risk_ledger.py",
+    "text_checks.py",
 }
 
 # Must match pyproject.toml's [tool.setuptools.package-data] whitelist exactly —

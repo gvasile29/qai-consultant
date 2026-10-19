@@ -314,7 +314,7 @@ def test_review_qa_document_happy_path_shape():
 
 
 def test_review_qa_document_findings_carry_kb_citations_list():
-    weak_doc = "Just a short note. " * 20  # long enough, no structure/keywords
+    weak_doc = "Just a short note about the test. " * 20  # long enough, no structure/keywords
     result = _run(_call_tool("review_qa_document", {
         "document_text": weak_doc, "doc_type": "test_plan",
     }))
