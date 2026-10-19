@@ -169,7 +169,7 @@ def executive_readout_html(readout) -> str:
         label = "Address first" if i == 0 else ""
         rows.append(
             f'<tr><td class="rid">{label}</td>'
-            f"<td><strong>{_html.escape(risk_id)}</strong> — {_html.escape(description)}</td></tr>"
+            f"<td><strong>{_html.escape(risk_id)}</strong>: {_html.escape(description)}</td></tr>"
         )
 
     if not rows:
@@ -280,8 +280,8 @@ def build_landing_deliverables_html(tokens: dict) -> str:
     first on the same screen) rather than redefining them, and continues
     its animation-delay cadence (which ends at 2.0s)."""
     deliverables = [
-        ("⚠️", "Risk Register", "Prioritized risks with likelihood, impact &amp; mitigation — before a single line of code is written."),
-        ("📊", "Effort Estimation", "PERT-based timeline with team capacity analysis and a confidence score (0–100)."),
+        ("⚠️", "Risk Register", "Prioritized risks with likelihood, impact &amp; mitigation, before a single line of code is written."),
+        ("📊", "Effort Estimation", "PERT-based timeline with team capacity analysis and a confidence score (0 to 100)."),
         ("📋", "Test Strategy", "ISTQB-aligned approach tailored to your stack, methodology, and compliance requirements."),
         ("📝", "Test Plan", "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."),
     ]

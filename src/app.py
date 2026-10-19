@@ -356,7 +356,7 @@ def load_kb_sidebar_bullets() -> list[str]:
 
 # ── MCP announcement (v3.0) ──────────────────────────────────────────────────
 MCP_ANNOUNCEMENT_BODY = """
-QAI Consultant is also available as a local MCP server — call it directly from
+QAI Consultant is also available as a local MCP server, call it directly from
 Claude Code, Claude Desktop, or any other MCP client that runs local servers,
 no API keys required (keyless, runs locally after a one-time embedding model
 download):
@@ -370,7 +370,7 @@ It exposes standards-grounded knowledge retrieval (`retrieve_qa_knowledge`,
 (`estimate_qa_effort`), QA document review (`review_qa_document`), test-results
 analysis (`analyze_test_results`) and QA maturity assessment
 (`assess_qa_maturity`) as MCP tools, plus prompts for the project-intake
-interview and Risk Register / Test Strategy / Test Plan structures — so your
+interview and Risk Register / Test Strategy / Test Plan structures, so your
 own AI assistant can ground its QA work in this app's knowledge base. It is
 keyless and runs locally; the only network access it needs is the one-time
 embedding model download.
@@ -611,17 +611,17 @@ def render_intro():
 |  | **QAI Consultant** (this app) | **Generic AI** (no tools) | **Claude + `qai-consultant-mcp`** |
 |---|---|---|---|
 | Knowledge base | ISTQB, OWASP, ISO 26262, A-SPICE, EU AI Act, 17 AI SDLC case studies | General training data only | The same curated knowledge base's Markdown documents (the ISTQB/OWASP PDFs aren't bundled, for licensing reasons), retrieved live via `retrieve_qa_knowledge` |
-| Structured output | 4 full documents auto-generated (Risk, Effort, Strategy, Plan) | Varies by prompt quality, ungrounded | Claude writes the narrative — grounded in real retrieved sources, with `[Source N]` citations |
+| Structured output | 4 full documents auto-generated (Risk, Effort, Strategy, Plan) | Varies by prompt quality, ungrounded | Claude writes the narrative, grounded in real retrieved sources, with `[Source N]` citations |
 | Project discovery | Guided 11-question dialogue in the browser | You write the full prompt yourself | Same 11-question interview, served as an MCP prompt inside Claude |
-| Effort estimation | Deterministic PERT + multipliers + confidence score | None — numbers are guessed, not computed | Same deterministic PERT core via `estimate_qa_effort` — no LLM guesswork |
-| Setup | None — open the browser | None | One-time install (`uvx qai-consultant-mcp` / `claude mcp add`) |
+| Effort estimation | Deterministic PERT + multipliers + confidence score | None, numbers are guessed, not computed | Same deterministic PERT core via `estimate_qa_effort`, no LLM guesswork |
+| Setup | None, open the browser | None | One-time install (`uvx qai-consultant-mcp` / `claude mcp add`) |
 | Best for | Fastest kick-off, no IDE, shareable documents | Quick unstructured chat, accept generic output | Already working in Claude Code/Desktop, want grounded answers + real numbers without leaving it |
 
-The MCP server (v3.0+) is built from the same knowledge base and the same deterministic estimation core as this app — it's not a lesser copy, it's the same grounding and math, just consumed as tools inside Claude instead of as generated documents. It deliberately never generates documents itself: Claude's own reasoning writes the narrative, this server only supplies retrieval and numbers. See the [MCP server on PyPI](https://pypi.org/project/qai-consultant-mcp/).
+The MCP server (v3.0+) is built from the same knowledge base and the same deterministic estimation core as this app, it's not a lesser copy, it's the same grounding and math, just consumed as tools inside Claude instead of as generated documents. It deliberately never generates documents itself: Claude's own reasoning writes the narrative, this server only supplies retrieval and numbers. See the [MCP server on PyPI](https://pypi.org/project/qai-consultant-mcp/).
 
 **Recommended workflow:**
 1. **Use QAI Consultant at kick-off** → generates your baseline documents in minutes
-2. **Feed those docs into Claude Code** (or Copilot / Cursor) as project context — or, if you're already there, **install `qai-consultant-mcp`** and skip straight to grounded retrieval + estimation as tools
+2. **Feed those docs into Claude Code** (or Copilot / Cursor) as project context, or, if you're already there, **install `qai-consultant-mcp`** and skip straight to grounded retrieval + estimation as tools
 3. **Ask your AI assistant to refine** the strategy against your specific codebase, tickets, and architecture
             """)
 
@@ -717,7 +717,7 @@ def render_dialogue():
         # Optional free-text context — deliberately NOT in st.session_state.answers:
         # the progress bar divides by len(QUESTIONS) and this field must not count.
         st.markdown("**Anything else QAI should know? (optional)**")
-        st.caption("💡 e.g., legacy constraints, third-party dependencies, team specifics — used to tailor all generated documents")
+        st.caption("💡 e.g., legacy constraints, third-party dependencies, team specifics, used to tailor all generated documents")
         st.text_area(
             label="Anything else QAI should know? (optional)",
             key="input_additional_context",
@@ -798,7 +798,7 @@ def render_review():
     if "review_additional_context" not in st.session_state:
         st.session_state["review_additional_context"] = context.additional_context
     st.text_area(
-        label="Additional context (optional — edit, extend, or clear before generating)",
+        label="Additional context (optional, edit, extend, or clear before generating)",
         key="review_additional_context",
         max_chars=2000,
         height=120,
@@ -807,7 +807,7 @@ def render_review():
     with st.expander("📊 Attach test execution results (optional)"):
         st.caption(
             "Upload JUnit XML and/or CSV test execution reports to ground the "
-            "Risk Register in real pass/fail data — each XML file counts as one run."
+            "Risk Register in real pass/fail data, each XML file counts as one run."
         )
         uploaded_results = st.file_uploader(
             "Upload JUnit XML or CSV files",
@@ -903,10 +903,10 @@ def _track_download(doc: str, fmt: str):
 def _save_feedback(feedback_value: str, extra_note: str):
     output_path = st.session_state.get("output_path")
     if not output_path:
-        st.warning("No strategy file found — feedback cannot be saved.")
+        st.warning("No strategy file found, feedback cannot be saved.")
         return
     if not output_path.exists():
-        st.warning("Strategy file was deleted — feedback cannot be saved.")
+        st.warning("Strategy file was deleted, feedback cannot be saved.")
         return
     try:
         feedback_dir = Path(__file__).resolve().parent.parent / "knowledge_base" / "generated_strategies"
@@ -1026,7 +1026,7 @@ def render_strategy():
 
     agent = st.session_state.get("agent")
     if agent is None:
-        st.error("❌ Agent not initialised — please refresh the page.")
+        st.error("❌ Agent not initialised, please refresh the page.")
         st.stop()
 
     if needs_generation:
@@ -1513,7 +1513,7 @@ def render_strategy():
             st.rerun()
 
     else:
-        st.success("✅ Feedback submitted — thank you for helping QAI Consultant improve!")
+        st.success("✅ Feedback submitted, thank you for helping QAI Consultant improve!")
 
 
 _REVIEW_DOC_TYPE_OPTIONS = [
@@ -1604,7 +1604,7 @@ def render_doc_review():
     if result.doc_type == "insufficient_content":
         st.warning(
             f"⚠️ Document is too short to review ({result.stats.get('char_count', 0)} "
-            f"characters after cleanup — need at least {REVIEW_MIN_CONTENT_CHARS})."
+            f"characters after cleanup, need at least {REVIEW_MIN_CONTENT_CHARS})."
         )
         if st.button("← Try another document", use_container_width=True):
             _reset_review_mode_state()
@@ -1635,7 +1635,7 @@ def render_doc_review():
 
     st.markdown("### Findings")
     if not result.findings:
-        st.success("No findings — the document satisfies every mechanical check in the rubric.")
+        st.success("No findings, the document satisfies every mechanical check in the rubric.")
     else:
         for finding in result.findings:
             icon = _REVIEW_SEVERITY_ICON.get(finding.severity, "⚪")
@@ -1788,7 +1788,7 @@ def render_maturity_assessment():
     st.markdown("## 📈 Assess QA Maturity")
     st.markdown(
         "Describe your team's testing process (policy, planning, tracking, environment, "
-        "training, reviews, ...) — or paste an existing Test Strategy/Risk Register — for "
+        "training, reviews, ...), or paste an existing Test Strategy/Risk Register, for "
         "a deterministic, TMMi-grounded process maturity signal. If the description mentions "
         "an AI/ML system, EU AI Act Articles 9-15 readiness is also assessed."
     )
@@ -1839,7 +1839,7 @@ def render_maturity_assessment():
     if result.status == "insufficient_content":
         st.warning(
             f"⚠️ Description is too short to assess ({result.stats.get('char_count', 0)} "
-            f"characters after cleanup — need at least {MATURITY_MIN_CONTENT_CHARS})."
+            f"characters after cleanup, need at least {MATURITY_MIN_CONTENT_CHARS})."
         )
         if st.button("← Try another description", use_container_width=True):
             _reset_maturity_mode_state()
@@ -1874,7 +1874,7 @@ def render_maturity_assessment():
 
     st.markdown("### Findings")
     if not result.findings:
-        st.success("No findings — every mechanical check in the rubric passed.")
+        st.success("No findings, every mechanical check in the rubric passed.")
     else:
         _severity_icon = {"critical": "🔴", "major": "🟠", "minor": "🟡"}
         for finding in result.findings:
@@ -2044,7 +2044,7 @@ def main():
         st.session_state.mcp_announcement_seen = True
         st.info(
             "🔌 QAI Consultant is also available as a local MCP server for Claude Code, "
-            "Claude Desktop, and other MCP clients — see the sidebar's **Use QAI in your AI tools "
+            "Claude Desktop, and other MCP clients, see the sidebar's **Use QAI in your AI tools "
             "(MCP)** panel."
         )
 
