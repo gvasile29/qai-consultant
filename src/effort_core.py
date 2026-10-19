@@ -902,3 +902,46 @@ def compute_estimation(context: ProjectContext, risk_register: str = "") -> Esti
     calculate_data_quality(context, data)
     finalize(data)
     return data
+
+
+_PERSON_DAYS = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:(?:person|man|working)[- ]days?|PDs?|p/d)\b", re.IGNORECASE
+)
+
+
+def _known_person_day_figures(data: EstimationData) -> set:
+    values = [
+        data.pert_total_optimistic, data.pert_total_most_likely, data.pert_total_pessimistic,
+        data.pert_total_expected, data.pert_total_sd, data.available_person_days,
+        abs(data.capacity_gap), data.risk_buffer_days, data.final_effort_min,
+        data.final_effort_max, data.baseline_effort_min, data.baseline_effort_max,
+        data.adjusted_effort_min, data.adjusted_effort_max,
+        data.pert_total_expected - 2 * data.pert_total_sd,
+        data.pert_total_expected + 2 * data.pert_total_sd,
+    ]
+    for a in data.pert_activities:
+        values += [v for v in a.values() if isinstance(v, (int, float))]
+    known = set()
+    for v in values:
+        known.add(round(v, 1))
+    return known
+
+
+def drop_unverified_person_day_figures(text: str, data: EstimationData) -> str:
+    """The LLM narrative must not restate effort totals (live runs showed 24 in
+    prose vs 20.5 in the table). Drop every sentence that quotes a person-day
+    figure not produced by the deterministic pipeline; lines left empty go away."""
+    known = _known_person_day_figures(data)
+
+    def _bad(sentence: str) -> bool:
+        return any(round(float(m.group(1)), 1) not in known for m in _PERSON_DAYS.finditer(sentence))
+
+    out_lines = []
+    for line in text.split("\n"):
+        if not _PERSON_DAYS.search(line):
+            out_lines.append(line)
+            continue
+        kept = [s for s in re.split(r"(?<=[.!?])\s+", line) if not _bad(s)]
+        if kept:
+            out_lines.append(" ".join(kept))
+    return "\n".join(out_lines)

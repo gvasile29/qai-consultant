@@ -221,6 +221,7 @@ def test_event_counter_ids_are_unique_and_cover_every_doc_and_value():
     assert len(ids) == len(set(ids))
     assert len(ids) == (
         len(visit_counter.DOWNLOAD_DOCS) * len(visit_counter.DOWNLOAD_FORMATS)
+        + 1  # the Download-all bundle
         + len(visit_counter.FEEDBACK_VALUES)
     )
     assert VECTOR_ID not in ids
@@ -244,14 +245,16 @@ def test_every_app_download_button_is_tracked_with_a_known_counter():
             f"download_button at app.py:{call.lineno} has no on_click=_track_download"
         )
         doc, fmt = ast.literal_eval(kwargs["args"])
-        assert doc in visit_counter.DOWNLOAD_DOCS, f"app.py:{call.lineno} unknown doc {doc!r}"
-        assert fmt in visit_counter.DOWNLOAD_FORMATS, f"app.py:{call.lineno} unknown fmt {fmt!r}"
+        if (doc, fmt) != visit_counter.DOWNLOAD_BUNDLE:
+            assert doc in visit_counter.DOWNLOAD_DOCS, f"app.py:{call.lineno} unknown doc {doc!r}"
+            assert fmt in visit_counter.DOWNLOAD_FORMATS, f"app.py:{call.lineno} unknown fmt {fmt!r}"
         file_name = ast.unparse(kwargs["file_name"])
         assert doc in file_name and file_name.rstrip("'\"").endswith("." + fmt), (
             f"app.py:{call.lineno} counter ({doc}, {fmt}) doesn't match file_name {file_name}"
         )
         seen.add((doc, fmt))
     expected = {(d, f) for d in visit_counter.DOWNLOAD_DOCS for f in visit_counter.DOWNLOAD_FORMATS}
+    expected.add(visit_counter.DOWNLOAD_BUNDLE)
     assert seen == expected
 
 

@@ -37,6 +37,7 @@ from effort_core import (
     RISK_BUFFER,
     EstimationData,
     capacity_utilization_pct,
+    drop_unverified_person_day_figures,
     compute_estimation,
     explain_effort_range,
 )
@@ -105,7 +106,8 @@ Write the following sections (keep each concise — 3-5 sentences max):
         # Parsing strips section headers and can leave a lone ** behind after ask()
         # already sanitized the whole narrative, so clean each parsed piece again.
         exec_summary, assumptions, recommendations = (
-            fix_stray_emphasis(s) for s in (exec_summary, assumptions, recommendations)
+            drop_unverified_person_day_figures(fix_stray_emphasis(s), data)
+            for s in (exec_summary, assumptions, recommendations)
         )
 
         # Assemble final report

@@ -48,6 +48,7 @@ from maturity_generator import (
     build_maturity_report_markdown,
     save_maturity_report,
 )
+from doc_bundle import build_zip
 from visit_counter import (
     download_counter_id,
     feedback_counter_id,
@@ -1385,6 +1386,30 @@ def render_strategy():
                 use_container_width=True,
                 disabled=pdf_bytes is None,
             )
+
+    st.markdown("###")
+    _bundle = {
+        f"risk_register_{safe_name}.md": with_ai_footer(st.session_state.risk_register).encode("utf-8"),
+        f"effort_estimation_{safe_name}.md": with_ai_footer(st.session_state.effort_report).encode("utf-8"),
+        f"test_strategy_{safe_name}.md": with_ai_footer(st.session_state.strategy).encode("utf-8"),
+        f"test_plan_{safe_name}.md": with_ai_footer(st.session_state.test_plan).encode("utf-8"),
+    }
+    for _doc, _pdf in (
+        ("risk_register", st.session_state.risk_pdf_bytes),
+        ("effort_estimation", st.session_state.effort_pdf_bytes),
+        ("test_strategy", st.session_state.strategy_pdf_bytes),
+        ("test_plan", st.session_state.test_plan_pdf_bytes),
+    ):
+        _bundle[f"{_doc}_{safe_name}.pdf"] = _pdf or b""
+    st.download_button(
+        label="⬇️ Download all 4 documents (.zip, md + pdf)",
+        data=build_zip(_bundle),
+        file_name=f"all_documents_{safe_name}.zip",
+        on_click=_track_download,
+        args=("all_documents", "zip"),
+        mime="application/zip",
+        use_container_width=True,
+    )
 
     # Generate Another button
     st.markdown("###")

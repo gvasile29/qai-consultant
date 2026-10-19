@@ -115,7 +115,7 @@ def test_retrieve_qa_knowledge_happy_path():
     assert "chunks" in result and "kb_version" in result
     assert len(result["chunks"]) <= 3
     for chunk in result["chunks"]:
-        assert set(chunk.keys()) == {"source", "category", "text", "score"}
+        assert set(chunk.keys()) == {"source", "category", "text", "score", "match"}
 
 
 def test_retrieve_qa_knowledge_invalid_category_returns_structured_error():

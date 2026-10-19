@@ -831,3 +831,28 @@ if __name__ == "__main__":
 
     import sys as _sys
     _sys.exit(0 if failed == 0 else 1)
+
+
+def test_narrative_drops_sentences_with_unverified_person_day_figures():
+    from effort_core import EstimationData, drop_unverified_person_day_figures
+
+    data = EstimationData(pert_total_expected=20.5, pert_total_sd=2.0, available_person_days=30.0)
+    text = (
+        "Expected effort is 20.5 person-days. The total reaches 24 person-days. Plan carefully.\n"
+        "- Only 24 person-days remain\n"
+        "- Capacity is 30 person-days"
+    )
+    out = drop_unverified_person_day_figures(text, data)
+    assert "24" not in out
+    assert "20.5 person-days" in out and "Plan carefully." in out
+    assert "Capacity is 30 person-days" in out
+    assert drop_unverified_person_day_figures(out, data) == out
+
+
+def test_narrative_guard_covers_unit_variants():
+    from effort_core import EstimationData, drop_unverified_person_day_figures
+
+    data = EstimationData(pert_total_expected=20.5)
+    for variant in ("24 man-days", "24 working days", "24 PD", "24 person days"):
+        assert drop_unverified_person_day_figures(f"It needs {variant}.", data) == ""
+    assert drop_unverified_person_day_figures("A 14 days sprint.", data) == "A 14 days sprint."

@@ -177,6 +177,8 @@ def lint_output(text: str, context_text: str = "") -> list:
     if context_text:
         for _end, m in _threshold_hits(text, context_text.lower()):
             problems.append(f"unflagged invented threshold: {m.group(0)!r}")
+        for _end, name in _tool_hits(text, context_text):
+            problems.append(f"unflagged tool outside the stated stack: {name!r}")
     return problems
 
 _NORMATIVE = re.compile(r"\b(mandatory|mandated|required)\b", re.IGNORECASE)
@@ -385,7 +387,14 @@ _THRESHOLD = re.compile(
     r"(?:\s*\(p\d+\))?"
     r"(?:\s+(?:[\w-]+\s+){0,2}?(?:coverage|false positives?|pass rate|failure rate|error rate|defect leakage)\b)?"
     r"|"
-    r"\b(?P<n2>\d{1,3})\s*%\s+(?:[\w-]+\s+){0,2}?(?:coverage|false positives?|pass rate|spot-check rate|defect leakage)\b)",
+    r"\b(?P<n2>\d{1,3})\s*%\s+(?:[\w-]+\s+){0,2}?(?:coverage|false positives?|pass rate|spot-check rate|defect leakage)\b"
+    r"|"
+    # bare quantities with no comparator: "5+ real devices", "24h/48h SLAs", "80% of effort"
+    r"\b(?P<n3>\d{1,3})\+\s+(?:[\w-]+\s+){0,2}?(?:devices?|browsers?|users?|testers?|engineers?|environments?)\b"
+    r"|"
+    r"\b(?P<n4>\d{1,3})\s*h(?:ours?)?\s*/\s*\d{1,3}\s*h(?:ours?)?\b(?:\s+SLAs?)?"
+    r"|"
+    r"\b(?P<n5>\d{1,3})\s*%\s+of\s+(?:the\s+)?(?:testing\s+|total\s+|QA\s+)?(?:effort|time|budget|capacity)\b)",
     re.IGNORECASE,
 )
 _FLAG_WORDS = re.compile(
@@ -414,7 +423,7 @@ def _threshold_hits(text: str, context_text: str):
         if line.lstrip().startswith("#") or _FLAG_WORDS.search(line):
             continue
         for m in _THRESHOLD.finditer(line):
-            num = m.group("n1") or m.group("n2")
+            num = next(g for g in m.group("n1", "n2", "n3", "n4", "n5") if g)
             if re.search(rf"(?<![\d.]){re.escape(num)}(?![\d.])", context_text):
                 continue
             yield line_start + m.end(), m
@@ -433,6 +442,43 @@ def flag_invented_thresholds(text: str, source_text: Optional[str]) -> str:
         text = text[:end] + THRESHOLD_FLAG + text[end:]
     return text
 
+_VENDOR_TOOLS = re.compile(
+    r"\b(BrowserStack|Sauce Labs|LambdaTest|Applitools|AppSee|Termly|OneTrust|TestRail|"
+    r"Zephyr|Qase|Percy|Snyk|SonarQube|Burp Suite|Datadog|New Relic|Sentry|LoadRunner|Tricentis)\b"
+)
+TOOL_FLAG = " (suggested tool, not in the project's stated stack)"
+
+
+def _tool_hits(text: str, haystack: str):
+    """(end_offset, name) for the first mention of each vendor tool whose name is
+    absent from ``haystack`` (project context) and that is not already marked
+    anywhere in ``text``. One marker per tool per document keeps the output
+    readable; a tool on a line that already says suggested/e.g. counts as handled."""
+    haystack = haystack.lower()
+    seen = {m.group(1).lower() for m in re.finditer(rf"{_VENDOR_TOOLS.pattern}\)?\s*\(suggested tool", text)}
+    for line_start, line in _lines_with_offsets(text):
+        if line.lstrip().startswith("#"):
+            continue
+        for m in _VENDOR_TOOLS.finditer(line):
+            name = m.group(1).lower()
+            if name in seen or name in haystack:
+                continue
+            seen.add(name)
+            if _FLAG_WORDS.search(line):
+                continue
+            yield line_start + m.end(), m.group(1)
+
+
+def flag_unlisted_tools(text: str, source_text: Optional[str]) -> str:
+    """Third-party products the model introduced out of thin air (BrowserStack,
+    Termly...) get a "(suggested tool ...)" marker unless the PROJECT CONTEXT
+    already mentions them. Idempotent."""
+    context = project_context_of(source_text)
+    if not context:
+        return text
+    for end in sorted({e for e, _ in _tool_hits(text, context)}, reverse=True):
+        text = text[:end] + TOOL_FLAG + text[end:]
+    return text
 
 
 def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
@@ -446,6 +492,7 @@ def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
     text = unquote_unverified_quotes(text, source_text)
     text = strip_unverified_syllabus_versions(text, source_text)
     text = flag_invented_thresholds(text, source_text)
+    text = flag_unlisted_tools(text, source_text)
     text = soften_absolute_tone(text)
     text = clean_separator_debris(text)
     return replace_dashes(text)

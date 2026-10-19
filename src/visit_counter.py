@@ -54,6 +54,7 @@ DOWNLOAD_DOCS = (
     "quality_review", "maturity_assessment",
 )
 DOWNLOAD_FORMATS = ("md", "pdf")
+DOWNLOAD_BUNDLE = ("all_documents", "zip")  # the "Download all" button (not a doc x format pair)
 FEEDBACK_VALUES = ("yes", "partially", "no")
 
 
@@ -68,6 +69,7 @@ def feedback_counter_id(value: str) -> str:
 def all_event_counter_ids() -> list:
     """Every download/feedback counter ID app.py can record, in report order."""
     ids = [download_counter_id(d, f) for d in DOWNLOAD_DOCS for f in DOWNLOAD_FORMATS]
+    ids.append(download_counter_id(*DOWNLOAD_BUNDLE))
     return ids + [feedback_counter_id(v) for v in FEEDBACK_VALUES]
 
 
