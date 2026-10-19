@@ -32,6 +32,7 @@ Use `--require-mistral` whenever the change concerns the primary model. A run th
 - No known garbage markers (safety-classifier output, refusals).
 - The Risk Matrix parses to ≥3 rows via `risk_ledger.parse_risk_matrix` (what the Risk Ledger UI renders).
 - `effort_data` is present.
+- Each saved document passes `output_guards.lint_output()`: no lone `**`, no "ISTQB-mandated"/"unusable", no unqualified "No dedicated/prior/existing X" absence claims (the 2026-10 exploratory-QA defects). A FAIL here means a prompt or model change regressed honesty, not that the lint is flaky.
 - It counts and prints every Mistral→OpenRouter fallback or mid-stream failure warning.
 
 ## After it passes
