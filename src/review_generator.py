@@ -18,12 +18,12 @@ from agent import MISTRAL_MODEL
 from ai_disclosure import build_front_matter, with_ai_footer
 from review_core import ReviewResult
 from logger import get_logger
-from output_guards import CITATION_RULES, STANDARDS_RULES
+from output_guards import CITATION_RULES, STANDARDS_RULES, STYLE_RULES, replace_dashes
 
 logger = get_logger(__name__)
 
 REVIEW_SYSTEM_PROMPT = """You are QAI Consultant, a senior QA Architect performing a QA document quality review.
-A deterministic rubric has already scored the document — you never invent, change,
+A deterministic rubric has already scored the document, you never invent, change,
 or contradict the given overall score, dimension scores, or findings. Your job is to
 explain why they matter (grounded in the ISTQB/IEEE/ISO knowledge base provided) and
 give the document's author concrete, prioritized, actionable fixes.
@@ -46,7 +46,7 @@ def build_review_prompt(result: ReviewResult, knowledge_context: str) -> str:
 A deterministic rubric has already reviewed an existing QA document (detected type:
 {result.doc_type}). Write a narrative Quality Review report explaining these
 already-computed results to the document's author and prioritizing what to fix first.
-Do NOT invent a different score or additional findings — use exactly what is given below.
+Do NOT invent a different score or additional findings, use exactly what is given below.
 
 OVERALL SCORE: {result.overall_score}/100
 
@@ -60,7 +60,7 @@ RELEVANT QA KNOWLEDGE BASE:
 {knowledge_context}
 
 {CITATION_RULES}
-{STANDARDS_RULES}
+{STANDARDS_RULES}{STYLE_RULES}
 Generate the narrative review using EXACTLY this structure:
 
 # QA Document Quality Review
@@ -81,7 +81,7 @@ Briefly list the Minor findings with suggested fixes.
 ## References
 List the standards/methodologies referenced above.
 
-Be specific — reference the actual dimension names and evidence given above rather
+Be specific, reference the actual dimension names and evidence given above rather
 than generic advice.
 """
 
@@ -106,19 +106,19 @@ def build_review_report_markdown(result: ReviewResult, narrative: str = "") -> s
     lines.append("## Findings")
     lines.append("")
     if not result.findings:
-        lines.append("No findings — every mechanical check in the rubric passed.")
+        lines.append("No findings: every mechanical check in the rubric passed.")
     else:
         for finding in result.findings:
             lines.append(
                 f"- **[{finding.severity.upper()}]** ({finding.dimension}) "
-                f"{finding.message} — _evidence: {finding.evidence}_"
+                f"{finding.message} (_evidence: {finding.evidence}_)"
             )
     if narrative:
         lines.append("")
         lines.append("---")
         lines.append("")
         lines.append(narrative)
-    return "\n".join(lines)
+    return replace_dashes("\n".join(lines))
 
 
 def save_review_report(markdown_text: str, source_label: str, output_dir: Optional[Path] = None) -> Path:
