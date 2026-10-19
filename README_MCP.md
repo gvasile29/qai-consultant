@@ -51,7 +51,7 @@ First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2
 
 | Tool | What it does |
 |---|---|
-| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (standards summaries — OWASP Top 10, IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE, EU AI Act; testing methodologies; audit/evaluation frameworks; AI SDLC case studies), filterable by category; `min_score` and `low_relevance` tell you when the Markdown-only index has no real match |
+| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (standards summaries — OWASP Top 10, IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE, EU AI Act; testing methodologies; audit/evaluation frameworks; AI SDLC case studies), filterable by category; `min_score`, `low_relevance` and a per-chunk `match` (strong/moderate/weak) tell you when the Markdown-only index has no real match |
 | `list_kb_sources` | Every document in the knowledge base, grouped by category |
 | `estimate_qa_effort` | Deterministic PERT-based effort estimate (baseline + complexity multipliers + team capacity + confidence score) — no LLM narrative, you write your own from the numbers; `warnings` lists any input that was assumed or ignored |
 | `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829-grounded dimensions, with findings and resolved KB citations — no LLM scoring, you write the narrative from the findings |

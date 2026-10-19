@@ -3,7 +3,7 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [3.8.1] - 2026-10-19
 
 ### Added
 - "Download all 4 documents (.zip)" button on the results screen (Markdown and PDF of every document).
