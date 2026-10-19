@@ -3,6 +3,14 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.7.2] - 2026-10-19
+
+### Fixed
+- `estimate_qa_effort` charged a false +20% "No existing automation - greenfield setup needed" multiplier whenever the automation description merely contained the letters "no" inside another word (for example "CANoe"). It now matches whole words only, so a project that lists CANoe, Google Test or similar is no longer treated as having no automation. Genuine answers such as "none", "no automation yet" or "nothing" still trigger it.
+
+### Changed
+- Streamlit app only (not part of the MCP package): generated documents no longer present unprovided facts as findings (absence claims such as "No dedicated security specialist" are marked as not stated in the project context), drop unverifiable ISTQB section citations and invented quotes, no longer overstate what IEEE 829 / ISTQB mandate, and no longer show stray `**` markers; score tiles no longer break words mid-label, the logo and EU AI icon are embedded so they cannot render as broken images, each answer in the discovery dialogue counts on the first Enter, and the landing page now says "~3-5 min" instead of "~2 min".
+
 ## [3.7.1] - 2026-10-14
 
 ### Added
