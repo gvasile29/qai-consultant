@@ -3,6 +3,11 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- The Executive Readout above the result tabs (effort range, team capacity, "Address first" rows) and the app's own messages and help text no longer use em or en dashes as punctuation; ranges read "114.5 to 332.5 person-days".
+
 ## [3.8.1] - 2026-10-19
 
 ### Added

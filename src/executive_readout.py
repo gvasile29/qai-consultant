@@ -23,8 +23,8 @@ _LEVEL_ORDER = ["critical", "high", "medium", "low"]
 class ExecutiveReadout:
     overall_risk: str = ""            # "Critical" | "High" | "Medium" | "Low" | ""
     risk_breakdown: str = ""          # e.g. "1 Critical · 2 High · 1 Medium"
-    effort_range: str = ""            # e.g. "42–51 person-days"
-    capacity: str = ""                # e.g. "36 person-days available — 9 short of expected effort"
+    effort_range: str = ""            # e.g. "42 to 51 person-days"
+    capacity: str = ""                # e.g. "36 person-days available, 9 short of expected effort"
     capacity_deficit: bool = False
     confidence: str = ""              # e.g. "Medium (59/100)"
     address_first: list = field(default_factory=list)  # [(risk_id, description), ...]
@@ -72,15 +72,15 @@ def build_readout(risk_rows: list, effort_data) -> Optional[ExecutiveReadout]:
 
     if effort_data is not None:
         readout.effort_range = (
-            f"{_fmt_days(effort_data.final_effort_min)}–{_fmt_days(effort_data.final_effort_max)} person-days"
+            f"{_fmt_days(effort_data.final_effort_min)} to {_fmt_days(effort_data.final_effort_max)} person-days"
         )
         available = _fmt_days(round(effort_data.available_person_days, 1))
         gap = round(effort_data.capacity_gap, 1)
         if gap < 0:
-            readout.capacity = f"{available} person-days available — {_fmt_days(-gap)} short of expected effort"
+            readout.capacity = f"{available} person-days available, {_fmt_days(-gap)} short of expected effort"
             readout.capacity_deficit = True
         else:
-            readout.capacity = f"{available} person-days available — {_fmt_days(gap)} above expected effort"
+            readout.capacity = f"{available} person-days available, {_fmt_days(gap)} above expected effort"
         readout.confidence = f"{effort_data.confidence_level} ({effort_data.confidence_score}/100)"
         try:
             readout.range_explanation = explain_effort_range(effort_data)

@@ -443,3 +443,26 @@ def test_replace_dashes_turns_numeric_ranges_into_to():
     out = replace_dashes(f"| **Range** | 64.4 {dash} 181.8 person-days |\n- **QA %:** 20% {dash} 25% of effort")
     assert "64.4 to 181.8" in out and "20% to 25%" in out
     assert dash not in out and ", 181" not in out
+
+
+def test_executive_readout_has_no_dash_punctuation():
+    """The readout is built in code, so replace_dashes never sees it (live QA, 3.8.1)."""
+    from components import executive_readout_html
+    from executive_readout import ExecutiveReadout
+
+    readout = ExecutiveReadout(
+        overall_risk="Critical", risk_breakdown="3 Critical", effort_range="114.5 to 332.5 person-days",
+        capacity="189 person-days available, 5.8 above expected effort", confidence="High (79/100)",
+        address_first=[("R01", "Third-party payment failures")],
+    )
+    html = executive_readout_html(readout)
+    assert "—" not in html and "–" not in html
+
+
+def test_readout_builder_formats_range_and_capacity_without_dashes():
+    import inspect
+
+    import executive_readout
+
+    src = inspect.getsource(executive_readout.build_readout)
+    assert "—" not in src and "–" not in src
