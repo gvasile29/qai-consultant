@@ -904,7 +904,9 @@ def compute_estimation(context: ProjectContext, risk_register: str = "") -> Esti
     return data
 
 
-_PERSON_DAYS = re.compile(r"(\d+(?:\.\d+)?)\s*(?:person[- ]days?|PDs?)\b", re.IGNORECASE)
+_PERSON_DAYS = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:(?:person|man|working)[- ]days?|PDs?|p/d)\b", re.IGNORECASE
+)
 
 
 def _known_person_day_figures(data: EstimationData) -> set:
@@ -942,6 +944,4 @@ def drop_unverified_person_day_figures(text: str, data: EstimationData) -> str:
         kept = [s for s in re.split(r"(?<=[.!?])\s+", line) if not _bad(s)]
         if kept:
             out_lines.append(" ".join(kept))
-        elif not line.strip():
-            out_lines.append(line)
     return "\n".join(out_lines)

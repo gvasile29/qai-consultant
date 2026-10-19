@@ -847,3 +847,12 @@ def test_narrative_drops_sentences_with_unverified_person_day_figures():
     assert "20.5 person-days" in out and "Plan carefully." in out
     assert "Capacity is 30 person-days" in out
     assert drop_unverified_person_day_figures(out, data) == out
+
+
+def test_narrative_guard_covers_unit_variants():
+    from effort_core import EstimationData, drop_unverified_person_day_figures
+
+    data = EstimationData(pert_total_expected=20.5)
+    for variant in ("24 man-days", "24 working days", "24 PD", "24 person days"):
+        assert drop_unverified_person_day_figures(f"It needs {variant}.", data) == ""
+    assert drop_unverified_person_day_figures("A 14 days sprint.", data) == "A 14 days sprint."
