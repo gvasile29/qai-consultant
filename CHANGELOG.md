@@ -3,6 +3,17 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- "Download all 4 documents (.zip)" button on the results screen (Markdown and PDF of every document).
+- `retrieve_qa_knowledge` labels each chunk `match: strong | moderate | weak` and adds a note when even the best chunk is not a strong match, so an unrelated 0.45 hit is no longer presented like a real answer.
+
+### Fixed
+- Generated documents: quantities the model invented without a comparator ("5+ real devices", "24h/48h SLAs", "80% of effort") now get the "(suggested target)" marker, and vendor tools that are not in the project's stated stack (BrowserStack, Termly, AppSee and similar) are marked "(suggested tool, not in the project's stated stack)".
+- Effort report: sentences in the narrative that quote a person-day figure the calculation did not produce are dropped, so the prose can no longer disagree with the tables.
+- Queued pipeline stages are labelled "queued" instead of only looking faded.
+
 ## [3.8.0] - 2026-10-19
 
 ### Fixed
