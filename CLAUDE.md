@@ -253,19 +253,17 @@ Full version history and rationale lives in `CHANGELOG.md` — this is a condens
 - **v2.0–v2.0.2** ✅ Cloud migration (Ollama→Mistral+OpenRouter, ChromaDB→Pinecone, Streamlit Cloud) + stability/eval hardening
 - **v2.5.0–v2.6** ✅ In-app Release Notes; `evaluation_audit/` KB pillar; EU AI Act Article 50 transparency (notices, footers, machine-readable marking) + KB pillar
 - **v3.0** ✅ MCP server MVP (`qai-consultant-mcp` on PyPI) — keyless local stdio server (`src/mcp_server.py` + `src/local_index.py` + `src/kb_config.py`), tools `retrieve_qa_knowledge`/`list_kb_sources`/`estimate_qa_effort`, `src/prompts.py` MCP prompts, licensing gate in `tests/test_packaging.py` (zero PDFs/HTML in the wheel). Design rationale (the "MCP lens"): `MCP_PLAN.md`.
-- **v3.1–v3.1.6** ✅ Evaluation Package — `review_qa_document` + `analyze_test_results` MCP tools, Streamlit doc-review/results modes, CLI flags — plus visit counter (see the Pinecone all-zero-vector Gotcha) and MCP registry/distribution fixes (`mcp>=2.0` breaking upgrade, cold-start attach timeout — see the MCP warmup Gotcha).
+- **v3.1-v3.1.6** ✅ Evaluation Package: `review_qa_document` + `analyze_test_results`, doc-review/results modes, visit counter, registry fixes.
 - **v3.2** ✅ CI quality gates completion — nightly `live-contract-tests.yml` against real Pinecone/Mistral/OpenRouter, SKIPs without secrets, never blocks a PR.
 - **v3.3–v3.3.1** ✅ EU AI Act "Fully AI-Generated" icon (sidebar SVG + PDF PNG badge) + an MCP attach-reliability fix (dependency-pinning saga, see Gotchas).
 - **v3.4–v3.4.4** ✅ "Calibration Bench" visual redesign in 3 phases (landing → interactive flow → output screens, each via `superpowers:subagent-driven-development` with independent implementer+reviewer per task plus a final whole-branch review) + further MCP dependency-pinning fixes. Full incident history: `docs/postmortems/2026-09-mcp-dependency-pinning-saga.md`.
 - **v3.5.0–v3.5.3** ✅ QA Maturity Assessment (`assess_qa_maturity` tool, TMMi-based, `src/maturity_core.py`) + keyword-matching fixes (see the QA Maturity Gotcha) + MCP embedding backend switched to `fastembed`, dropping torch/sentence-transformers/langchain-community.
 - **v3.5.4** ✅ Reliability fixes from the external audit (`docs/audits/2026-09-23-external-audit.md`): streaming fallback only before the first token, row-based risk buffer, word-boundary data-quality scoring.
 - **v3.6.0** ✅ Server-side daily run limits (`usage_guard.py`) + deterministic Executive Readout above the output tabs (`executive_readout.py`), from the external audit.
-- **v3.6.1** ✅ Free-tier-only OpenRouter fallback chain (`OPENROUTER_MODELS`), empty LLM responses raise instead of saving a blank document, + training-data warning in `AI_INTERACTION_NOTICE`.
-- **v3.6.2** ✅ Primary model → `ministral-14b-2512` (Free-plan 429 on mistral-small), `LLM_NUM_PREDICT` 4000→6500, bold-tolerant Risk Matrix header parser.
-- **v3.6.3** ✅ fastembed 0.8.0→0.8.1: KB-backed MCP tools crashed (numpy inhomogeneous shape) on a cached upstream model snapshot with fixed-128 padding below 256 truncation (#105).
-- **v3.7.0** ✅ Landing-page adoption strip (`adoption_metrics.py`), download/feedback counters, MCP telemetry default-on with opt-out + per-process id.
-- **v3.7.1** ✅ Telemetry drops unrecognized `category` values; `analyze_test_results` docstring fix; agent skill `skills/qai-consultant/SKILL.md`, kept in sync by `tests/test_skill_doc.py`.
-- **v3.7.2** ✅ `effort_core` whole-word automation match (CANoe false greenfield +20%); Streamlit-only honesty guards (`output_guards.py`), inline images, no `st.form` in the dialogue (PR #121).
+- **v3.6.1-v3.6.3** ✅ Free-tier-only OpenRouter chain, empty LLM responses raise, primary model `ministral-14b-2512`, `LLM_NUM_PREDICT` 6500, fastembed 0.8.1 fix (details in CHANGELOG.md).
+- **v3.7.0-v3.7.1** ✅ Adoption strip, download/feedback counters, default-on opt-out MCP telemetry, agent skill `skills/qai-consultant/SKILL.md` (kept in sync by `tests/test_skill_doc.py`).
+- **v3.7.2** ✅ `effort_core` whole-word automation match; Streamlit honesty guards (`output_guards.py`) (PR #121).
+- **v3.8.0** ✅ MCP end-to-end QA fixes (effort parsing + `warnings`, review/maturity gates, retrieval `min_score`, tolerant results parsing) + Streamlit effort/sources/download fixes.
 - **v4.0** Remote MCP + distribution: hosted Streamable HTTP server connectable from claude.ai, registry submissions, server-side usage metrics.
 
 > **MCP lens (governs all v3.x scope):** the client LLM is stronger than the internal one, so the server never exposes LLM generation — only what the client can't do alone (standards-grounded retrieval, deterministic estimation, validated QA process templates). `ask()`/`ask_streaming()`/document generation stay in Streamlit/CLI. Rationale: `MCP_PLAN.md`.

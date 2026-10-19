@@ -3,6 +3,20 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.8.0] - 2026-10-19
+
+### Fixed
+- `estimate_qa_effort` read timelines in days, sprints or quarters as months (for example "2 days" became 42 working days). It now understands days, working days, sprints, quarters and the Romanian units zile, saptamani, luni, ani and trimestru. Timelines it cannot read (such as "Dec 2026" or "ASAP") still use the 130-day default but now say so in a new `warnings` list. Team sizes written as ranges ("2-3") or number words ("three") are read correctly instead of being summed or counted as 1.
+- `estimate_qa_effort` confidence no longer reads "High" when the data is thin or the capacity shortfall is large; it is capped at Medium or Low with an explanation. SOC 2, PSD2, ISO 27001, EU AI Act, NIS2 and DORA now add an effort multiplier, and any compliance item or project type it does not recognise is listed in `warnings` instead of being dropped silently.
+- `review_qa_document` no longer scores a recipe or user stories as a test plan: input that is not a QA document returns `status: "not_a_qa_document"`, and input over 200,000 characters returns `input_too_large`. Test-case lists (TC-001 and so on) are scored with their own rubric instead of being told they lack objectives and scope. Non-English input is still scored but flagged with `language_warning` and `score_reliable: false`, and auto-detection reports `detection_confidence`.
+- `assess_qa_maturity` recognises more real-world phrasing (dashboards and metrics, equivalence partitioning, traceability matrix, dedicated test organisation, ISTQB training, non-functional testing), warns on keyword lists and non-English text, and carries a `detection_caveat` that scores can under-state paraphrased practices.
+- `retrieve_qa_knowledge` takes `min_score` (default 0.40). When nothing in the Markdown-only knowledge base matches, it returns no chunks, `low_relevance: true` and a note saying so, instead of returning unrelated text. Empty queries are rejected and near-duplicate chunks are collapsed.
+- `analyze_test_results` accepts common CSV headers and status words (pass, ok, fail, skip), reports dropped rows in `warnings`, and returns `no_tests_found` instead of an empty 0% result when nothing parses. Skipped tests no longer count as flaky, and inverted or out-of-range flaky bounds are rejected. Citations on review and maturity findings are limited to relevant sources, and the index builds in the background so the first knowledge call is faster.
+
+### Changed
+- `overall_pass_rate` in `analyze_test_results` is now passed divided by non-skipped runs.
+- Streamlit app: generated documents flag invented numeric targets as "suggested target", avoid invented scope and tools, contain no em dashes or stray ` ; ` separators, use a calibrated review tone and name ISTQB syllabi only as in the sources. The Effort table total now equals its rows, the range, capacity gap and confidence score are explained, and `[Source N]` citations match the Knowledge Sources panel with clean file names. Each tab's download buttons name their document, "Generate Another Strategy" keeps your answers, a project name survives choosing a template, the time estimate reads "~5-10 min" with a step-by-step progress line, and the MCP panel no longer says "fully offline" and discloses telemetry.
+
 ## [3.7.2] - 2026-10-19
 
 ### Fixed

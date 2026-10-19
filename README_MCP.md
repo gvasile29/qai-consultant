@@ -51,9 +51,9 @@ First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2
 
 | Tool | What it does |
 |---|---|
-| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (standards summaries — OWASP Top 10, IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE, EU AI Act; testing methodologies; audit/evaluation frameworks; AI SDLC case studies), filterable by category |
+| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (standards summaries — OWASP Top 10, IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE, EU AI Act; testing methodologies; audit/evaluation frameworks; AI SDLC case studies), filterable by category; `min_score` and `low_relevance` tell you when the Markdown-only index has no real match |
 | `list_kb_sources` | Every document in the knowledge base, grouped by category |
-| `estimate_qa_effort` | Deterministic PERT-based effort estimate (baseline + complexity multipliers + team capacity + confidence score) — no LLM narrative, you write your own from the numbers |
+| `estimate_qa_effort` | Deterministic PERT-based effort estimate (baseline + complexity multipliers + team capacity + confidence score) — no LLM narrative, you write your own from the numbers; `warnings` lists any input that was assumed or ignored |
 | `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829-grounded dimensions, with findings and resolved KB citations — no LLM scoring, you write the narrative from the findings |
 | `analyze_test_results` | Deterministic health metrics from JUnit XML or CSV test execution data — flaky tests, ever-failing tests, slowest tests, and failure clustering — no LLM anywhere in this tool |
 | `assess_qa_maturity` | Deterministic indicative TMMi process-maturity level (1-3, never a certified 4-5) from a free-text description or pasted document, plus a conditional 7-check EU AI Act Articles 9-15 readiness score when the input signals an AI/ML system — no LLM anywhere in this tool |
