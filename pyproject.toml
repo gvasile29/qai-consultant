@@ -156,7 +156,7 @@ ignore_missing_imports = true
 py-modules = [
     "mcp_server", "dialogue", "effort_core", "local_index",
     "telemetry", "prompts", "kb_config", "logger", "version",
-    "review_core", "results_core", "maturity_core", "risk_ledger",
+    "review_core", "results_core", "maturity_core", "risk_ledger", "text_checks",
 ]
 
 [tool.setuptools.package-dir]
