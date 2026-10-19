@@ -473,7 +473,7 @@ def render_sidebar():
 
 # ── Example output constants (used in render_intro expander) ──────────────────
 EXAMPLE_RISK = """
-### Risk Register — ShopFlow E-Commerce Platform
+### Risk Register: ShopFlow E-Commerce Platform
 
 | ID | Risk | Likelihood | Impact | Severity | Mitigation |
 |----|------|-----------|--------|----------|-----------|
@@ -485,7 +485,7 @@ EXAMPLE_RISK = """
 """
 
 EXAMPLE_EFFORT = """
-### Effort Estimation — ShopFlow E-Commerce Platform
+### Effort Estimation: ShopFlow E-Commerce Platform
 
 | Phase | Optimistic | Most Likely | Pessimistic | PERT Estimate |
 |-------|-----------|-------------|-------------|---------------|
@@ -501,23 +501,23 @@ Risk buffer: +20% → **~39 person-days**
 """
 
 EXAMPLE_STRATEGY = """
-### Test Strategy — ShopFlow E-Commerce Platform
+### Test Strategy: ShopFlow E-Commerce Platform
 
 **Scope:** End-to-end testing of checkout flow, user authentication, product catalogue, and payment integration.
 
 **Approach:** Risk-based testing (ISTQB CTAL-TM) prioritising payment and authentication flows. OWASP WSTG v4.2 for security coverage.
 
 **Test Levels:**
-- **Unit** — Jest (frontend), Mocha (backend services) — developer-owned
-- **Integration** — API contract tests (Postman/Newman), payment gateway mocks
-- **System** — Playwright E2E covering 15 critical user journeys
-- **Performance** — k6 load tests simulating 500 concurrent users
+- **Unit**: Jest (frontend), Mocha (backend services), developer-owned
+- **Integration**: API contract tests (Postman/Newman), payment gateway mocks
+- **System**: Playwright E2E covering 15 critical user journeys
+- **Performance**: k6 load tests simulating 500 concurrent users
 
 **Exit Criteria:** 0 open Critical/High defects, >85% test coverage on payment module, all OWASP Top 10 checks passed.
 """
 
 EXAMPLE_TEST_PLAN = """
-### Test Plan — ShopFlow E-Commerce Platform
+### Test Plan: ShopFlow E-Commerce Platform
 
 **Standard:** IEEE 829 | **Methodology:** Scrum
 
