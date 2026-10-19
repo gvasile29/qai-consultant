@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for src/effort_estimator.py — v0.4 Effort Estimation module.
 
 Covers:
@@ -457,14 +457,14 @@ def test_pert_nine_activities():
 
 
 def test_confidence_level_medium():
-    """BMW ECU with v0.6 score-based algorithm -> confidence = 'Medium'.
+    """BMW ECU with the v0.6 score-based algorithm -> 'Low' (was 'Medium' (score 59) before the\n    plausibility caps: a capacity deficit above 50% of expected effort now caps the label at Low).
 
     v0.6 replaces count-based logic with a four-factor score (0-100):
       Factor 1 (PERT spread ≈ 1.125): ~37 pts
       Factor 2 (capacity gap_ratio ≈ -0.74 — severe deficit): 0 pts
       Factor 3 (data quality — all fields specific): 20 pts
       Factor 4 (82% multiplier): 2 pts
-      Total ≈ 59 → "Medium"
+      Raw total ≈ 59, capped to 39 by the severe-deficit rule → "Low"
     """
     data = EstimationData()
     effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
@@ -478,10 +478,10 @@ def test_confidence_level_medium():
 
     assert len(data.multipliers) >= 5, \
         f"Precondition: need >= 5 multipliers, got {len(data.multipliers)}"
-    assert data.confidence_level == "Medium", \
-        f"Expected 'Medium' confidence (v0.6 score-based), got '{data.confidence_level}' (score={data.confidence_score})"
-    assert 40 <= data.confidence_score < 70, \
-        f"Expected score in [40, 69], got {data.confidence_score}"
+    assert data.confidence_level == "Low", \
+        f"Expected 'Low' confidence (severe-deficit cap), got '{data.confidence_level}' (score={data.confidence_score})"
+    assert data.confidence_score < 40, \
+        f"Expected score < 40, got {data.confidence_score}"
     print(f"  PASS: {len(data.multipliers)} multipliers -> confidence = '{data.confidence_level}' (score={data.confidence_score}/100)")
 
 
@@ -694,8 +694,8 @@ def test_full_estimate_bmw(agent):
         f"Expected 'v-model', got '{data.methodology_detected}'"
     assert data.total_multiplier == EXPECTED_TOTAL_MULTIPLIER, \
         f"Expected +82%, got +{data.total_multiplier}%"
-    assert data.confidence_level == "Medium", \
-        f"Expected 'Medium' (v0.6 score-based), got '{data.confidence_level}' (score={data.confidence_score})"
+    assert data.confidence_level == "Low", \
+        f"Expected 'Low' (severe-deficit cap), got '{data.confidence_level}' (score={data.confidence_score})"
     assert len(data.pert_activities) == 9, \
         f"Expected 9 PERT activities, got {len(data.pert_activities)}"
     print("  PASS: EstimationData fields verified")
@@ -765,7 +765,7 @@ if __name__ == "__main__":
             test_pert_formula),
         ("9 PERT activities when total_multiplier > 0",
             test_pert_nine_activities),
-        ("confidence = 'Medium' for BMW ECU (v0.6 score-based algorithm)",
+        ("confidence = 'Low' for BMW ECU (severe-deficit cap)",
             test_confidence_level_medium),
         ("app.py has 3 tabs: Risk Register, Effort Estimation, Test Strategy",
             test_three_tabs_in_app),
