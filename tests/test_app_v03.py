@@ -110,7 +110,7 @@ def test_risk_register_tab_has_download_button():
     source = read_app_source()
     fn = extract_function(source, "render_strategy")
 
-    assert '"⬇️ Download (.md)"' in fn, \
+    assert '"⬇️ Download Risk Register (.md)"' in fn, \
         "Risk Register download button label not found"
     assert 'risk_register' in fn and 'download_button' in fn, \
         "download_button for risk_register not found"
@@ -125,7 +125,7 @@ def test_strategy_tab_has_download_button():
     source = read_app_source()
     fn = extract_function(source, "render_strategy")
 
-    assert '"⬇️ Download (.md)"' in fn, \
+    assert '"⬇️ Download Test Strategy (.md)"' in fn, \
         "Test Strategy download button label not found"
     # Filename uses project_name
     assert 'test_strategy_' in fn, "test_strategy filename prefix not found"

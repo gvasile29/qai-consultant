@@ -249,8 +249,14 @@ def build_landing_hero_html(tokens: dict) -> str:
 """
 
 
+# Single source of truth for the full 4-document generation time shown in the
+# UI (observed live: 8-10 min on the free providers). Never hardcode it elsewhere.
+GENERATION_TIME_ESTIMATE = "~5-10 min"
+GENERATION_TIME_ESTIMATE_LONG = GENERATION_TIME_ESTIMATE.replace(" min", " minutes")
+
+
 def build_landing_deliverables_html(tokens: dict) -> str:
-    """Pure function: token dict -> the "What you get in ~3-5 minutes"
+    """Pure function: token dict -> the "What you get in ~5-10 minutes"
     deliverable cards + stat tiles HTML block. Reuses
     build_landing_hero_html()'s .pom-card/.pom-cidx/.pom-ctitle/.pom-cbody
     classes and pom-card-in keyframe (defined above, always rendered
@@ -263,7 +269,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
         ("📝", "Test Plan", "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."),
     ]
     stats = [
-        ("Time to results", "~3-5 min", "vs. hours of manual work"),
+        ("Time to results", GENERATION_TIME_ESTIMATE, "vs. hours of manual work"),
         ("Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors"),
         ("Deliverables", "4 documents", "Risk · Effort · Strategy · Plan"),
         ("Cost", "Free", "No sign-up required"),
@@ -274,7 +280,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
         for icon, title, body in deliverables
     )
     deliverable_delay_rules = "\n".join(
-        f".pom-deliverables .pom-card:nth-child({i}) {{ animation-delay: {2.15 + (i - 1) * 0.15:.2f}s; }}"
+        f".pom-deliverables .pom-card:nth-child({i}) {{ animation-delay: {2.15 + (i - 1) * 0.1:.2f}s; }}"
         for i in range(1, len(deliverables) + 1)
     )
     stat_tiles = "".join(
@@ -303,7 +309,7 @@ def build_landing_deliverables_html(tokens: dict) -> str:
   }}
 }}
 </style>
-<div class="pom-readout">&gt; what you get in ~3-5 minutes</div>
+<div class="pom-readout">&gt; what you get in {GENERATION_TIME_ESTIMATE_LONG}</div>
 <div class="pom-deliverables">{deliverable_cards}</div>
 <div class="pom-stats">{stat_tiles}</div>
 """
