@@ -545,7 +545,8 @@ def build_stage_sequence_html(tokens: dict, stages: list) -> str:
 .stage-sequence {{ display: flex; gap: 0.6rem; margin-bottom: 1.2rem; flex-wrap: wrap; }}
 .stage-item {{ display: flex; align-items: center; gap: 0.4rem; font-family: 'Plex Mono', monospace; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.3rem 0.7rem; border: 1px solid {tokens['line']}; border-radius: 4px; color: {tokens['ink_dim']}; }}
 .stage-item .stage-dot {{ width: 7px; height: 7px; border-radius: 50%; background: {tokens['line']}; display: inline-block; }}
-.stage-item.pending {{ opacity: 0.55; }}
+.stage-item.pending {{ opacity: 0.75; border-style: dashed; }}
+.stage-item.pending::after {{ content: 'queued'; text-transform: none; letter-spacing: 0; opacity: 0.8; }}
 .stage-item.active {{ color: {tokens['ink']}; border-color: {tokens['accent']}; }}
 .stage-item.active .stage-dot {{ background: {tokens['accent']}; animation: stage-pulse 1.2s ease-in-out infinite; }}
 .stage-item.done {{ color: {tokens['ink']}; border-color: {tokens['pass_']}; }}

@@ -464,3 +464,11 @@ def test_sidebar_nav_css_marks_only_the_active_mode():
 def test_sidebar_nav_css_ignores_unknown_mode():
     from components import build_sidebar_nav_css
     assert "button:disabled" not in build_sidebar_nav_css(LIGHT_TOKENS, "bogus")
+
+
+def test_pending_stage_is_labelled_queued_not_just_faded():
+    from components import build_stage_sequence_html
+    from theme import LIGHT_TOKENS
+
+    html = build_stage_sequence_html(LIGHT_TOKENS, [("Plan", "pending")])
+    assert "stage-item pending" in html and "content: 'queued'" in html
