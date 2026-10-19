@@ -314,6 +314,28 @@ def test_thresholds_from_context_or_already_flagged_are_untouched():
     assert g.sanitize_llm_markdown(plain, prompt) == plain
 
 
+def test_bare_invented_quantities_are_flagged():
+    text = (
+        "- Test on 5+ real devices\n"
+        "- 24h/48h SLAs for triage\n"
+        "- Focus 80% of effort on Critical Risks\n"
+    )
+    out = g.sanitize_llm_markdown(text, _CTX_PROMPT)
+    assert out.count("(suggested target)") == 3
+    assert g.sanitize_llm_markdown(out, _CTX_PROMPT) == out
+
+
+def test_vendor_tool_outside_stack_is_flagged_once_per_line():
+    prompt = "PROJECT CONTEXT:\ntech_stack: Flutter, Firebase\n\nRELEVANT QA KNOWLEDGE BASE:\nBrowserStack is a cloud"
+    text = "- Run on BrowserStack and BrowserStack App Live\n- Firebase Test Lab"
+    out = g.sanitize_llm_markdown(text, prompt)
+    assert out.count(g.TOOL_FLAG) == 1 and out.endswith("Firebase Test Lab")
+    assert g.sanitize_llm_markdown(out, prompt) == out
+    assert any("tool" in p for p in g.lint_output(text, "tech_stack: flutter"))
+    assert g.lint_output(out, "tech_stack: flutter") == []
+    assert g.sanitize_llm_markdown("- BrowserStack", "tech_stack: browserstack") == "- BrowserStack"
+
+
 def test_lint_flags_unflagged_threshold_until_sanitized():
     ctx = "team of 3"
     bad = "- p95 response under 2 s"
