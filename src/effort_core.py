@@ -287,7 +287,7 @@ def pert_breakdown(data: EstimationData) -> None:
     raw_total = sum((lo + hi) / 2 for lo, hi in activities.values())
     norm_scale = 100.0 / raw_total if raw_total > 0 else 1.0
 
-    total_o = total_m = total_p = 0.0
+    total_o = total_m = total_p = total_e = 0.0
 
     for activity, (pct_lo, pct_hi) in activities.items():
         pct_mid = ((pct_lo + pct_hi) / 2) * norm_scale
@@ -311,11 +311,17 @@ def pert_breakdown(data: EstimationData) -> None:
         total_o += o
         total_m += m
         total_p += p
+        total_e += e
 
+    # Every total is the sum of the rounded per-activity values shown in the
+    # report table, so the displayed TOTAL row always equals its column. The
+    # expected total used to be recomputed as (O + 4M + P) / 6 from the
+    # totals, which drifts from the sum of the rounded row values; capacity
+    # gap, confidence and "% of capacity" all derive from this figure.
     data.pert_total_optimistic = round(total_o, 1)
     data.pert_total_most_likely = round(total_m, 1)
     data.pert_total_pessimistic = round(total_p, 1)
-    data.pert_total_expected = round((total_o + 4 * total_m + total_p) / 6, 1)
+    data.pert_total_expected = round(total_e, 1)
     data.pert_total_sd = round((total_p - total_o) / 6, 1)
 
 
@@ -410,6 +416,103 @@ def finalize(data: EstimationData) -> None:
     data.confidence_level = calculate_confidence(data)
 
 
+def _confidence_components(data: EstimationData) -> tuple:
+    """Return the four confidence factor scores (spread, gap, quality, magnitude)."""
+    spread_pts = gap_pts = 0
+
+    # ── Factor 1: PERT spread ratio (40 pts) ──────────────────────────────────
+    # spread_ratio = (P - O) / E — lower is better (less uncertainty)
+    if data.pert_total_expected > 0:
+        spread_ratio = (data.pert_total_pessimistic - data.pert_total_optimistic) / data.pert_total_expected
+        if spread_ratio < 1.0:
+            spread_pts = 40
+        elif spread_ratio < 2.0:
+            spread_pts = int(40 - (spread_ratio - 1.0) * 20)   # 20-39
+        elif spread_ratio < 3.0:
+            spread_pts = int(20 - (spread_ratio - 2.0) * 15)   # 5-19
+        else:
+            spread_pts = 0
+
+    # ── Factor 2: Capacity gap ratio (30 pts) ───────────────────────────────────
+    # gap_ratio = capacity_gap / expected_effort
+    # positive (surplus) → good; negative (deficit) → bad
+    if data.pert_total_expected > 0:
+        gap_ratio = data.capacity_gap / data.pert_total_expected
+        if gap_ratio >= 0.3:
+            gap_pts = 30    # comfortable surplus (≥30% buffer)
+        elif gap_ratio >= 0.0:
+            gap_pts = int(15 + gap_ratio / 0.3 * 15)   # 15-30
+        elif gap_ratio >= -0.3:
+            gap_pts = int(15 + gap_ratio / 0.3 * 15)   # 0-14  (mild deficit)
+        else:
+            gap_pts = 0     # severe deficit (>30% short)
+
+    # ── Factor 3: Data quality (20 pts) ─────────────────────────────────────────
+    quality_pts = min(20, max(0, data.data_quality_score))
+
+    # ── Factor 4: Multiplier magnitude (10 pts) ─────────────────────────────────
+    # 0% → 10 pts; 50% → 5 pts; ≥100% → 0 pts
+    magnitude_pts = max(0, 10 - int(data.total_multiplier / 10))
+
+    return spread_pts, gap_pts, quality_pts, magnitude_pts
+
+
+def confidence_breakdown(data: EstimationData) -> list:
+    """Per-factor confidence points as (label, points, max_points, detail) tuples.
+
+    Deterministic and derived from the same helper calculate_confidence()
+    sums, so the explanation shown in the UI can never disagree with the score.
+    (The >5-year duration guard, when it fires, caps the total at 69 on top.)
+    """
+    spread_pts, gap_pts, quality_pts, magnitude_pts = _confidence_components(data)
+    expected = data.pert_total_expected
+    spread = (
+        f"best-to-worst-case spread is {(data.pert_total_pessimistic - data.pert_total_optimistic) / expected:.1f}x "
+        f"the expected effort (narrower is better)" if expected > 0 else "no expected effort to compare"
+    )
+    gap = (
+        f"capacity is {data.capacity_gap / expected * 100:+.0f}% relative to expected effort "
+        f"(surplus is better, deficit lowers it)" if expected > 0 else "no expected effort to compare"
+    )
+    return [
+        ("PERT spread", spread_pts, 40, spread),
+        ("Capacity gap", gap_pts, 30, gap),
+        ("Data quality", quality_pts, 20, "how specific the dialogue answers were (timeline, team sizes, compliance, automation)"),
+        ("Multiplier magnitude", magnitude_pts, 10, f"+{data.total_multiplier:g}% complexity adjustments applied (fewer is better)"),
+    ]
+
+
+def explain_effort_range(data: EstimationData) -> str:
+    """One deterministic paragraph on what drives the final effort range and the
+    capacity gap, built only from the numbers in ``data`` (no LLM)."""
+    lo, hi = data.final_effort_min, data.final_effort_max
+    ratio = f"{hi / lo:.1f}x" if lo > 0 else "n/a"
+    half_buffer = round(data.risk_buffer_days * 0.5, 1)
+    if data.capacity_gap >= 0:
+        gap_text = f"a surplus of {data.capacity_gap:g}"
+    else:
+        gap_text = f"a deficit of {abs(data.capacity_gap):g}"
+    return (
+        f"The range runs {lo:g} to {hi:g} person-days (upper bound is {ratio} the lower). "
+        f"The lower bound is the PERT optimistic total ({data.pert_total_optimistic:g}, each activity at 60% of its "
+        f"most-likely estimate) plus half the risk buffer ({half_buffer:g}). "
+        f"The upper bound is the PERT pessimistic total ({data.pert_total_pessimistic:g}, each activity at 180% of "
+        f"its most-likely estimate) plus the full risk buffer ({data.risk_buffer_days:g}). "
+        f"The most-likely total ({data.pert_total_most_likely:g}) comes from a baseline of "
+        f"{data.baseline_effort_min:g}-{data.baseline_effort_max:g} person-days adjusted by +{data.total_multiplier:g}% "
+        f"complexity multipliers. "
+        f"Capacity gap = available capacity ({data.available_person_days:g}) minus PERT expected effort "
+        f"({data.pert_total_expected:g}) = {gap_text} person-days."
+    )
+
+
+def capacity_utilization_pct(data: EstimationData) -> Optional[int]:
+    """PERT expected effort as a whole-number % of available capacity (None if no capacity)."""
+    if data.available_person_days <= 0:
+        return None
+    return round(data.pert_total_expected / data.available_person_days * 100)
+
+
 def calculate_confidence(data: EstimationData) -> str:
     """
     Score-based confidence algorithm (0-100 points).
@@ -422,48 +525,8 @@ def calculate_confidence(data: EstimationData) -> str:
 
     Final score → High (70-100), Medium (40-69), Low (0-39)
     """
-    score = 0
-
-    # ── Factor 1: PERT spread ratio (40 pts) ──────────────────────────────────
-    # spread_ratio = (P - O) / E — lower is better (less uncertainty)
-    if data.pert_total_expected > 0:
-        spread_ratio = (data.pert_total_pessimistic - data.pert_total_optimistic) / data.pert_total_expected
-        # spread_ratio < 1.0 → very tight → 40 pts
-        # spread_ratio 1.0-2.0 → moderate → 20-39 pts
-        # spread_ratio 2.0-3.0 → wide → 5-19 pts
-        # spread_ratio > 3.0 → very wide → 0 pts
-        if spread_ratio < 1.0:
-            score += 40
-        elif spread_ratio < 2.0:
-            score += int(40 - (spread_ratio - 1.0) * 20)   # 20-39
-        elif spread_ratio < 3.0:
-            score += int(20 - (spread_ratio - 2.0) * 15)   # 5-19
-        else:
-            score += 0
-
-    # ── Factor 2: Capacity gap ratio (30 pts) ───────────────────────────────────
-    # gap_ratio = capacity_gap / expected_effort
-    # positive (surplus) → good; negative (deficit) → bad
-    if data.pert_total_expected > 0:
-        gap_ratio = data.capacity_gap / data.pert_total_expected
-        if gap_ratio >= 0.3:
-            score += 30    # comfortable surplus (≥30% buffer)
-        elif gap_ratio >= 0.0:
-            score += int(15 + gap_ratio / 0.3 * 15)   # 15-30
-        elif gap_ratio >= -0.3:
-            score += int(15 + gap_ratio / 0.3 * 15)   # 0-14  (mild deficit)
-        else:
-            score += 0     # severe deficit (>30% short)
-
-    # ── Factor 3: Data quality (20 pts) ─────────────────────────────────────────
-    # Uses pre-calculated data_quality_score (0-20) set during estimation
-    score += min(20, max(0, data.data_quality_score))
-
-    # ── Factor 4: Multiplier magnitude (10 pts) ─────────────────────────────────
-    # total_multiplier is the sum of all % adjustments applied
-    # 0% → 10 pts; 50% → 5 pts; ≥100% → 0 pts
-    magnitude_score = max(0, 10 - int(data.total_multiplier / 10))
-    score += magnitude_score
+    spread_pts, gap_pts, quality_pts, magnitude_pts = _confidence_components(data)
+    score = spread_pts + gap_pts + quality_pts + magnitude_pts
 
     # ── Absolute magnitude guard ─────────────────────────────────────────────────
     # However well the four factors score, a physically-implausible duration

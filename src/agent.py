@@ -14,6 +14,7 @@ from pinecone import Pinecone
 from kb_config import EMBEDDING_MODEL
 from logger import get_logger, setup_logging
 from output_guards import sanitize_llm_markdown
+from source_labels import build_source_labels, display_name
 from mistralai.client import Mistral
 from openai import OpenAI
 
@@ -382,7 +383,7 @@ class QAIAgent:
         context_parts = []
         for i, chunk in enumerate(chunks, 1):
             category = chunk.metadata.get("category", "General")
-            filename = chunk.metadata.get("filename", "Unknown")
+            filename = display_name(chunk.metadata.get("filename", "Unknown"))
             context_parts.append(
                 f"[Source {i} — {category}: {filename}]\n{chunk.page_content}"
             )
@@ -461,10 +462,7 @@ USER QUERY:
 """
         response = self.ask(rag_prompt, system_prompt=system_prompt)
 
-        sources = list({
-            f"[{c.metadata.get('category', 'N/A')}] {c.metadata.get('filename', 'N/A')}"
-            for c in chunks
-        })
+        sources = build_source_labels(chunks)
 
         return response, sources
 

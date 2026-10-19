@@ -22,6 +22,7 @@ from rich import print as rprint
 
 from agent import QAIAgent, QAIConnectionError, QAIModelError, QAIKnowledgeBaseError, clean_markdown_html
 from dialogue import DialogueManager
+from source_labels import build_source_labels
 from strategy_generator import StrategyGenerator
 from logger import setup_logging, get_logger
 from version import __version__
@@ -173,18 +174,9 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summar
     risk_knowledge = agent.format_knowledge_context(risk_chunks)
     strategy_knowledge = agent.format_knowledge_context(strategy_chunks)
     test_plan_knowledge = agent.format_knowledge_context(test_plan_chunks)
-    test_plan_sources = list({
-        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-        for c in test_plan_chunks
-    })
-    risk_sources = list({
-        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-        for c in risk_chunks
-    })
-    sources = list({
-        f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-        for c in strategy_chunks
-    })
+    test_plan_sources = build_source_labels(test_plan_chunks)
+    risk_sources = build_source_labels(risk_chunks)
+    sources = build_source_labels(strategy_chunks)
 
     # === Step 1/4: Risk Register (streaming) ===
     console.print(Panel("[bold yellow]⚠️  Generating Risk Register...[/bold yellow]", border_style="yellow"))

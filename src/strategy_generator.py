@@ -18,6 +18,7 @@ from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
+from source_labels import build_source_labels
 from risk_analyzer import RiskAnalyzer
 from test_plan_generator import TestPlanGenerator
 from effort_estimator import EffortEstimator
@@ -259,10 +260,7 @@ class StrategyGenerator:
             raise ValueError(f"LLM returned empty Test Strategy for '{context.project_name}'")
         logger.info(f"Test Strategy generated ({len(strategy)} chars)")
 
-        sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in chunks
-        })
+        sources = build_source_labels(chunks)
 
         return strategy, sources
 

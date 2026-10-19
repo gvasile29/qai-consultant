@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from effort_core import confidence_breakdown, explain_effort_range
+
 _LEVEL_ORDER = ["critical", "high", "medium", "low"]
 
 
@@ -26,6 +28,8 @@ class ExecutiveReadout:
     capacity_deficit: bool = False
     confidence: str = ""              # e.g. "Medium (59/100)"
     address_first: list = field(default_factory=list)  # [(risk_id, description), ...]
+    range_explanation: str = ""       # what drives the effort range + how the gap is computed
+    confidence_factors: list = field(default_factory=list)  # [(label, points, max_points, detail), ...]
 
 
 def _level_key(risk_level: str) -> Optional[str]:
@@ -78,5 +82,11 @@ def build_readout(risk_rows: list, effort_data) -> Optional[ExecutiveReadout]:
         else:
             readout.capacity = f"{available} person-days available — {_fmt_days(gap)} above expected effort"
         readout.confidence = f"{effort_data.confidence_level} ({effort_data.confidence_score}/100)"
+        try:
+            readout.range_explanation = explain_effort_range(effort_data)
+            readout.confidence_factors = confidence_breakdown(effort_data)
+        except Exception:  # noqa: BLE001 -- explanations are optional; never break the readout
+            readout.range_explanation = ""
+            readout.confidence_factors = []
 
     return readout

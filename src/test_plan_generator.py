@@ -13,6 +13,7 @@ from typing import Optional
 from agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
 from ai_disclosure import build_front_matter, with_ai_footer
 from dialogue import ProjectContext
+from source_labels import build_source_labels
 from logger import get_logger
 from output_guards import CITATION_RULES, GROUNDING_RULES
 
@@ -179,10 +180,7 @@ class TestPlanGenerator:
         test_plan = self.agent.ask(prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
         logger.info(f"Test Plan generated ({len(test_plan)} chars)")
 
-        sources = list({
-            f"[{(c.metadata or {}).get('category', 'N/A')}] {(c.metadata or {}).get('filename', 'N/A')}"
-            for c in chunks
-        })
+        sources = build_source_labels(chunks)
         return test_plan, sources
 
     def _build_test_plan_query(self, context: ProjectContext) -> str:
