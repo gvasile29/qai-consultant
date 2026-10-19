@@ -450,17 +450,23 @@ TOOL_FLAG = " (suggested tool, not in the project's stated stack)"
 
 
 def _tool_hits(text: str, haystack: str):
-    """(end_offset, name) for the first vendor-tool mention per line whose name is
-    absent from ``haystack`` (project context + knowledge) and whose line carries
-    no suggested/example flag."""
+    """(end_offset, name) for the first mention of each vendor tool whose name is
+    absent from ``haystack`` (project context) and that is not already marked
+    anywhere in ``text``. One marker per tool per document keeps the output
+    readable; a tool on a line that already says suggested/e.g. counts as handled."""
     haystack = haystack.lower()
+    seen = {m.group(1).lower() for m in re.finditer(rf"{_VENDOR_TOOLS.pattern}\)?\s*\(suggested tool", text)}
     for line_start, line in _lines_with_offsets(text):
-        if line.lstrip().startswith("#") or _FLAG_WORDS.search(line):
+        if line.lstrip().startswith("#"):
             continue
         for m in _VENDOR_TOOLS.finditer(line):
-            if m.group(1).lower() not in haystack:
-                yield line_start + m.end(), m.group(1)
-                break
+            name = m.group(1).lower()
+            if name in seen or name in haystack:
+                continue
+            seen.add(name)
+            if _FLAG_WORDS.search(line):
+                continue
+            yield line_start + m.end(), m.group(1)
 
 
 def flag_unlisted_tools(text: str, source_text: Optional[str]) -> str:
