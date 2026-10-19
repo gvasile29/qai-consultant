@@ -23,6 +23,7 @@ import hashlib
 import json
 import math
 import re
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,6 +65,29 @@ def _default_cache_dir() -> Path:
 
 
 VALID_CATEGORIES = ("Standard", "Methodology", "Article", "Expert Knowledge", "Audit/Evaluation")
+
+LOW_RELEVANCE_NOTE = (
+    "No sufficiently relevant match in the local knowledge base. The local index covers "
+    "Markdown guides only (methodologies, selected standards, audit frameworks, case studies); "
+    "the ISTQB and OWASP PDF syllabi are not included for licensing reasons, so fundamentals "
+    "(e.g. test design techniques, test levels) are often absent. Answer from your own "
+    "knowledge and say the knowledge base had no match."
+)
+
+_DEDUPE_OVERLAP = 0.5  # overlap coefficient above which two same-source chunks are near-duplicates
+
+
+def _shingles(text: str, n: int = 5) -> frozenset:
+    words = text.lower().split()
+    if len(words) < n:
+        return frozenset([" ".join(words)]) if words else frozenset()
+    return frozenset(" ".join(words[i:i + n]) for i in range(len(words) - n + 1))
+
+
+def _overlap_ratio(a: frozenset, b: frozenset) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / min(len(a), len(b))
 
 
 @dataclass(frozen=True)
@@ -188,6 +212,7 @@ class LocalIndex:
         self._qcache: "OrderedDict[str, list[float]]" = OrderedDict()
         self._embedder = None
         self._built = False
+        self._build_lock = threading.Lock()
 
     # ── Construction ─────────────────────────────────────────────────────────
 
@@ -216,6 +241,12 @@ class LocalIndex:
         """Lazily build or load the full corpus index on first real use
         (search()/list_sources()) — deliberately not done in __init__ or
         warmup_embedder(); see warmup_embedder()'s docstring for why."""
+        if self._built:
+            return
+        with self._build_lock:
+            self._ensure_built_locked()
+
+    def _ensure_built_locked(self) -> None:
         if self._built:
             return
 
@@ -312,10 +343,34 @@ class LocalIndex:
             self._qcache.popitem(last=False)
         return vec
 
-    def search(self, query: str, category: Optional[str] = None, k: int = 5) -> dict:
-        """Returns {"chunks": [...], "kb_version": ...} on success, or
-        {"error": "invalid_argument", "message": ..., "valid_categories": [...]}
-        for an unrecognized category — never raises for a bad category."""
+    def search(
+        self, query: str, category: Optional[str] = None, k: int = 5, min_score: float = 0.0,
+    ) -> dict:
+        """Returns {"chunks": [...], "kb_version": ..., "best_score": float|None,
+        "low_relevance": bool[, "note": str]} on success, or
+        {"error": "invalid_argument", "message": ..., ...} for an empty query,
+        a non-numeric/out-of-range min_score, or an unrecognized category —
+        never raises for those.
+
+        Near-duplicate chunks (adjacent/overlapping chunks of one source whose
+        text overlaps heavily) are collapsed, keeping the higher score, and
+        the result is backfilled up to k.
+
+        min_score (default 0.0 = off): chunks scoring below it are dropped.
+        When nothing reaches it, `chunks` is empty and `low_relevance` is True
+        with an explanatory `note`; `best_score` is the best cosine similarity
+        found (before filtering), so the caller can see how close the miss was."""
+        if not isinstance(query, str) or not query.strip():
+            return {
+                "error": "invalid_argument",
+                "message": "query must be a non-empty string.",
+            }
+        if isinstance(min_score, bool) or not isinstance(min_score, (int, float)) \
+                or not 0.0 <= float(min_score) <= 1.0:
+            return {
+                "error": "invalid_argument",
+                "message": "min_score must be a number between 0 and 1.",
+            }
         if category is not None and category not in VALID_CATEGORIES:
             return {
                 "error": "invalid_argument",
@@ -327,7 +382,8 @@ class LocalIndex:
         k = max(1, min(k, 20))
 
         if not self._chunks:
-            return {"chunks": [], "kb_version": self.kb_version}
+            return {"chunks": [], "kb_version": self.kb_version, "best_score": None,
+                    "low_relevance": False}
 
         qvec = self._query_vector(query)
         qnorm = math.sqrt(sum(x * x for x in qvec)) or 1.0
@@ -341,15 +397,53 @@ class LocalIndex:
             scored.append((score, chunk))
 
         scored.sort(key=lambda pair: pair[0], reverse=True)
-        top = scored[:k]
 
-        return {
+        best_score = round(scored[0][0], 4) if scored else None
+        top: list = []
+        top_shingles: list = []
+        for score, chunk in scored:
+            if len(top) >= k or score < min_score:
+                break
+            shingles = _shingles(chunk.text)
+            if any(
+                prev.source == chunk.source and _overlap_ratio(shingles, prev_sh) > _DEDUPE_OVERLAP
+                for (_, prev), prev_sh in zip(top, top_shingles)
+            ):
+                continue  # near-duplicate of a higher-scoring chunk already kept
+            top.append((score, chunk))
+            top_shingles.append(shingles)
+
+        result: dict = {
             "chunks": [
                 {"source": c.source, "category": c.category, "text": c.text, "score": round(score, 4)}
                 for score, c in top
             ],
             "kb_version": self.kb_version,
+            "best_score": best_score,
+            "low_relevance": False,
         }
+        if not top and min_score > 0.0:
+            result["low_relevance"] = True
+            result["note"] = LOW_RELEVANCE_NOTE
+        return result
+
+    # ── Background build ─────────────────────────────────────────────────────
+
+    def start_background_build(self) -> None:
+        """Kick off _ensure_built() on a daemon thread so the first real
+        search() doesn't pay the full-corpus embed. MUST only be called after
+        warmup_embedder() has completed on the main thread (the native
+        runtime's first init is what races stdio's reader on Windows; later
+        calls from another thread are the same situation as a FastMCP worker
+        thread). Never raises; a failed build is retried lazily by the first
+        real call."""
+        def _run() -> None:
+            try:
+                self._ensure_built()
+            except Exception:
+                pass
+
+        threading.Thread(target=_run, name="qai-index-build", daemon=True).start()
 
     def list_sources(self) -> dict:
         """Returns {"categories": {category: [{"source", "title"}]}, "kb_version", "doc_count"}."""
