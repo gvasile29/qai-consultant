@@ -407,10 +407,10 @@ def test_analyze_test_results_requires_exactly_one_input():
 
 
 def test_analyze_test_results_malformed_xml_never_crashes():
+    # Was an empty "successful" 0-run result before the F8 fix; now a structured error.
     result = _run(_call_tool("analyze_test_results", {"junit_xml": "<not valid xml"}))
-    assert "error" not in result
-    assert result["runs"] == 0
-    assert result["executions"] == 0
+    assert result["error"] == "no_tests_found"
+    assert result["warnings"]
 
 
 def test_analyze_test_results_reference_tests_reports_never_run():
@@ -528,9 +528,16 @@ class _FakeIndex:
 
     def __init__(self):
         self.warmup_calls = 0
+        self.background_build_calls = 0
+        self.events = []
 
     def warmup_embedder(self):
         self.warmup_calls += 1
+        self.events.append("warmup")
+
+    def start_background_build(self):
+        self.background_build_calls += 1
+        self.events.append("background_build")
 
 
 def test_main_starts_server_and_fires_telemetry_when_index_builds(monkeypatch):
