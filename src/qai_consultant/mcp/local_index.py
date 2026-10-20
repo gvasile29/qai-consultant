@@ -40,14 +40,14 @@ _MAX_QCACHE_ENTRIES = 256  # LRU cap on _query_vector()'s per-instance cache
 
 def _resolve_default_kb_dir() -> Path:
     """knowledge_base/ lives two different places depending on how this module
-    got here: a sibling of src/ in the git repo (dev), or a sibling of this
-    module itself once packaged (site-packages/knowledge_base/ — see
-    pyproject.toml's wheel force-include, step 8). Repo layout is checked
+    got here: a sibling of src/ in the git repo (dev), or a sibling of the
+    qai_consultant package once installed (site-packages/knowledge_base/, a
+    top-level package next to site-packages/qai_consultant/). Repo layout is checked
     first since it's the more common case during development/testing."""
     repo_layout = _REPO_ROOT / "knowledge_base"
     if repo_layout.is_dir():
         return repo_layout
-    return Path(__file__).resolve().parent / "knowledge_base"
+    return Path(__file__).resolve().parents[2] / "knowledge_base"
 
 
 _DEFAULT_KB_DIR = _resolve_default_kb_dir()

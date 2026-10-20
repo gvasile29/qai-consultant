@@ -403,3 +403,27 @@ def test_match_strength_labels_and_weak_note():
     assert [li.match_strength(s) for s in (0.7, 0.55, 0.456, 0.40, 0.2)] == [
         "strong", "strong", "moderate", "moderate", "weak",
     ]
+
+
+def test_installed_layout_resolves_knowledge_base_beside_the_package(tmp_path):
+    """In an installed wheel the module sits at site/qai_consultant/mcp/local_index.py
+    and knowledge_base/ is a top-level sibling of qai_consultant/ (two levels up)."""
+    import importlib.util
+    import shutil
+
+    site = tmp_path / "site"
+    mod_dir = site / "qai_consultant" / "mcp"
+    mod_dir.mkdir(parents=True)
+    (site / "knowledge_base").mkdir()
+    copy = mod_dir / "local_index.py"
+    shutil.copy(SRC_DIR / "qai_consultant" / "mcp" / "local_index.py", copy)
+
+    spec = importlib.util.spec_from_file_location("_installed_local_index_copy", copy)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
+
+    assert module._DEFAULT_KB_DIR == (site / "knowledge_base").resolve()

@@ -116,7 +116,7 @@ Homepage = "https://github.com/gvasile29/qai-consultant"
 Repository = "https://github.com/gvasile29/qai-consultant"
 
 [project.scripts]
-qai-consultant-mcp = "mcp_server:main"
+qai-consultant-mcp = "qai_consultant.mcp.server:main"
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -148,16 +148,12 @@ ignore_missing_imports = true
 # documented `--extra-index-url` in the install instructions), not project-local
 # `[tool.uv.sources]` scoping.
 
-# ── setuptools: flat modules from src/, no nested package ───────────────────────
-# Matches these modules' existing bare `from x import y` style (no package prefix) —
-# see mcp_server.py's own note on why `from __future__ import annotations` is absent;
-# this flat layout is the same "don't fight the existing import style" choice.
+# ── setuptools: the qai_consultant package (wheel tiers only) + knowledge_base ──
+# common/core/mcp are the keyless tiers that ship to PyPI; rag/generation/
+# compliance/ui/observability are app-side and must never be in the wheel
+# (tests/system/release/test_package_layout.py enforces the import direction).
 [tool.setuptools]
-py-modules = [
-    "mcp_server", "dialogue", "effort_core", "local_index",
-    "telemetry", "prompts", "kb_config", "logger", "version",
-    "review_core", "results_core", "maturity_core", "risk_ledger", "text_checks",
-]
+include-package-data = true
 
 [tool.setuptools.package-dir]
 "knowledge_base" = "knowledge_base"
@@ -172,8 +168,11 @@ py-modules = [
 # verbatim" before first publish). tests/system/release/test_packaging.py asserts zero .pdf files
 # make it into the built wheel regardless, as the actual enforced gate.
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["knowledge_base*"]
+where = [".", "src"]
+include = [
+    "knowledge_base*",
+    "qai_consultant", "qai_consultant.common*", "qai_consultant.core*", "qai_consultant.mcp*",
+]
 namespaces = true
 
 [tool.setuptools.exclude-package-data]
