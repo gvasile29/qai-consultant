@@ -3,9 +3,10 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [3.9.0] - 2026-10-20
 
 ### Changed
+- The Executive Readout now headlines the expected effort (the PERT expected value) and labels the min-to-max range a planning band, not a confidence interval.
 - `src/` is now the `qai_consultant` package, grouped by dependency tier (`common`, `core`, `mcp` ship in the PyPI wheel; `rag`, `generation`, `compliance`, `ui`, `observability` are app-side). Imports are absolute and no `sys.path` hacks remain in `src/` or `tests/`.
 - New import-tier guard (`tests/system/release/test_package_layout.py`) enforces that the wheel tiers stay keyless and acyclic (`common` <- `core` <- `mcp`).
 - The MCP console script now points at `qai_consultant.mcp.server:main`; the wheel is built from `packages.find` plus a small `setup.py` that keeps the app-side `qai_consultant/cli.py` out of it.
