@@ -1,7 +1,7 @@
 """PreToolUse hook: block Claude from editing files that must not be hand-edited.
 
 - .env / .env.*        live API keys (Mistral, OpenRouter, Pinecone)
-- src/_theme_fonts.py  generated base64 font data; manual edits get overwritten
+- src/qai_consultant/ui/_theme_fonts.py  generated base64 font data; manual edits get overwritten
 
 Names are normalized the way Windows resolves them (case-insensitive, trailing
 dots/spaces dropped, NTFS alternate-data-stream suffix ignored) so `.ENV`,

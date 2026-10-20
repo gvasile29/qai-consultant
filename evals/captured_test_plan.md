@@ -1,6 +1,6 @@
 <!--
 The "2. Test Items" section produced by the CURRENT QAI Consultant Test Plan prompt
-(src/test_plan_generator.py) for the golden project context (_RUN_INPUTS in
+(src/qai_consultant/generation/test_plan_generator.py) for the golden project context (_RUN_INPUTS in
 estimate_integrity.py), captured live against real Mistral + Pinecone credentials on
 2026-07-06. The user supplied NO version numbers in any of the 11 answers; the prompt's
 "version not specified" guard (added in 8094bd3, 2026-07-02) means the generator now
