@@ -170,7 +170,8 @@ def test_no_legacy_flat_module_references_remain():
                             offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno} import {a.name}")
                 elif isinstance(node, ast.Constant) and isinstance(node.value, str):
                     head = node.value.split(".")[0]
-                    if "." in node.value and head in LEGACY_NAMES and node.value.replace(".", "").replace("_", "").isalnum():
+                    looks_dotted = node.value.replace(".", "").replace("_", "").isalnum()
+                    if "." in node.value and head in LEGACY_NAMES and looks_dotted and not node.value.endswith((".py", ".md", ".json", ".toml", ".yml", ".txt")):
                         offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno} string {node.value!r}")
     assert not offenders, "\n".join(offenders[:40])
 
