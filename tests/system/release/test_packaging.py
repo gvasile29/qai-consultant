@@ -13,6 +13,7 @@ backend's package, too slow for every CI run.
 """
 
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -114,6 +115,8 @@ def built_wheel(tmp_path_factory) -> Path:
     pytest.importorskip("build", reason="PyPA `build` is not installed; cannot build the wheel")
     pytest.importorskip("setuptools", reason="setuptools is not installed; cannot build the wheel")
     out_dir = tmp_path_factory.mktemp("qai_mcp_dist")
+    # A stale in-tree build/lib once leaked old flat modules into the wheel.
+    shutil.rmtree(REPO_ROOT / "build", ignore_errors=True)
     result = subprocess.run(
         [sys.executable, "-m", "build", "--wheel", "--no-isolation", "--outdir", str(out_dir)],
         cwd=REPO_ROOT, capture_output=True, text=True, timeout=180,
@@ -146,6 +149,11 @@ def test_wheel_excludes_forbidden_paths(wheel_namelist):
     for fragment in _FORBIDDEN_PATH_FRAGMENTS:
         matches = [n for n in wheel_namelist if fragment in n]
         assert matches == [], f"Wheel must not contain anything under '{fragment}': {matches}"
+
+
+def test_every_py_member_of_the_wheel_is_inside_the_package(wheel_namelist):
+    stray = [n for n in wheel_namelist if n.endswith(".py") and not n.startswith("qai_consultant/")]
+    assert stray == [], f"Only qai_consultant/ may carry .py files (no setup.py, no flat modules): {stray}"
 
 
 def test_wheel_contains_expected_py_modules(wheel_namelist):
