@@ -145,7 +145,14 @@ def executive_readout_html(readout) -> str:
                 "<details><summary>Why this range, and how the gap is computed</summary>"
                 f"<p>{_html.escape(readout.range_explanation)}</p></details>"
             )
-        rows.append(f'<tr><td class="rid">QA effort</td><td>{_html.escape(readout.effort_range)}{why}</td></tr>')
+        expected = getattr(readout, "expected_effort", "")
+        band = f"Planning band: {readout.effort_range} (fixed 60% to 180% spread, not a confidence interval)"
+        head = (
+            f"<strong>{_html.escape(expected)} expected</strong><br>{_html.escape(band)}"
+            if expected
+            else _html.escape(readout.effort_range)
+        )
+        rows.append(f'<tr><td class="rid">QA effort</td><td>{head}{why}</td></tr>')
     if readout.capacity:
         cap_tier = "fail" if readout.capacity_deficit else "pass"
         rows.append(

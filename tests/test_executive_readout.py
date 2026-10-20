@@ -52,6 +52,11 @@ def test_address_first_is_top_three_by_priority():
 def test_effort_capacity_and_confidence_come_from_estimation_data():
     readout = build_readout([], _effort(gap=-9.0))
     assert readout.effort_range == "42 to 51.5 person-days"
+    assert readout.expected_effort.endswith(" person-days")
+    html = executive_readout_html(readout)
+    assert f"{readout.expected_effort} expected" in html
+    assert "Planning band: 42 to 51.5 person-days" in html
+    assert "not a confidence interval" in html
     assert readout.capacity == "36 person-days available, 9 short of expected effort"
     assert readout.capacity_deficit
     assert readout.confidence == "Medium (59/100)"

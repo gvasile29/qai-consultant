@@ -568,6 +568,7 @@ def explain_effort_range(data: EstimationData) -> str:
         f"The most-likely total ({data.pert_total_most_likely:g}) comes from a baseline of "
         f"{data.baseline_effort_min:g}-{data.baseline_effort_max:g} person-days adjusted by +{data.total_multiplier:g}% "
         f"complexity multipliers. "
+        f"The range is a planning band built from those fixed factors, not a statistical confidence interval. "
         f"Capacity gap = available capacity ({data.available_person_days:g}) minus PERT expected effort "
         f"({data.pert_total_expected:g}) = {gap_text} person-days."
     )
