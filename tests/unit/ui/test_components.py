@@ -1,0 +1,474 @@
+"""Tests for src/components.py -- Signal Ledger / Risk Ledger HTML builders
+(Ledger section) and Landing hero + "What you get" (Landing section).
+
+These build HTML strings only (no Streamlit runtime needed to test them --
+st.markdown() is the caller's job, not this module's).
+"""
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+SRC_DIR = REPO_ROOT / "src"
+sys.path.insert(0, str(SRC_DIR))
+
+from components import (  # noqa: E402
+    build_content_polish_css,
+    build_dialogue_header_html,
+    build_doc_review_input_tray_css,
+    build_landing_deliverables_html,
+    build_landing_hero_html,
+    build_output_eyebrow_html,
+    build_review_summary_html,
+    build_sidebar_polish_css,
+    build_stage_sequence_html,
+    risk_ledger_table_html,
+    score_tier,
+    signal_ledger_html,
+)
+from theme import DARK_TOKENS, LIGHT_TOKENS  # noqa: E402
+
+SAMPLE_ROWS = [
+    {"risk_id": "R01", "description": "Auth token expiry untested", "likelihood": "High",
+     "impact": "High", "risk_level": "Critical", "priority": "1"},
+    {"risk_id": "R02", "description": "No load test above 200 rps", "likelihood": "Medium",
+     "impact": "Medium", "risk_level": "Medium", "priority": "2"},
+]
+
+
+def test_score_tier_boundaries():
+    assert score_tier(100) == "pass"
+    assert score_tier(80) == "pass"
+    assert score_tier(79) == "hold"
+    assert score_tier(50) == "hold"
+    assert score_tier(49) == "fail"
+    assert score_tier(0) == "fail"
+
+
+def test_signal_ledger_html_contains_label_and_score():
+    html = signal_ledger_html("Confidence", 72, sub="cited from 6 sources")
+    assert "Confidence" in html
+    assert "72" in html
+    assert "cited from 6 sources" in html
+    assert 'class="signal-ledger"' in html
+
+
+def test_signal_ledger_html_uses_computed_tier_class():
+    html = signal_ledger_html("Overall Score", 84)
+    assert "sl-score pass" in html
+    html = signal_ledger_html("Overall Score", 61)
+    assert "sl-score hold" in html
+    html = signal_ledger_html("Overall Score", 30)
+    assert "sl-score fail" in html
+
+
+def test_signal_ledger_html_accepts_explicit_tier_override():
+    # e.g. effort confidence is a "how sure are we" score, not a "how good
+    # is this" score -- callers may want to force the tier explicitly.
+    html = signal_ledger_html("Confidence", 90, tier="hold")
+    assert "sl-score hold" in html
+
+
+def test_signal_ledger_html_escapes_label_and_sub_text():
+    html = signal_ledger_html("<script>alert(1)</script>", 50, sub="<b>x</b>")
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_risk_ledger_table_html_renders_all_rows():
+    html = risk_ledger_table_html(SAMPLE_ROWS)
+    # 1 header <tr> (inside <thead>) + 1 per data row (2 rows here) = 3.
+    assert html.count("<tr>") == 3
+    assert "R01" in html and "R02" in html
+    assert "Auth token expiry untested" in html
+
+
+def test_risk_ledger_table_html_uses_severity_tier_classes():
+    html = risk_ledger_table_html(SAMPLE_ROWS)
+    assert 'class="sev fail"' in html   # Critical -> fail
+    assert 'class="sev hold"' in html   # Medium -> hold
+
+
+def test_risk_ledger_table_html_empty_rows_returns_empty_string():
+    assert risk_ledger_table_html([]) == ""
+
+
+def test_risk_ledger_table_html_escapes_description():
+    rows = [{"risk_id": "R01", "description": "<img src=x onerror=alert(1)>",
+              "likelihood": "Low", "impact": "Low", "risk_level": "Low", "priority": "1"}]
+    html = risk_ledger_table_html(rows)
+    assert "<img" not in html
+    assert "&lt;img" in html
+
+
+# ── Landing ─────────────────────────────────────────────────────────────
+
+
+def test_build_landing_hero_html_uses_the_given_tokens_not_a_hardcoded_theme():
+    light_html = build_landing_hero_html(LIGHT_TOKENS)
+    dark_html = build_landing_hero_html(DARK_TOKENS)
+    assert LIGHT_TOKENS["ink"] in light_html
+    assert DARK_TOKENS["ink"] not in light_html
+    assert DARK_TOKENS["ink"] in dark_html
+    assert LIGHT_TOKENS["ink"] not in dark_html
+
+
+def test_build_landing_hero_html_defines_all_keyframes():
+    html = build_landing_hero_html(LIGHT_TOKENS)
+    for name in [
+        "pom-reveal", "pom-fill-risk", "pom-fill-effort",
+        "pom-fill-strategy", "pom-tick", "pom-card-in",
+    ]:
+        assert f"@keyframes {name}" in html
+
+
+def test_build_landing_hero_html_does_not_reuse_ledger_card_class():
+    # Regression guard for the design-spec correction: .ledger-card belongs
+    # to the Phase-2 dialogue screen and has no :hover rule to inherit --
+    # this phase must define its own class, never touch .ledger-card.
+    html = build_landing_hero_html(LIGHT_TOKENS)
+    assert "ledger-card" not in html
+    assert ".pom-card:hover" in html
+
+
+def test_build_landing_hero_html_contains_the_standards_row():
+    html = build_landing_hero_html(LIGHT_TOKENS)
+    for standard in ["ISTQB", "OWASP", "IEEE 829", "ISO 25010"]:
+        assert standard in html
+
+
+def test_build_landing_hero_html_contains_how_it_works_copy():
+    html = build_landing_hero_html(LIGHT_TOKENS)
+    assert "Answer a few questions" in html
+    assert "AI analyzes" in html
+    assert "Download your strategy" in html
+
+
+def test_build_landing_hero_html_zeroes_animation_delays_for_reduced_motion():
+    # theme.py's global prefers-reduced-motion rule only zeroes
+    # animation-duration/transition-duration -- it never touches
+    # animation-delay, so delayed "pom-" elements (staggered standards
+    # badges, cards) would sit at their opacity:0 "from" state for the
+    # full original delay before snapping in. This module defines its own
+    # scoped prefers-reduced-motion block to zero those delays -- don't
+    # let it be deleted as "redundant" with theme.py's rule, they cover
+    # different CSS properties.
+    html = build_landing_hero_html(LIGHT_TOKENS)
+    assert "@media (prefers-reduced-motion: reduce)" in html
+    assert "animation-delay: 0s !important" in html
+
+
+def test_build_landing_hero_html_relies_on_theme_global_rule_for_duration():
+    # This module still relies on theme.py's existing global
+    # prefers-reduced-motion rule (build_css()) to zero out
+    # animation-duration/transition-duration -- confirm that global rule
+    # still exists so this reliance stays valid.
+    from theme import build_css
+    assert "prefers-reduced-motion" in build_css(LIGHT_TOKENS)
+
+
+def test_build_landing_deliverables_html_uses_the_given_tokens_not_a_hardcoded_theme():
+    light_html = build_landing_deliverables_html(LIGHT_TOKENS)
+    dark_html = build_landing_deliverables_html(DARK_TOKENS)
+    assert LIGHT_TOKENS["ink"] in light_html
+    assert DARK_TOKENS["ink"] not in light_html
+    assert DARK_TOKENS["ink"] in dark_html
+    assert LIGHT_TOKENS["ink"] not in dark_html
+
+
+def test_build_landing_deliverables_html_contains_all_four_deliverable_titles():
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    for title in ["Risk Register", "Effort Estimation", "Test Strategy", "Test Plan"]:
+        assert title in html
+
+
+def test_build_landing_deliverables_html_contains_all_four_stat_labels():
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    for label in ["Time to results", "Standards", "Deliverables", "Cost"]:
+        assert label in html
+
+
+def test_build_landing_deliverables_html_has_a_pom_readout_eyebrow_label():
+    # Regression guard: this section was the landing screen's only
+    # unlabeled content block after dropping the pre-existing "What you
+    # get in ~2 minutes" markdown heading. Must reuse the .pom-readout
+    # class build_landing_hero_html() already defines, not a new one.
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    assert '<div class="pom-readout">&gt; what you get in ~5-10 minutes</div>' in html
+
+
+def test_build_landing_deliverables_html_does_not_redefine_the_pom_card_in_keyframe():
+    # Regression guard: must reuse the pom-card-in keyframe from
+    # build_landing_hero_html() (concatenated into the same document) rather
+    # than redefining it -- a silent duplicate would be easy to miss since
+    # CSS allows redeclaring the same @keyframes name without error.
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    assert "@keyframes pom-card-in" not in html
+
+
+def test_build_landing_deliverables_html_delay_rules_are_scoped_under_pom_deliverables():
+    # Regression guard: nth-child delay overrides must be scoped under
+    # .pom-deliverables, never a bare ".pom-card:nth-child(...)" rule, which
+    # would also match (and fight with) the "How it works" cards' own delay
+    # rules defined in build_landing_hero_html().
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    for line in html.splitlines():
+        if ".pom-card:nth-child" in line:
+            assert ".pom-deliverables" in line, \
+                f"Found a bare (unscoped) .pom-card:nth-child rule: {line!r}"
+
+
+def test_build_landing_deliverables_html_zeroes_animation_delay_for_reduced_motion():
+    html = build_landing_deliverables_html(LIGHT_TOKENS)
+    assert "@media (prefers-reduced-motion: reduce)" in html
+    assert "animation-delay: 0s !important" in html
+
+
+# ── Dialogue & Sidebar ──────────────────────────────────────────────────
+
+from dataclasses import dataclass  # noqa: E402
+
+
+@dataclass
+class _FakeContext:
+    project_name: str = "ShopFlow"
+    project_type: str = "Web app"
+    tech_stack: str = "React + Django"
+    methodology: str = "Scrum"
+    timeline: str = "3 months"
+    team_qa_size: str = "2"
+    team_dev_size: str = "6"
+    known_risks: str = "Payment integration"
+    existing_automation: str = "Selenium suite"
+    compliance_requirements: str = "GDPR"
+
+
+def test_dialogue_header_uses_the_given_tokens_not_a_hardcoded_theme():
+    light = build_dialogue_header_html(LIGHT_TOKENS, 3, 11)
+    dark = build_dialogue_header_html(DARK_TOKENS, 3, 11)
+    assert LIGHT_TOKENS["accent"] in light
+    assert DARK_TOKENS["accent"] not in light
+    assert DARK_TOKENS["accent"] in dark
+    assert LIGHT_TOKENS["accent"] not in dark
+
+
+def test_dialogue_header_computes_progress_percentage():
+    html = build_dialogue_header_html(LIGHT_TOKENS, 3, 12)
+    assert "width: 25%;" in html
+
+
+def test_dialogue_header_handles_zero_total_without_dividing_by_zero():
+    html = build_dialogue_header_html(LIGHT_TOKENS, 0, 0)
+    assert "width: 0%;" in html
+
+
+def test_dialogue_header_adds_ledger_card_hover_without_touching_base_rule():
+    html = build_dialogue_header_html(LIGHT_TOKENS, 1, 11)
+    assert ".ledger-card:hover" in html
+
+
+def test_review_summary_escapes_html_in_user_supplied_fields():
+    context = _FakeContext(project_name="<script>alert(1)</script>")
+    html = build_review_summary_html(LIGHT_TOKENS, context, animate=False)
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_review_summary_contains_all_ten_fields():
+    html = build_review_summary_html(LIGHT_TOKENS, _FakeContext(), animate=False)
+    for value in ["ShopFlow", "React + Django", "Scrum", "GDPR"]:
+        assert value in html
+
+
+def test_review_summary_animate_flag_controls_the_css_class():
+    animated = build_review_summary_html(LIGHT_TOKENS, _FakeContext(), animate=True)
+    static = build_review_summary_html(LIGHT_TOKENS, _FakeContext(), animate=False)
+    assert 'class="review-grid animate"' in animated
+    assert 'class="review-grid animate"' not in static
+    assert 'class="review-grid"' in static
+
+
+def test_review_summary_zeroes_animation_delay_for_reduced_motion():
+    html = build_review_summary_html(LIGHT_TOKENS, _FakeContext(), animate=True)
+    assert "@media (prefers-reduced-motion: reduce)" in html
+    assert "animation-delay: 0s !important" in html
+
+
+def test_sidebar_polish_css_scopes_to_sidebar_testid():
+    html = build_sidebar_polish_css(LIGHT_TOKENS)
+    assert '[data-testid="stSidebar"]' in html
+    assert LIGHT_TOKENS["accent"] in html
+
+
+# ── Output screens ──────────────────────────────────────────────────────
+
+def test_output_eyebrow_uses_the_given_tokens_not_a_hardcoded_theme():
+    light = build_output_eyebrow_html(LIGHT_TOKENS, "output analysis sequence")
+    dark = build_output_eyebrow_html(DARK_TOKENS, "output analysis sequence")
+    assert LIGHT_TOKENS["ink_dim"] in light
+    assert DARK_TOKENS["ink_dim"] not in light
+    assert DARK_TOKENS["ink_dim"] in dark
+    assert LIGHT_TOKENS["ink_dim"] not in dark
+
+
+def test_output_eyebrow_renders_the_given_label():
+    html = build_output_eyebrow_html(LIGHT_TOKENS, "document review sequence")
+    assert "document review sequence" in html
+
+
+def test_stage_sequence_renders_all_stage_labels_with_correct_status_class():
+    stages = [("Risk", "done"), ("Effort", "active"), ("Strategy", "pending"), ("Plan", "pending")]
+    html = build_stage_sequence_html(LIGHT_TOKENS, stages)
+    assert '<div class="stage-item done">' in html
+    assert "Risk" in html
+    assert '<div class="stage-item active">' in html
+    assert "Effort" in html
+    assert html.count('<div class="stage-item pending">') == 2
+
+
+def test_stage_sequence_renders_a_failed_stage_with_the_fail_token_not_pass():
+    # Regression guard: a stage whose LLM call failed must render visibly
+    # distinct from a genuinely completed one -- render_strategy()'s
+    # per-stage except handler sets the session-state key to "" (not None)
+    # on failure, and _render_stages() must map that to "failed", not
+    # "done", or the live status readout would show green success right
+    # next to its own red st.error message.
+    html = build_stage_sequence_html(LIGHT_TOKENS, [("Risk", "failed")])
+    assert '<div class="stage-item failed">' in html
+    assert '<div class="stage-item done">' not in html
+    assert ".stage-item.failed { color:" in html
+    assert LIGHT_TOKENS["fail"] in html
+
+
+def test_stage_sequence_defines_the_pulse_animation_for_active_dots():
+    html = build_stage_sequence_html(LIGHT_TOKENS, [("Risk", "active")])
+    assert "@keyframes stage-pulse" in html
+    assert ".stage-item.active .stage-dot" in html
+    assert "animation: stage-pulse" in html
+
+
+def test_stage_sequence_handles_an_empty_stage_list():
+    html = build_stage_sequence_html(LIGHT_TOKENS, [])
+    assert '<div class="stage-sequence"></div>' in html
+
+
+def test_stage_sequence_escapes_html_in_labels():
+    html = build_stage_sequence_html(LIGHT_TOKENS, [("<script>alert(1)</script>", "pending")])
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_content_polish_css_scopes_buttons_and_expanders_to_main_not_sidebar():
+    html = build_content_polish_css(LIGHT_TOKENS)
+    assert '[data-testid="stMain"]' in html
+    assert '[data-testid="stSidebar"]' not in html
+    assert LIGHT_TOKENS["accent"] in html
+
+
+def test_content_polish_css_scopes_hover_color_away_from_primary_buttons():
+    # Regression guard: Streamlit's default primaryColor is red (#FF4B4B)
+    # with a white label; repainting a primary button's label to this app's
+    # blue accent on hover leaves near-illegible contrast against the still-
+    # red fill. border-color has no such conflict and stays unscoped; the
+    # `color` override must exclude buttons whose real rendered <button>
+    # carries data-testid="stBaseButton-primary" (confirmed via a live
+    # Streamlit + Playwright DOM probe -- see this module's docstring).
+    html = build_content_polish_css(LIGHT_TOKENS)
+    assert 'button:not([data-testid$="-primary"]):hover {' in html
+    color_rule_start = html.index('button:not([data-testid$="-primary"]):hover {')
+    color_rule_body = html[color_rule_start:html.index("}", color_rule_start)]
+    assert "color:" in color_rule_body
+    assert "border-color:" not in color_rule_body
+
+    border_rule_start = html.index("button:hover,")
+    border_rule_body = html[border_rule_start:html.index("}", border_rule_start)]
+    assert "border-color:" in border_rule_body
+    # A bare "color:" declaration (not "border-color:", and not the word
+    # "color" inside the transition property list) must NOT be present here.
+    import re
+    assert not re.search(r"(?<!-)color:\s*#", border_rule_body)
+
+
+def test_content_polish_css_styles_the_active_tab_indicator():
+    html = build_content_polish_css(LIGHT_TOKENS)
+    assert '[data-testid="stTab"][aria-selected="true"]' in html
+    assert ".react-aria-SelectionIndicator" in html
+
+
+def test_content_polish_css_defines_the_output_tiles_entrance_animation():
+    html = build_content_polish_css(LIGHT_TOKENS)
+    assert "@keyframes output-tiles-in" in html
+    assert ".output-tiles.animate" in html
+
+
+def test_doc_review_input_tray_css_scopes_to_the_keyed_container():
+    html = build_doc_review_input_tray_css(LIGHT_TOKENS)
+    assert ".st-key-doc-review-input" in html
+    assert LIGHT_TOKENS["surface"] in html
+
+
+# ── Landing CTAs, kick-off note & sidebar mode nav ─────────────────────────
+
+def test_app_modes_order_and_ids():
+    from components import APP_MODES
+    assert [m[0] for m in APP_MODES] == ["strategy", "doc_review", "maturity"]
+    assert [m[1] for m in APP_MODES] == ["01", "02", "03"]
+
+
+def test_landing_note_names_all_four_documents_without_em_dash():
+    from components import build_landing_note_html
+    for tokens in (LIGHT_TOKENS, DARK_TOKENS):
+        html = build_landing_note_html(tokens)
+        assert "four baseline documents" in html
+        for doc in ("Risk Register", "Effort Estimation", "Test Strategy", "Test Plan"):
+            assert doc in html
+        assert "—" not in html
+        assert tokens["accent"] in html
+
+
+def test_landing_cta_css_repaints_primary_with_accent_and_surface_label():
+    from components import build_landing_cta_css
+    for tokens in (LIGHT_TOKENS, DARK_TOKENS):
+        css = build_landing_cta_css(tokens)
+        assert ".st-key-landing-cta" in css
+        primary = [line for line in css.splitlines() if 'stBaseButton-primary"] {' in line][0]
+        assert f"background: {tokens['accent']}" in primary
+        assert f"color: {tokens['surface']}" in primary
+        hover = [line for line in css.splitlines() if 'stBaseButton-primary"]:hover' in line][0]
+        assert f"color: {tokens['surface']}" in hover
+        assert "#FF4B4B" not in css
+
+
+def test_landing_details_css_is_scoped():
+    from components import build_landing_details_css
+    css = build_landing_details_css(DARK_TOKENS)
+    rules = [line for line in css.splitlines() if "{" in line and "<style>" not in line]
+    assert rules and all(line.startswith(".st-key-landing-details") for line in rules)
+
+
+def test_sidebar_nav_css_indexes_every_mode():
+    from components import APP_MODES, build_sidebar_nav_css
+    css = build_sidebar_nav_css(DARK_TOKENS, None)
+    for mode_id, idx, _label in APP_MODES:
+        assert f'.st-key-nav-{mode_id} button p::before {{ content: "{idx}"' in css
+    assert "button:disabled" not in css  # no active mode on the landing page
+
+
+def test_sidebar_nav_css_marks_only_the_active_mode():
+    from components import build_sidebar_nav_css
+    css = build_sidebar_nav_css(LIGHT_TOKENS, "maturity")
+    assert ".st-key-nav-maturity button:disabled" in css
+    assert ".st-key-nav-strategy button:disabled" not in css
+    assert ".st-key-nav-doc_review button:disabled" not in css
+
+
+def test_sidebar_nav_css_ignores_unknown_mode():
+    from components import build_sidebar_nav_css
+    assert "button:disabled" not in build_sidebar_nav_css(LIGHT_TOKENS, "bogus")
+
+
+def test_pending_stage_is_labelled_queued_not_just_faded():
+    from components import build_stage_sequence_html
+    from theme import LIGHT_TOKENS
+
+    html = build_stage_sequence_html(LIGHT_TOKENS, [("Plan", "pending")])
+    assert "stage-item pending" in html and "content: 'queued'" in html

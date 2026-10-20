@@ -19,7 +19,7 @@ Start with `git diff origin/master...HEAD --stat`, then read the full diff of th
 
 4. **Warmup ordering.** `main()` in `mcp_server.py` must call `index.warmup_embedder()` before `mcp.run()`. Moving embedder init back to lazy/first-call reintroduces the Windows stdio deadlock (`docs/postmortems/2026-07-30-mcp-windows-stdio-deadlock.md`). Heavy full-corpus embedding must stay lazy (`_ensure_built()`), or cold attach exceeds Claude Desktop's ~60s timeout.
 
-5. **Licensing gate.** No `.pdf`/`.html` reaches the wheel. A newly whitelisted `knowledge_base.*` package-data folder needs a matching `_WHITELISTED_MD_FOLDERS` entry in `tests/test_packaging.py`, and its content must be self-authored.
+5. **Licensing gate.** No `.pdf`/`.html` reaches the wheel. A newly whitelisted `knowledge_base.*` package-data folder needs a matching `_WHITELISTED_MD_FOLDERS` entry in `tests/system/release/test_packaging.py`, and its content must be self-authored.
 
 6. **FastMCP argument coercion.** A new tool `str` parameter that clients might send as a JSON array must be typed `Optional[Union[str, list]]` and branch on `isinstance(value, list)`.
 
@@ -30,7 +30,7 @@ Start with `git diff origin/master...HEAD --stat`, then read the full diff of th
 ## Run these (read-only, keyless)
 
 ```bash
-python -m pytest tests/test_packaging.py tests/test_mcp_server.py -q
+python -m pytest tests/system/release/test_packaging.py tests/system/mcp/test_mcp_server.py -q
 python scripts/verify_mcp_stdio_no_deadlock.py   # if mcp_server.py or local_index.py changed
 ```
 

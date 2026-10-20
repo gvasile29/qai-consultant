@@ -1,0 +1,858 @@
+﻿"""
+Tests for src/effort_estimator.py — v0.4 Effort Estimation module.
+
+Covers:
+1.  Duration parsing: "2 years" -> 460 working days, "18 months" -> 378 days
+2.  Team size parsing: "2" -> 2, "6" -> 6
+3.  Project type detection: embedded + V-model methodology
+4.  Baseline QA %: embedded + V-model -> (30, 40)%
+5.  Multiplier: ISO 26262 ASIL B -> +20%
+6.  Multiplier: A-SPICE level 2 -> +20%
+7.  Multiplier: No existing automation -> +20%
+8.  Multiplier: Small QA team (<=2) -> +10%
+9.  Multiplier: External/third-party integrations risk -> +12%
+10. Total multiplier sum for BMW ECU profile -> +82%
+11. PERT formula: E = (O + 4*M + P) / 6
+12. PERT produces 9 activities when automation multiplier applies
+13. Confidence level = "Low" for >= 5 multipliers
+14. Streamlit app.py has 3 tabs (Risk Register, Effort Estimation, Test Strategy)
+15. Effort Estimation tab has correct download button label
+16. init_session_state() initializes effort_report and effort_path keys
+17. "Generate Another Strategy" clears effort_report and effort_path
+18. Sidebar "Start Over" clears effort_report and effort_path
+19. CLI shows 3 panels (Risk Register, Effort Estimation, Test Strategy)
+20. LLM smoke: full report with BMW ECU context, all 8 sections present, file saved
+"""
+
+import sys
+import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["CHROMA_TELEMETRY"] = "False"
+
+import re
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+SRC_DIR = REPO_ROOT / "src"
+APP_PY = SRC_DIR / "app.py"
+CLI_PY = SRC_DIR / "cli.py"
+sys.path.insert(0, str(SRC_DIR))
+
+from dialogue import ProjectContext
+from effort_estimator import EffortEstimator, EstimationData, BASELINE_QA_PERCENT
+import effort_core
+
+
+@pytest.fixture(scope="module")
+def agent():
+    """Real QAIAgent for the LLM smoke test; SKIP (not ERROR) without live API keys."""
+    from agent import QAIAgent
+    try:
+        return QAIAgent()
+    except Exception as exc:
+        pytest.skip(f"live agent unavailable ({type(exc).__name__}: {exc}) — requires API keys")
+
+
+# ── BMW ECU sample context (triggers all 5 key multipliers) ─────────────────
+
+BMW_EFFORT_CONTEXT = ProjectContext(
+    project_name="BMW Embedded ECU",
+    project_description=(
+        "Safety-critical embedded control unit for BMW electric vehicles, "
+        "controlling powertrain, battery management, and CAN bus communications"
+    ),
+    project_type="automotive embedded system",
+    tech_stack="C++ with AUTOSAR Classic, QNX RTOS",
+    team_qa_size="2",               # <= 2 -> small team +10%
+    team_dev_size="6",
+    timeline="2 years",             # 2 * 230 = 460 working days
+    methodology="V-model",          # -> v-model baseline (30-40%)
+    known_risks=(
+        "third-party CAN bus integration risks, "
+        "hardware timing failures under load"
+    ),                              # third-party -> +12%
+    existing_automation="No existing automation",  # -> +20%
+    compliance_requirements="ISO 26262 ASIL B, A-SPICE level 2",
+    # ASIL B -> +20%, A-SPICE L2 -> +20%
+)
+
+# Expected multipliers for BMW_EFFORT_CONTEXT
+EXPECTED_MULTIPLIERS = [
+    ("ISO 26262 ASIL B requirement", 20),
+    ("A-SPICE compliance (Level 2)", 20),
+    ("No existing automation — greenfield setup needed", 20),
+    ("Small QA team (<=2 people) — context switching overhead", 10),
+    ("External integrations identified as risk", 12),
+]
+EXPECTED_TOTAL_MULTIPLIER = 82  # 20 + 20 + 20 + 10 + 12
+
+# Required sections in the Effort Estimation Report
+REQUIRED_REPORT_SECTIONS = [
+    "## 1. Executive Summary",
+    "## 2. Baseline Calculation",
+    "## 3. Complexity Adjustments",
+    "## 4. Activity Breakdown (PERT)",
+    "## 5. Team Capacity Analysis",
+    "## 6. Risk Buffer",
+    "## 7. Assumptions & Constraints",
+    "## 8. Recommendations",
+]
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def read_app_source() -> str:
+    return APP_PY.read_text(encoding="utf-8")
+
+
+def read_cli_source() -> str:
+    return CLI_PY.read_text(encoding="utf-8")
+
+
+def extract_function(source: str, fn_name: str) -> str:
+    """Return the source lines of a top-level function."""
+    pattern = rf'\ndef {fn_name}\('
+    start = re.search(pattern, source)
+    if not start:
+        raise ValueError(f"Function '{fn_name}' not found")
+    rest = source[start.start():]
+    next_def = re.search(r'\ndef \w', rest[4:])
+    if next_def:
+        return rest[:next_def.start() + 4]
+    return rest
+
+
+def make_dummy_estimator():
+    """Create an EffortEstimator with a no-op agent for deterministic-only tests."""
+
+    class _DummyAgent:
+        def ask(self, prompt, system_prompt=""):
+            return (
+                "EXECUTIVE_SUMMARY: Test estimate generated.\n"
+                "ASSUMPTIONS: - Standard working days.\n"
+                "RECOMMENDATIONS: - Prioritize risk-based testing.\n"
+            )
+
+    return EffortEstimator(_DummyAgent())
+
+
+def make_capturing_estimator():
+    """Create an EffortEstimator whose agent records every prompt it receives.
+
+    Returns (estimator, captured_prompts) — captured_prompts is a list appended
+    to on each ask() call.
+    """
+    captured = []
+
+    class _CapturingAgent:
+        def ask(self, prompt, system_prompt=""):
+            captured.append(prompt)
+            return (
+                "EXECUTIVE_SUMMARY: Test estimate generated.\n"
+                "ASSUMPTIONS: - Standard working days.\n"
+                "RECOMMENDATIONS: - Prioritize risk-based testing.\n"
+            )
+
+    return EffortEstimator(_CapturingAgent()), captured
+
+
+# ── Non-LLM Structural Tests ─────────────────────────────────────────────────
+
+def test_save_includes_ai_generated_footer(tmp_path):
+    """save() appends the visible AI-generated footer to the saved report body (v2.5.2)."""
+    estimator = make_dummy_estimator()
+    body = "## 1. Executive Summary\n\nSome generated report body."
+    output_path = estimator.save(body, BMW_EFFORT_CONTEXT, output_dir=tmp_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "AI-generated" in content, "AI-generated footer missing from saved Effort Report"
+    assert content.index(body) < content.index("AI-generated"), \
+        "Footer must come after the document body"
+
+    print("  PASS: save() includes visible AI-generated footer")
+
+
+def test_parse_duration_2years():
+    """'2 years' parses to 460 working days (2 * 230)."""
+    days = effort_core.parse_duration("2 years")
+    assert days == 460, f"Expected 460, got {days}"
+    print("  PASS: '2 years' -> 460 working days")
+
+
+def test_parse_duration_18months():
+    """'18 months' parses to 378 working days (18 * 21).
+    NOTE: strings containing 'year' (e.g. 'model year') trigger the year
+    branch; use a clean month-only string to test the month path.
+    """
+    days = effort_core.parse_duration("18 months")
+    assert days == 378, f"Expected 378, got {days}"
+    print("  PASS: '18 months' -> 378 working days")
+
+
+def test_parse_duration_6weeks():
+    """'6 weeks' parses to 30 working days (6 * 5)."""
+    days = effort_core.parse_duration("6 weeks")
+    assert days == 30, f"Expected 30, got {days}"
+    print("  PASS: '6 weeks' -> 30 working days")
+
+
+def test_parse_team_size_2():
+    """'2' parses to 2."""
+    size = effort_core.parse_team_size("2")
+    assert size == 2, f"Expected 2, got {size}"
+    print("  PASS: '2' -> team size 2")
+
+
+def test_parse_team_size_range():
+    """'5 developers' parses to 5."""
+    size = effort_core.parse_team_size("5 developers")
+    assert size == 5, f"Expected 5, got {size}"
+    print("  PASS: '5 developers' -> team size 5")
+
+
+# The narrative format the LLM actually renders, captured live from a real call:
+# a markdown heading, bold, and a leading number around each section label — not
+# the plain "LABEL:" the old _extract_section regex assumed.
+_REALISTIC_NARRATIVE = """### **1. EXECUTIVE SUMMARY**
+The effort estimation ranges between 213.6-594.6 person-days, reflecting a 45% adjustment.
+
+---
+
+### **2. ASSUMPTIONS**
+- **Scope Stability**: Functional requirements remain consistent.
+- **Compliance Readiness**: PCI-DSS and GDPR controls are pre-validated.
+
+---
+### **3. RECOMMENDATIONS**
+1. **Prioritize Automation**: Allocate 20% of QA effort to regression suites.
+2. **Resource Augmentation**: Consider a temporary QA lead.
+"""
+
+
+def test_extract_section_handles_markdown_heading_format():
+    """_extract_section finds EXECUTIVE_SUMMARY even when the LLM renders it as
+    a numbered, bold markdown heading with a space instead of an underscore
+    ("### **1. EXECUTIVE SUMMARY**") rather than the plain "LABEL:" format."""
+    est = make_dummy_estimator()
+    result = est._extract_section(_REALISTIC_NARRATIVE, "EXECUTIVE_SUMMARY")
+    assert result is not None, "Expected EXECUTIVE_SUMMARY to be found despite markdown decoration"
+    assert "213.6-594.6" in result, f"Expected the summary text, got: {result!r}"
+    print("  PASS: EXECUTIVE_SUMMARY extracted despite '### **1. EXECUTIVE SUMMARY**' formatting")
+
+
+def test_extract_section_assumptions_does_not_swallow_recommendations():
+    """_extract_section's ASSUMPTIONS capture must stop before RECOMMENDATIONS
+    even though the RECOMMENDATIONS heading is itself markdown-decorated
+    ("### **3. RECOMMENDATIONS**") — reproduces a live bug where the whole
+    Recommendations section was duplicated verbatim inside Assumptions &
+    Constraints because the old regex's stop condition never matched a
+    decorated heading and fell through to end-of-string instead."""
+    est = make_dummy_estimator()
+    assumptions = est._extract_section(_REALISTIC_NARRATIVE, "ASSUMPTIONS")
+    assert assumptions is not None, "Expected ASSUMPTIONS to be found"
+    assert "Prioritize Automation" not in assumptions, \
+        f"ASSUMPTIONS swallowed the RECOMMENDATIONS section: {assumptions!r}"
+    assert "Scope Stability" in assumptions
+    print("  PASS: ASSUMPTIONS stops before RECOMMENDATIONS, no duplication")
+
+
+def test_extract_section_recommendations_extracted_cleanly():
+    """RECOMMENDATIONS extracts its own content correctly and completely."""
+    est = make_dummy_estimator()
+    recommendations = est._extract_section(_REALISTIC_NARRATIVE, "RECOMMENDATIONS")
+    assert recommendations is not None, "Expected RECOMMENDATIONS to be found"
+    assert "Prioritize Automation" in recommendations
+    assert "Resource Augmentation" in recommendations
+    print("  PASS: RECOMMENDATIONS extracted cleanly")
+
+
+def test_parse_narrative_no_duplication_end_to_end():
+    """_parse_narrative() on a realistic markdown-decorated LLM response
+    produces three DISTINCT sections — no section's content reappears in
+    another (the end-to-end regression check for the live duplication bug)."""
+    est = make_dummy_estimator()
+    exec_summary, assumptions, recommendations = est._parse_narrative(_REALISTIC_NARRATIVE)
+    assert "Prioritize Automation" not in assumptions, "Recommendations leaked into assumptions"
+    assert "Scope Stability" not in recommendations, "Assumptions leaked into recommendations"
+    assert "213.6-594.6" in exec_summary
+    print("  PASS: exec_summary / assumptions / recommendations are distinct, no cross-contamination")
+
+
+def test_narrative_prompt_includes_additional_context_when_set():
+    """The narrative prompt contains the ADDITIONAL CONTEXT line when the field is set."""
+    est, captured = make_capturing_estimator()
+    from dataclasses import replace
+    context = replace(BMW_EFFORT_CONTEXT, additional_context="Legacy SOAP backend must be regression-tested.")
+    est.estimate(context, "")
+    assert captured, "No prompt captured — narrative LLM call never happened"
+    assert "ADDITIONAL CONTEXT FROM THE USER" in captured[0], \
+        "ADDITIONAL CONTEXT line missing from narrative prompt when field is set"
+    assert "Legacy SOAP backend must be regression-tested." in captured[0], \
+        "Additional context text missing from narrative prompt"
+    print("  PASS: narrative prompt includes the ADDITIONAL CONTEXT line when set")
+
+
+def test_narrative_prompt_omits_additional_context_when_empty():
+    """The narrative prompt omits the ADDITIONAL CONTEXT line when the field is empty."""
+    est, captured = make_capturing_estimator()
+    est.estimate(BMW_EFFORT_CONTEXT, "")
+    assert captured, "No prompt captured — narrative LLM call never happened"
+    assert "ADDITIONAL CONTEXT FROM THE USER" not in captured[0], \
+        "ADDITIONAL CONTEXT line must not appear when the field is empty"
+    print("  PASS: narrative prompt omits the ADDITIONAL CONTEXT line when empty")
+
+
+def test_detect_project_type_embedded():
+    """'automotive embedded system' detects as 'embedded'."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    assert data.project_type_detected == "embedded", \
+        f"Expected 'embedded', got '{data.project_type_detected}'"
+    print("  PASS: 'automotive embedded system' -> project_type_detected = 'embedded'")
+
+
+def test_detect_methodology_vmodel():
+    """'V-model' detects as 'v-model'."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    assert data.methodology_detected == "v-model", \
+        f"Expected 'v-model', got '{data.methodology_detected}'"
+    print("  PASS: 'V-model' -> methodology_detected = 'v-model'")
+
+
+def test_baseline_embedded_vmodel():
+    """embedded + v-model baseline QA % is (30, 40)."""
+    assert ("embedded", "v-model") in BASELINE_QA_PERCENT, \
+        "('embedded', 'v-model') key missing from BASELINE_QA_PERCENT"
+    lo, hi = BASELINE_QA_PERCENT[("embedded", "v-model")]
+    assert (lo, hi) == (30, 40), f"Expected (30, 40), got ({lo}, {hi})"
+    print(f"  PASS: embedded + v-model baseline QA % = {lo}% - {hi}%")
+
+
+def test_multiplier_iso26262_asil_b():
+    """ISO 26262 ASIL B compliance adds +20% multiplier."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+
+    asil_b = [r for r, p in data.multipliers if "asil b" in r.lower()]
+    assert asil_b, "ISO 26262 ASIL B multiplier not applied"
+    reason, pct = next((r, p) for r, p in data.multipliers if "asil b" in r.lower())
+    assert pct == 20, f"ISO 26262 ASIL B should be +20%, got +{pct}%"
+    print(f"  PASS: ISO 26262 ASIL B -> +20% (reason: '{reason}')")
+
+
+def test_multiplier_aspice_level2():
+    """A-SPICE level 2 compliance adds +20% multiplier."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+
+    aspice = [(r, p) for r, p in data.multipliers if "a-spice" in r.lower()]
+    assert aspice, "A-SPICE multiplier not applied"
+    reason, pct = aspice[0]
+    assert pct == 20, f"A-SPICE Level 2 should be +20%, got +{pct}%"
+    assert "2" in reason, f"Expected Level 2 in reason, got: '{reason}'"
+    print(f"  PASS: A-SPICE Level 2 -> +20% (reason: '{reason}')")
+
+
+def test_multiplier_no_automation():
+    """'No existing automation' adds +20% multiplier."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+
+    no_auto = [(r, p) for r, p in data.multipliers if "automation" in r.lower() and "greenfield" in r.lower()]
+    assert no_auto, "No-automation multiplier not applied"
+    reason, pct = no_auto[0]
+    assert pct == 20, f"No automation should be +20%, got +{pct}%"
+    print(f"  PASS: No existing automation -> +20% (reason: '{reason}')")
+
+
+def test_multiplier_small_qa_team():
+    """QA team size <=2 adds +10% multiplier."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+
+    small_team = [(r, p) for r, p in data.multipliers if "small qa team" in r.lower()]
+    assert small_team, "Small QA team multiplier not applied"
+    reason, pct = small_team[0]
+    assert pct == 10, f"Small QA team should be +10%, got +{pct}%"
+    print(f"  PASS: Small QA team (<=2) -> +10% (reason: '{reason}')")
+
+
+def test_multiplier_external_integrations():
+    """'third-party' risk adds +12% external integrations multiplier."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+
+    integrations = [(r, p) for r, p in data.multipliers if "integration" in r.lower()]
+    assert integrations, "External integrations multiplier not applied"
+    reason, pct = integrations[0]
+    assert pct == 12, f"External integrations should be +12%, got +{pct}%"
+    print(f"  PASS: Third-party integrations risk -> +12% (reason: '{reason}')")
+
+
+def test_total_multiplier_82pct():
+    """BMW ECU context total multiplier = 82% (20+20+20+10+12)."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+
+    assert data.total_multiplier == EXPECTED_TOTAL_MULTIPLIER, \
+        f"Expected total multiplier {EXPECTED_TOTAL_MULTIPLIER}%, got {data.total_multiplier}%"
+    assert len(data.multipliers) == 5, \
+        f"Expected 5 multipliers, got {len(data.multipliers)}: {data.multipliers}"
+    print(f"  PASS: Total multiplier = +{data.total_multiplier}% ({len(data.multipliers)} factors)")
+    for reason, pct in data.multipliers:
+        print(f"        + {pct}%: {reason}")
+
+
+def test_pert_formula():
+    """PERT formula: E = (O + 4*M + P) / 6 verified for each activity."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.pert_breakdown(data)
+
+    failures = []
+    for act in data.pert_activities:
+        o, m, p = act["optimistic"], act["most_likely"], act["pessimistic"]
+        expected = round((o + 4 * m + p) / 6, 1)
+        if abs(expected - act["expected"]) > 0.2:  # allow small rounding diff
+            failures.append(f"{act['activity']}: E={act['expected']} but (O+4M+P)/6={expected}")
+
+    assert not failures, "PERT formula mismatch:\n" + "\n".join(failures)
+    print(f"  PASS: PERT formula E=(O+4M+P)/6 verified for all {len(data.pert_activities)} activities")
+
+
+def test_pert_nine_activities():
+    """When total_multiplier > 0, PERT produces 9 activities (Automation Framework Setup included)."""
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.pert_breakdown(data)
+
+    assert data.total_multiplier > 0, "Precondition: total_multiplier must be > 0"
+    assert len(data.pert_activities) == 9, \
+        f"Expected 9 PERT activities, got {len(data.pert_activities)}"
+    names = [a["activity"] for a in data.pert_activities]
+    assert "Automation Framework Setup" in names, \
+        "Automation Framework Setup missing from PERT when total_multiplier > 0"
+    print("  PASS: 9 PERT activities (Automation Framework Setup included)")
+    for a in data.pert_activities:
+        print(f"        {a['activity']}: {a['optimistic']}d / {a['most_likely']}d / {a['pessimistic']}d -> E={a['expected']}d")
+
+
+def test_confidence_level_medium():
+    """BMW ECU with the v0.6 score-based algorithm -> 'Low' (was 'Medium' (score 59) before the\n    plausibility caps: a capacity deficit above 50% of expected effort now caps the label at Low).
+
+    v0.6 replaces count-based logic with a four-factor score (0-100):
+      Factor 1 (PERT spread ≈ 1.125): ~37 pts
+      Factor 2 (capacity gap_ratio ≈ -0.74 — severe deficit): 0 pts
+      Factor 3 (data quality — all fields specific): 20 pts
+      Factor 4 (82% multiplier): 2 pts
+      Raw total ≈ 59, capped to 39 by the severe-deficit rule → "Low"
+    """
+    data = EstimationData()
+    effort_core.detect_project_type(BMW_EFFORT_CONTEXT, data)
+    effort_core.calculate_baseline(BMW_EFFORT_CONTEXT, data)
+    effort_core.apply_multipliers(BMW_EFFORT_CONTEXT, data)
+    effort_core.pert_breakdown(data)
+    effort_core.team_capacity(BMW_EFFORT_CONTEXT, data)
+    effort_core.risk_buffer("", data)
+    effort_core.calculate_data_quality(BMW_EFFORT_CONTEXT, data)
+    effort_core.finalize(data)
+
+    assert len(data.multipliers) >= 5, \
+        f"Precondition: need >= 5 multipliers, got {len(data.multipliers)}"
+    assert data.confidence_level == "Low", \
+        f"Expected 'Low' confidence (severe-deficit cap), got '{data.confidence_level}' (score={data.confidence_score})"
+    assert data.confidence_score < 40, \
+        f"Expected score < 40, got {data.confidence_score}"
+    print(f"  PASS: {len(data.multipliers)} multipliers -> confidence = '{data.confidence_level}' (score={data.confidence_score}/100)")
+
+
+# ── Risk buffer: counts Risk Matrix rows, not keyword occurrences ────────────
+
+_RISK_REGISTER_TWO_ROWS = """\
+## Risk Matrix Overview
+
+| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |
+|---|---|---|---|---|---|
+| R01 | **Critical** payment failure on the critical path | High | High | **Critical** | 1 |
+| R02 | Session handling | High | Medium | Medium | 2 |
+
+## R01 — Payment failure
+Critical impact on revenue. Risk Level: Critical. Likelihood: High.
+"""
+
+
+def _pert_data(expected: float = 100.0) -> EstimationData:
+    data = EstimationData()
+    data.pert_total_expected = expected
+    return data
+
+
+def test_risk_buffer_counts_matrix_rows_not_keywords():
+    """One Critical row + one Medium row → 5 + 1 = 6 days. The old keyword
+    count also counted 'critical' in descriptions/prose and '| high' in the
+    Likelihood/Impact columns, inflating this to the 35% cap."""
+    data = _pert_data(100.0)
+    effort_core.risk_buffer(_RISK_REGISTER_TWO_ROWS, data)
+    assert data.risk_buffer_days == 6.0, \
+        f"1 Critical + 1 Medium row → expected 6.0 days, got {data.risk_buffer_days}"
+
+
+def test_risk_buffer_still_capped_at_35_percent():
+    rows = "\n".join(f"| R{i:02d} | Risk {i} | High | High | Critical | {i} |" for i in range(1, 11))
+    register = ("| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |\n"
+                "|---|---|---|---|---|---|\n" + rows)
+    data = _pert_data(100.0)
+    effort_core.risk_buffer(register, data)
+    assert data.risk_buffer_days == 35.0  # 10 × 5 = 50, capped at 35% of 100
+
+
+def test_risk_buffer_without_parseable_matrix_uses_default_15_percent():
+    """A register the parser can't read gets the same 15% default as no
+    register at all, instead of guessing from keyword counts."""
+    data = _pert_data(100.0)
+    effort_core.risk_buffer("Critical critical CRITICAL — no table here", data)
+    assert data.risk_buffer_days == 15.0
+
+
+# ── Streamlit app.py structural tests ────────────────────────────────────────
+
+def test_three_tabs_in_app():
+    """render_strategy() defines 3 tabs with Risk Register, Effort Estimation, Test Strategy."""
+    source = read_app_source()
+    fn = extract_function(source, "render_strategy")
+
+    assert 'st.tabs(' in fn, "st.tabs() not found in render_strategy"
+    assert '"⚠️ Risk Register"' in fn or "'⚠️ Risk Register'" in fn, \
+        "Tab '⚠️ Risk Register' not found"
+    assert '"📊 Effort Estimation"' in fn or "'📊 Effort Estimation'" in fn, \
+        "Tab '📊 Effort Estimation' not found"
+    assert '"📋 Test Strategy"' in fn or "'📋 Test Strategy'" in fn, \
+        "Tab '📋 Test Strategy' not found"
+    print("  PASS: 3 tabs defined: 'Risk Register', 'Effort Estimation', 'Test Strategy'")
+
+
+def test_effort_tab_download_button():
+    """Tab 2 (Effort Estimation) has a download button with the correct label."""
+    source = read_app_source()
+    fn = extract_function(source, "render_strategy")
+
+    assert '"⬇️ Download Effort Estimation (.md)"' in fn, \
+        "Effort Estimation download button label not found"
+    assert 'effort_estimation_' in fn, \
+        "effort_estimation_ filename prefix not found"
+    print("  PASS: Effort Estimation tab has download button '⬇️ Download (.md)'")
+
+
+def test_effort_keys_in_init_session_state():
+    """init_session_state() initializes effort_report and effort_path."""
+    source = read_app_source()
+    fn = extract_function(source, "init_session_state")
+
+    assert '"effort_report"' in fn, "effort_report not initialized in init_session_state"
+    assert '"effort_path"' in fn, "effort_path not initialized in init_session_state"
+
+    assert 'effort_report"] = None' in fn or 'effort_report = None' in fn, \
+        "effort_report should default to None"
+    assert 'effort_path"] = None' in fn or 'effort_path = None' in fn, \
+        "effort_path should default to None"
+    print("  PASS: init_session_state() initializes effort_report=None, effort_path=None")
+
+
+def test_generate_another_clears_effort_keys():
+    """'Generate Another Strategy' cleanup list includes effort_report and effort_path."""
+    source = read_app_source()
+    fn = extract_function(source, "render_strategy")
+
+    for key in ["effort_report", "effort_path"]:
+        assert f'"{key}"' in fn, \
+            f"Key '{key}' missing from 'Generate Another Strategy' cleanup list"
+    print("  PASS: 'Generate Another Strategy' clears effort_report and effort_path")
+
+
+def test_start_over_clears_effort_keys():
+    """Sidebar 'Start Over' cleanup list includes effort_report and effort_path."""
+    source = read_app_source()
+    fn = extract_function(source, "render_sidebar")
+
+    for key in ["effort_report", "effort_path"]:
+        assert f'"{key}"' in fn, \
+            f"Sidebar 'Start Over' is missing key: '{key}'"
+    print("  PASS: Sidebar 'Start Over' clears effort_report and effort_path")
+
+
+def test_effort_estimator_imported_in_app():
+    """EffortEstimator is imported at module level in app.py."""
+    source = read_app_source()
+    top_imports = source.split("def ")[0]
+    assert "from effort_estimator import EffortEstimator" in top_imports, \
+        "EffortEstimator should be imported at module level"
+    print("  PASS: EffortEstimator imported at module level in app.py")
+
+
+# ── CLI structural tests ──────────────────────────────────────────────────────
+
+def test_cli_shows_three_panels():
+    """cli.py _run_main_loop() displays 3 panels: Risk Register, Effort Estimation, Test Strategy.
+
+    In v0.5, display logic moved from main() to _run_main_loop() so the watcher
+    can be passed in as a parameter. Check _run_main_loop() for the 3 panels.
+    """
+    source = read_cli_source()
+    fn = extract_function(source, "_run_main_loop")
+
+    assert "Risk Register" in fn, "Risk Register panel not found in cli.py _run_main_loop()"
+    assert "Effort Estimation" in fn, "Effort Estimation panel not found in cli.py _run_main_loop()"
+    assert "Generated Test Strategy" in fn or "Test Strategy" in fn, \
+        "Test Strategy panel not found in cli.py _run_main_loop()"
+    print("  PASS: CLI _run_main_loop() shows 3 panels: Risk Register, Effort Estimation, Test Strategy")
+
+
+def test_cli_generate_strategy_returns_effort_keys():
+    """generate_strategy() in cli.py returns effort_report and effort_path keys."""
+    source = read_cli_source()
+    fn = extract_function(source, "generate_strategy")
+
+    assert '"effort_report"' in fn or "'effort_report'" in fn, \
+        "generate_strategy() does not include 'effort_report' in its return dict"
+    assert '"effort_path"' in fn or "'effort_path'" in fn, \
+        "generate_strategy() does not include 'effort_path' in its return dict"
+    print("  PASS: generate_strategy() returns effort_report and effort_path")
+
+
+def test_cli_main_reconfigures_stdout_utf8():
+    """main() reconfigures stdout to UTF-8 before any output.
+
+    Without this, a non-UTF-8 Windows console (e.g. codepage 850/1252, or any
+    redirected/piped stdout) crashes with UnicodeEncodeError the moment Rich
+    renders its first spinner/emoji — before the dialogue even starts. Verified
+    live: `python src/cli.py` piped to a file crashes without this guard, and
+    completes successfully with it. Mirrors the same guard already present in
+    evals/run.py and evals/rag.py.
+    """
+    source = read_cli_source()
+    fn = extract_function(source, "main")
+
+    assert "sys.stdout.reconfigure" in fn, \
+        "main() no longer reconfigures stdout to UTF-8 — Windows console crash regression"
+    print("  PASS: main() reconfigures stdout to UTF-8 before any output")
+
+
+# ── LLM smoke test ───────────────────────────────────────────────────────────
+
+def test_full_estimate_bmw(agent):
+    """
+    Smoke test: EffortEstimator generates a valid report with all 8 sections
+    for the BMW ECU context, saves file with frontmatter.
+    """
+    estimator = EffortEstimator(agent)
+
+    print("  Calling EffortEstimator.estimate() with BMW ECU context...")
+    report, data = estimator.estimate(BMW_EFFORT_CONTEXT)
+
+    # All 8 sections present
+    for section in REQUIRED_REPORT_SECTIONS:
+        assert section in report, f"Missing section in report: '{section}'"
+    print(f"  PASS: All {len(REQUIRED_REPORT_SECTIONS)} required sections present")
+
+    # Deterministic values verified in report (total_multiplier is float e.g. 82.0)
+    multiplier_str = f"+{data.total_multiplier}%"
+    assert multiplier_str in report, \
+        f"Total multiplier '{multiplier_str}' not found in report"
+    assert str(data.final_effort_min) in report, \
+        f"Final effort min '{data.final_effort_min}' not found in report"
+    assert str(data.final_effort_max) in report, \
+        f"Final effort max '{data.final_effort_max}' not found in report"
+    print("  PASS: Deterministic values in report:")
+    print(f"        Multiplier total: +{data.total_multiplier}%")
+    print(f"        Final effort: {data.final_effort_min} - {data.final_effort_max} person-days")
+    print(f"        Confidence: {data.confidence_level}")
+    print(f"        Capacity gap: {'+' if data.capacity_gap >= 0 else ''}{data.capacity_gap} days")
+
+    # data fields are populated
+    assert data.project_type_detected == "embedded", \
+        f"Expected 'embedded', got '{data.project_type_detected}'"
+    assert data.methodology_detected == "v-model", \
+        f"Expected 'v-model', got '{data.methodology_detected}'"
+    assert data.total_multiplier == EXPECTED_TOTAL_MULTIPLIER, \
+        f"Expected +82%, got +{data.total_multiplier}%"
+    assert data.confidence_level == "Low", \
+        f"Expected 'Low' (severe-deficit cap), got '{data.confidence_level}' (score={data.confidence_score})"
+    assert len(data.pert_activities) == 9, \
+        f"Expected 9 PERT activities, got {len(data.pert_activities)}"
+    print("  PASS: EstimationData fields verified")
+
+    # Save and verify file
+    output_path = estimator.save(report, BMW_EFFORT_CONTEXT)
+    assert output_path.exists(), f"Output file not created: {output_path}"
+    assert "effort_estimation_BMW_Embedded_ECU" in output_path.name, \
+        f"Unexpected filename: {output_path.name}"
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "document_type: Effort Estimation Report" in content, \
+        "Missing 'document_type: Effort Estimation Report' frontmatter"
+    assert "generated_by: QAI Consultant" in content, \
+        "Missing 'generated_by: QAI Consultant' frontmatter"
+    assert f"project: {BMW_EFFORT_CONTEXT.project_name}" in content, \
+        "Missing project name in frontmatter"
+    print(f"  PASS: File saved: {output_path.name}")
+    print("        Frontmatter: document_type: Effort Estimation Report")
+
+
+# ── Runner ────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    static_tests = [
+        ("_parse_duration: '2 years' -> 460 days",
+            test_parse_duration_2years),
+        ("_parse_duration: '18 months' -> 378 days",
+            test_parse_duration_18months),
+        ("_parse_duration: '6 weeks' -> 30 days",
+            test_parse_duration_6weeks),
+        ("_parse_team_size: '2' -> 2",
+            test_parse_team_size_2),
+        ("_parse_team_size: '5 developers' -> 5",
+            test_parse_team_size_range),
+        ("_extract_section: finds EXECUTIVE_SUMMARY despite markdown heading",
+            test_extract_section_handles_markdown_heading_format),
+        ("_extract_section: ASSUMPTIONS does not swallow RECOMMENDATIONS",
+            test_extract_section_assumptions_does_not_swallow_recommendations),
+        ("_extract_section: RECOMMENDATIONS extracted cleanly",
+            test_extract_section_recommendations_extracted_cleanly),
+        ("_parse_narrative: no cross-section duplication end-to-end",
+            test_parse_narrative_no_duplication_end_to_end),
+        ("narrative prompt includes ADDITIONAL CONTEXT when set",
+            test_narrative_prompt_includes_additional_context_when_set),
+        ("narrative prompt omits ADDITIONAL CONTEXT when empty",
+            test_narrative_prompt_omits_additional_context_when_empty),
+        ("project type 'automotive embedded system' -> 'embedded'",
+            test_detect_project_type_embedded),
+        ("methodology 'V-model' -> 'v-model'",
+            test_detect_methodology_vmodel),
+        ("baseline: embedded + v-model -> (30, 40)%",
+            test_baseline_embedded_vmodel),
+        ("multiplier: ISO 26262 ASIL B -> +20%",
+            test_multiplier_iso26262_asil_b),
+        ("multiplier: A-SPICE level 2 -> +20%",
+            test_multiplier_aspice_level2),
+        ("multiplier: No existing automation -> +20%",
+            test_multiplier_no_automation),
+        ("multiplier: Small QA team (<=2) -> +10%",
+            test_multiplier_small_qa_team),
+        ("multiplier: third-party integrations risk -> +12%",
+            test_multiplier_external_integrations),
+        ("total multiplier for BMW ECU = +82%",
+            test_total_multiplier_82pct),
+        ("PERT formula E=(O+4M+P)/6 for all activities",
+            test_pert_formula),
+        ("9 PERT activities when total_multiplier > 0",
+            test_pert_nine_activities),
+        ("confidence = 'Low' for BMW ECU (severe-deficit cap)",
+            test_confidence_level_medium),
+        ("app.py has 3 tabs: Risk Register, Effort Estimation, Test Strategy",
+            test_three_tabs_in_app),
+        ("Effort Estimation tab has download button",
+            test_effort_tab_download_button),
+        ("init_session_state() initializes effort_report and effort_path",
+            test_effort_keys_in_init_session_state),
+        ("'Generate Another Strategy' clears effort_report and effort_path",
+            test_generate_another_clears_effort_keys),
+        ("Sidebar 'Start Over' clears effort_report and effort_path",
+            test_start_over_clears_effort_keys),
+        ("EffortEstimator imported at module level in app.py",
+            test_effort_estimator_imported_in_app),
+        ("CLI _run_main_loop() shows 3 panels: Risk Register, Effort Estimation, Test Strategy",
+            test_cli_shows_three_panels),
+        ("generate_strategy() returns effort_report and effort_path",
+            test_cli_generate_strategy_returns_effort_keys),
+    ]
+
+    passed = failed = 0
+
+    print("=" * 68)
+    print("  QAI Consultant — Effort Estimator v0.4 Tests")
+    print("=" * 68)
+
+    for name, fn in static_tests:
+        print(f"\n[TEST] {name}")
+        try:
+            fn()
+            passed += 1
+        except AssertionError as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+        except Exception as e:
+            import traceback
+            print(f"  ERROR: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            failed += 1
+
+    # LLM smoke test
+    print(f"\n{'=' * 68}")
+    print("  Loading agent + running LLM smoke test (requires Ollama)...")
+    print(f"{'=' * 68}")
+
+    try:
+        from agent import QAIAgent
+        agent = QAIAgent()
+        print("\n[TEST] Full estimate: BMW ECU context, all sections, file saved")
+        test_full_estimate_bmw(agent)
+        passed += 1
+    except AssertionError as e:
+        print(f"  FAIL: {e}")
+        failed += 1
+    except Exception as e:
+        import traceback
+        print(f"  ERROR: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        failed += 1
+
+    print(f"\n{'=' * 68}")
+    print(f"  Results: {passed} passed, {failed} failed")
+    print(f"{'=' * 68}")
+
+    import sys as _sys
+    _sys.exit(0 if failed == 0 else 1)
+
+
+def test_narrative_drops_sentences_with_unverified_person_day_figures():
+    from effort_core import EstimationData, drop_unverified_person_day_figures
+
+    data = EstimationData(pert_total_expected=20.5, pert_total_sd=2.0, available_person_days=30.0)
+    text = (
+        "Expected effort is 20.5 person-days. The total reaches 24 person-days. Plan carefully.\n"
+        "- Only 24 person-days remain\n"
+        "- Capacity is 30 person-days"
+    )
+    out = drop_unverified_person_day_figures(text, data)
+    assert "24" not in out
+    assert "20.5 person-days" in out and "Plan carefully." in out
+    assert "Capacity is 30 person-days" in out
+    assert drop_unverified_person_day_figures(out, data) == out
+
+
+def test_narrative_guard_covers_unit_variants():
+    from effort_core import EstimationData, drop_unverified_person_day_figures
+
+    data = EstimationData(pert_total_expected=20.5)
+    for variant in ("24 man-days", "24 working days", "24 PD", "24 person days"):
+        assert drop_unverified_person_day_figures(f"It needs {variant}.", data) == ""
+    assert drop_unverified_person_day_figures("A 14 days sprint.", data) == "A 14 days sprint."

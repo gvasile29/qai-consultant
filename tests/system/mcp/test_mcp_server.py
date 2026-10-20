@@ -1,0 +1,665 @@
+"""
+Tests for src/mcp_server.py — the MCP server's tool surface (v3.0 step 6).
+
+Uses the MCP SDK's in-memory client/server session (mcp.shared.memory) —
+no subprocess, no real stdio transport — to exercise the server exactly as
+a real MCP client would: list_tools(), call_tool(). Covers the pinned
+contracts from MCP_PLAN.md section 3: schemas, the happy path for each of
+the 3 tools, the invalid-category and validation-error contracts (both
+return a structured error, neither raises), and that estimate_qa_effort's
+output is bit-for-bit identical to calling compute_estimation() directly.
+"""
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+SRC_DIR = REPO_ROOT / "src"
+sys.path.insert(0, str(SRC_DIR))
+
+from mcp.shared.memory import create_connected_server_and_client_session
+
+import mcp_server
+from effort_core import compute_estimation
+from dialogue import ProjectContext
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+async def _call_tool(name: str, arguments: dict) -> dict:
+    async with create_connected_server_and_client_session(mcp_server.mcp._mcp_server) as client:
+        await client.initialize()
+        result = await client.call_tool(name, arguments)
+        assert not result.isError, f"{name} call errored at the protocol level: {result.content}"
+        assert len(result.content) == 1
+        return json.loads(result.content[0].text)
+
+
+async def _list_tools() -> list:
+    async with create_connected_server_and_client_session(mcp_server.mcp._mcp_server) as client:
+        await client.initialize()
+        result = await client.list_tools()
+        return result.tools
+
+
+async def _list_prompts() -> list:
+    async with create_connected_server_and_client_session(mcp_server.mcp._mcp_server) as client:
+        await client.initialize()
+        result = await client.list_prompts()
+        return result.prompts
+
+
+async def _get_prompt(name: str) -> str:
+    async with create_connected_server_and_client_session(mcp_server.mcp._mcp_server) as client:
+        await client.initialize()
+        result = await client.get_prompt(name)
+        return result.messages[0].content.text
+
+
+# ── Tool registration ────────────────────────────────────────────────────────────
+
+def test_all_six_tools_registered():
+    tools = _run(_list_tools())
+    names = {t.name for t in tools}
+    assert names == {
+        "retrieve_qa_knowledge", "list_kb_sources", "estimate_qa_effort",
+        "review_qa_document", "analyze_test_results", "assess_qa_maturity",
+    }
+
+
+def test_retrieve_qa_knowledge_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "retrieve_qa_knowledge")
+    props = tool.inputSchema["properties"]
+    assert set(props.keys()) >= {"query", "category", "k"}
+
+
+def test_estimate_qa_effort_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "estimate_qa_effort")
+    props = tool.inputSchema["properties"]
+    expected = set(mcp_server._REQUIRED_FIELDS) | {"additional_context"}
+    assert set(props.keys()) == expected
+
+
+def test_review_qa_document_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "review_qa_document")
+    props = tool.inputSchema["properties"]
+    assert set(props.keys()) == {"document_text", "doc_type"}
+
+
+def test_analyze_test_results_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "analyze_test_results")
+    props = tool.inputSchema["properties"]
+    assert set(props.keys()) == {
+        "junit_xml", "csv_text", "reference_tests", "flaky_min", "flaky_max",
+    }
+
+
+# ── retrieve_qa_knowledge ────────────────────────────────────────────────────────
+
+def test_retrieve_qa_knowledge_happy_path():
+    result = _run(_call_tool("retrieve_qa_knowledge", {
+        "query": "How should I prioritize tests by failure likelihood and business impact?",
+        "k": 3,
+    }))
+    assert "error" not in result
+    assert "chunks" in result and "kb_version" in result
+    assert len(result["chunks"]) <= 3
+    for chunk in result["chunks"]:
+        assert set(chunk.keys()) == {"source", "category", "text", "score", "match"}
+
+
+def test_retrieve_qa_knowledge_invalid_category_returns_structured_error():
+    result = _run(_call_tool("retrieve_qa_knowledge", {
+        "query": "anything",
+        "category": "NotARealCategory",
+    }))
+    assert result["error"] == "invalid_argument"
+    assert "valid_categories" in result
+
+
+def test_retrieve_qa_knowledge_invalid_category_is_not_sent_to_telemetry(monkeypatch):
+    captured = []
+    monkeypatch.setattr(mcp_server.telemetry, "is_enabled", lambda: True)
+    monkeypatch.setattr(mcp_server.telemetry, "_send", lambda name, props: captured.append(props))
+    _run(_call_tool("retrieve_qa_knowledge", {
+        "query": "anything",
+        "category": "payments service for ACME Corp",
+    }))
+    import time as _time
+    deadline = _time.monotonic() + 5  # fire-and-forget thread; poll, don't guess a sleep
+    while not captured and _time.monotonic() < deadline:
+        _time.sleep(0.05)
+    assert captured, "expected one tool_called event"
+    assert all("category" not in props for props in captured)
+
+
+def test_retrieve_qa_knowledge_category_filter():
+    result = _run(_call_tool("retrieve_qa_knowledge", {
+        "query": "risk based testing prioritization",
+        "category": "Methodology",
+        "k": 5,
+    }))
+    assert "error" not in result
+    assert all(c["category"] == "Methodology" for c in result["chunks"])
+
+
+# ── list_kb_sources ──────────────────────────────────────────────────────────────
+
+def test_list_kb_sources_happy_path():
+    result = _run(_call_tool("list_kb_sources", {}))
+    assert "categories" in result
+    assert "kb_version" in result
+    assert "doc_count" in result
+    assert result["doc_count"] > 0
+    assert "Standard" in result["categories"]
+
+
+# ── estimate_qa_effort ───────────────────────────────────────────────────────────
+
+_VALID_ESTIMATE_ARGS = {
+    "project_name": "Sample Fintech API",
+    "project_description": "Payment processing API for a fintech startup",
+    "project_type": "api",
+    "tech_stack": "Python, FastAPI, PostgreSQL",
+    "team_qa_size": "3",
+    "team_dev_size": "8",
+    "timeline": "6 months",
+    "methodology": "agile",
+    "known_risks": "third-party payment gateway integration",
+    "existing_automation": "some unit tests",
+    "compliance_requirements": "PCI-DSS",
+}
+
+
+def test_estimate_qa_effort_happy_path_returns_estimation_data_shape():
+    result = _run(_call_tool("estimate_qa_effort", _VALID_ESTIMATE_ARGS))
+    assert "error" not in result
+    for key in ("project_type_detected", "baseline_effort_min", "baseline_effort_max",
+                "multipliers", "pert_activities", "final_effort_min", "final_effort_max",
+                "confidence_level", "confidence_score"):
+        assert key in result
+    assert result["confidence_level"] in ("Low", "Medium", "High")
+    assert isinstance(result["multipliers"], list)
+    for m in result["multipliers"]:
+        assert isinstance(m, list) and len(m) == 2  # (reason, pct) tuples -> JSON-safe lists
+
+
+def test_estimate_qa_effort_matches_compute_estimation_directly():
+    """The tool's output must be identical to calling compute_estimation()
+    directly with an equivalent ProjectContext — no drift between the MCP
+    surface and the underlying deterministic core."""
+    from dataclasses import asdict
+    context = ProjectContext(**_VALID_ESTIMATE_ARGS, additional_context="")
+    direct = asdict(compute_estimation(context))
+    direct["multipliers"] = [list(m) for m in direct["multipliers"]]
+
+    via_tool = _run(_call_tool("estimate_qa_effort", _VALID_ESTIMATE_ARGS))
+    assert via_tool == direct
+
+
+def test_estimate_qa_effort_validation_error_shape_never_crashes():
+    bad_args = dict(_VALID_ESTIMATE_ARGS)
+    bad_args["project_name"] = ""  # empty -> InputValidator rejects it
+    bad_args["project_description"] = "short"  # under MIN_DESCRIPTION_LENGTH
+
+    result = _run(_call_tool("estimate_qa_effort", bad_args))
+    assert result["error"] == "validation"
+    assert "project_name" in result["fields"]
+    assert "project_description" in result["fields"]
+
+
+def test_estimate_qa_effort_validation_error_does_not_flag_valid_fields():
+    bad_args = dict(_VALID_ESTIMATE_ARGS)
+    bad_args["team_qa_size"] = ""
+
+    result = _run(_call_tool("estimate_qa_effort", bad_args))
+    assert result["error"] == "validation"
+    assert "team_qa_size" in result["fields"]
+    assert "project_name" not in result["fields"]
+
+
+def test_estimate_qa_effort_invalid_additional_context_reported():
+    bad_args = dict(_VALID_ESTIMATE_ARGS)
+    bad_args["additional_context"] = "x" * 3000  # over MAX_ADDITIONAL_CONTEXT_LENGTH
+
+    result = _run(_call_tool("estimate_qa_effort", bad_args))
+    assert result["error"] == "validation"
+    assert "additional_context" in result["fields"]
+
+
+# ── review_qa_document ───────────────────────────────────────────────────────────
+
+_STRONG_TEST_PLAN_TEXT = """
+# Test Plan — Acme Checkout
+
+## Scope
+This document defines the scope of testing for the checkout service.
+
+## Test Items
+The checkout API and payment gateway integration are the items to be tested.
+
+## Features to be Tested
+The following will be tested: cart totals, tax calculation, discount codes.
+
+## Features Not to be Tested
+Out of scope: third-party fraud detection internals are excluded from this plan.
+
+## Objectives
+The objective of this test plan is to validate checkout correctness end-to-end.
+
+## Test Levels
+Testing includes unit test, integration test, system test, and regression test levels.
+
+## Approach
+A risk-based testing approach is used, with risk-based prioritization of test cases.
+
+## Pass/Fail Criteria
+A test case passes when the expected result matches the observed output exactly.
+
+## Entry Criteria
+Entry criteria: all REQ-101 and REQ-102 requirements are code-complete and deployed to QA.
+
+## Exit Criteria
+Exit criteria: 95% of test cases pass and code coverage of 80% is achieved.
+
+## Suspension Criteria
+Testing will be suspended if the build fails smoke tests; resumption criteria apply after a fix.
+
+## Deliverables
+Test deliverables include the traceability matrix and the final test summary report.
+
+## Schedule
+The testing schedule spans two weeks per the project milestones.
+
+## Risks
+### R01 — Payment gateway instability
+- **Severity:** Critical
+- **Likelihood:** High priority risk requiring mitigation.
+- **Mitigation:** A contingency plan and mitigation strategy are documented for R01.
+
+Quality metrics tracked include defect density, coverage %, and pass rate (KPI).
+
+Expected result: the total is calculated to the exact cent per REQ-101.
+Expected result: the discount code REQ-102 reduces the total by exactly 10%.
+
+## Approvals
+Sign-off is required from the QA Lead and Project Manager before release.
+"""
+
+
+def test_review_qa_document_happy_path_shape():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "test_plan",
+    }))
+    assert "error" not in result
+    assert result["doc_type"] == "test_plan"
+    assert 0 <= result["overall_score"] <= 100
+    assert set(result["dimension_scores"].keys()) == {
+        "structure_completeness", "objectives_scope_clarity", "entry_exit_criteria",
+        "traceability", "measurability", "risk_coverage",
+    }
+    assert isinstance(result["findings"], list)
+    assert "kb_version" in result
+    assert "stats" in result
+
+
+def test_review_qa_document_findings_carry_kb_citations_list():
+    weak_doc = "Just a short note about the test. " * 20  # long enough, no structure/keywords
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": weak_doc, "doc_type": "test_plan",
+    }))
+    assert result["findings"], "expected findings on a weak document"
+    for finding in result["findings"]:
+        assert set(finding.keys()) == {"dimension", "severity", "message", "evidence", "kb_citations"}
+        assert isinstance(finding["kb_citations"], list)
+        for citation in finding["kb_citations"]:
+            assert set(citation.keys()) == {"source", "category", "score"}
+
+
+def test_review_qa_document_invalid_doc_type_returns_structured_error():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "not_a_real_type",
+    }))
+    assert result["error"] == "invalid_argument"
+    assert "valid_doc_types" in result
+
+
+def test_review_qa_document_insufficient_content_is_not_an_error():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": "Too short.", "doc_type": "auto",
+    }))
+    assert "error" not in result
+    assert result["doc_type"] == "insufficient_content"
+    assert result["overall_score"] == 0
+    assert result["findings"] == []
+
+
+def test_review_qa_document_auto_detects_doc_type():
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "auto",
+    }))
+    assert result["doc_type"] == "test_plan"
+
+
+# ── analyze_test_results ─────────────────────────────────────────────────────────
+
+_SINGLE_RUN_XML = """<testsuites>
+    <testsuite name="suite">
+        <testcase classname="pkg.A" name="test_pass" time="0.5"/>
+        <testcase classname="pkg.A" name="test_fail" time="0.1">
+            <failure message="boom">Traceback...</failure>
+        </testcase>
+    </testsuite>
+</testsuites>"""
+
+_MULTI_RUN_XML_ARRAY = json.dumps([
+    {"run_id": "run1", "xml": '<testsuite><testcase classname="pkg.B" name="test_flaky" time="0.1"/></testsuite>'},
+    {"run_id": "run2", "xml": '<testsuite><testcase classname="pkg.B" name="test_flaky" time="0.1"><failure message="x">x</failure></testcase></testsuite>'},
+    {"run_id": "run3", "xml": '<testsuite><testcase classname="pkg.B" name="test_flaky" time="0.1"/></testsuite>'},
+])
+
+_SIMPLE_CSV = "name,classname,status,duration_s\ntest_one,pkg.C,passed,1.0\ntest_two,pkg.C,failed,2.0\n"
+
+
+def test_analyze_test_results_junit_xml_happy_path():
+    result = _run(_call_tool("analyze_test_results", {"junit_xml": _SINGLE_RUN_XML}))
+    assert "error" not in result
+    assert result["runs"] == 1
+    assert result["total_tests"] == 2
+    assert result["executions"] == 2
+    assert result["overall_pass_rate"] == 0.5
+
+
+def test_analyze_test_results_csv_happy_path():
+    result = _run(_call_tool("analyze_test_results", {"csv_text": _SIMPLE_CSV}))
+    assert "error" not in result
+    assert result["total_tests"] == 2
+    assert result["executions"] == 2
+
+
+def test_analyze_test_results_multi_run_json_array():
+    result = _run(_call_tool("analyze_test_results", {
+        "junit_xml": _MULTI_RUN_XML_ARRAY, "flaky_min": 0.2, "flaky_max": 0.8,
+    }))
+    assert "error" not in result
+    assert result["runs"] == 3
+    assert result["executions"] == 3
+    assert len(result["flaky"]) == 1
+    assert result["flaky"][0]["test"] == "pkg.B::test_flaky"
+
+
+def test_analyze_test_results_requires_exactly_one_input():
+    both = _run(_call_tool("analyze_test_results", {"junit_xml": _SINGLE_RUN_XML, "csv_text": _SIMPLE_CSV}))
+    assert both["error"] == "invalid_argument"
+
+    neither = _run(_call_tool("analyze_test_results", {}))
+    assert neither["error"] == "invalid_argument"
+
+
+def test_analyze_test_results_malformed_xml_never_crashes():
+    # Was an empty "successful" 0-run result before the F8 fix; now a structured error.
+    result = _run(_call_tool("analyze_test_results", {"junit_xml": "<not valid xml"}))
+    assert result["error"] == "no_tests_found"
+    assert result["warnings"]
+
+
+def test_analyze_test_results_reference_tests_reports_never_run():
+    result = _run(_call_tool("analyze_test_results", {
+        "junit_xml": _SINGLE_RUN_XML,
+        "reference_tests": ["pkg.A::test_pass", "pkg.A::test_never_ran"],
+    }))
+    assert "error" not in result
+    assert result["never_run"] == [{"test": "pkg.A::test_never_ran"}]
+
+
+# ── Telemetry silence when disabled ─────────────────────────────────────────────
+
+def test_telemetry_opted_out_does_not_raise_on_new_tools(monkeypatch):
+    monkeypatch.setenv("QAI_TELEMETRY", "0")
+    assert mcp_server.telemetry.is_enabled() is False
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "test_plan",
+    }))
+    assert "error" not in result
+
+
+def test_telemetry_on_by_default_does_not_raise_on_new_tools(monkeypatch):
+    monkeypatch.delenv("QAI_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    assert mcp_server.telemetry.is_enabled() is True
+    monkeypatch.setattr(mcp_server.telemetry, "_send", lambda name, props: None)  # never hit PostHog from tests
+    result = _run(_call_tool("review_qa_document", {
+        "document_text": _STRONG_TEST_PLAN_TEXT, "doc_type": "test_plan",
+    }))
+    assert "error" not in result
+
+
+def test_track_tool_called_merges_extra_properties(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(mcp_server.telemetry, "is_enabled", lambda: True)
+    monkeypatch.setattr(mcp_server.telemetry, "_send", lambda name, props: captured.update(props))
+    mcp_server.telemetry.track_tool_called(
+        "review_qa_document", success=True, duration_ms=1.0,
+        extra={"doc_type": "test_plan", "score_bucket": "80-100", "finding_count": 0},
+    )
+    import time as _time
+    _time.sleep(0.2)  # fire-and-forget thread — give it a moment to run
+    assert captured.get("doc_type") == "test_plan"
+    assert captured.get("score_bucket") == "80-100"
+    assert captured.get("finding_count") == 0
+
+
+# ── Prompts ───────────────────────────────────────────────────────────────────────
+
+def test_all_four_prompts_registered():
+    prompts = _run(_list_prompts())
+    names = {p.name for p in prompts}
+    assert names == {
+        "qa_project_interview", "risk_register_structure",
+        "test_strategy_structure", "test_plan_structure",
+    }
+
+
+def test_qa_project_interview_lists_all_eleven_questions():
+    from dialogue import QUESTIONS
+    text = _run(_get_prompt("qa_project_interview"))
+    for q in QUESTIONS:
+        assert q["key"] in text
+        assert q["question"] in text
+
+
+def test_risk_register_structure_content_matches_app_convention():
+    text = _run(_get_prompt("risk_register_structure"))
+    for heading in ("Executive Summary", "Risk Matrix Overview", "Detailed Risk Analysis",
+                    "Risk-Based Testing Priorities", "Recommendations for QA Strategy"):
+        assert heading in text
+    assert "retrieve_qa_knowledge" in text
+    assert "[Source N]" in text
+    assert "AI-generated" in text
+
+
+def test_test_strategy_structure_content_matches_app_convention():
+    text = _run(_get_prompt("test_strategy_structure"))
+    for heading in ("Project Overview", "Risk Assessment", "Test Types Recommended",
+                    "Entry & Exit Criteria", "Resources & Man Power Estimation", "References"):
+        assert heading in text
+    assert "estimate_qa_effort" in text
+    assert "retrieve_qa_knowledge" in text
+    assert "AI-generated" in text
+
+
+def test_test_plan_structure_content_matches_app_convention():
+    text = _run(_get_prompt("test_plan_structure"))
+    for heading in ("Introduction", "Test Items", "Features to be Tested",
+                    "Entry and Exit Criteria", "Testing Schedule", "Environmental Needs"):
+        assert heading in text
+    assert "IEEE 829" in text
+    assert "version not specified" in text
+    assert "retrieve_qa_knowledge" in text
+    assert "AI-generated" in text
+
+
+# ── Fail-fast startup ─────────────────────────────────────────────────────────────
+
+def test_main_exits_nonzero_if_index_build_fails(monkeypatch):
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("simulated index build failure")
+
+    monkeypatch.setattr(mcp_server, "_get_index", _raise)
+    monkeypatch.setattr(mcp_server, "_index", None)
+    with pytest.raises(SystemExit) as exc_info:
+        mcp_server.main()
+    assert exc_info.value.code == 1
+
+
+class _FakeIndex:
+    """Records warmup_embedder() calls — `main()` must warm up the embedding
+    model with one cheap call, on the main thread, before mcp.run()."""
+
+    def __init__(self):
+        self.warmup_calls = 0
+        self.background_build_calls = 0
+        self.events = []
+
+    def warmup_embedder(self):
+        self.warmup_calls += 1
+        self.events.append("warmup")
+
+    def start_background_build(self):
+        self.background_build_calls += 1
+        self.events.append("background_build")
+
+
+def test_main_starts_server_and_fires_telemetry_when_index_builds(monkeypatch):
+    calls = []
+    fake_index = _FakeIndex()
+    monkeypatch.setattr(mcp_server, "_get_index", lambda: fake_index)
+    monkeypatch.setattr(mcp_server.telemetry, "track_server_start", lambda: calls.append("server_start"))
+    monkeypatch.setattr(mcp_server.mcp, "run", lambda: calls.append("run"))
+
+    mcp_server.main()
+
+    assert calls == ["server_start", "run"]
+
+
+def test_main_warms_up_embedding_model_before_run(monkeypatch):
+    """Regression test: main() must call index.warmup_embedder() (forcing the
+    real embedding model to initialize on the main thread) BEFORE mcp.run()
+    starts stdio_server()'s concurrent stdin-reader task — deferring this to
+    the first client-triggered retrieve_qa_knowledge call deadlocks on
+    Windows (confirmed via a real `uvx qai-consultant-mcp` stdio subprocess
+    hanging indefinitely on the second tool call). Deliberately a cheap
+    warmup_embedder() call, not a full search() — see local_index.py's
+    warmup_embedder()/_ensure_built() docstrings for why the full corpus
+    build must stay lazy instead (v3.1.6 cold-start timeout fix)."""
+    order = []
+    fake_index = _FakeIndex()
+    monkeypatch.setattr(mcp_server, "_get_index", lambda: fake_index)
+    monkeypatch.setattr(mcp_server.telemetry, "track_server_start", lambda: None)
+    monkeypatch.setattr(mcp_server.mcp, "run", lambda: order.append("run"))
+
+    mcp_server.main()
+
+    assert fake_index.warmup_calls == 1
+
+
+def test_main_exits_nonzero_if_warmup_search_fails(monkeypatch):
+    class _BrokenIndex:
+        def warmup_embedder(self):
+            raise RuntimeError("simulated embedding model init failure")
+
+    monkeypatch.setattr(mcp_server, "_get_index", lambda: _BrokenIndex())
+    monkeypatch.setattr(mcp_server.telemetry, "track_server_start", lambda: None)
+    with pytest.raises(SystemExit) as exc_info:
+        mcp_server.main()
+    assert exc_info.value.code == 1
+
+
+_LEVEL2_PROCESS_TEXT = """
+Our team maintains a documented test policy and test strategy defining our
+test objectives. Every release has a test plan with estimates, a schedule,
+and risk-based prioritization. We track defects in a defect log and report
+status against the plan, taking corrective action when we fall behind. Test
+design follows structured test design techniques with clear entry criteria
+and exit criteria; requirements are tracked as REQ-101, REQ-102. We run
+everything in a dedicated test environment that is representative of
+production.
+"""
+
+
+def test_assess_qa_maturity_schema_has_expected_params():
+    tools = _run(_list_tools())
+    tool = next(t for t in tools if t.name == "assess_qa_maturity")
+    props = tool.inputSchema["properties"]
+    assert set(props.keys()) == {"project_description"}
+
+
+def test_assess_qa_maturity_happy_path_shape():
+    result = _run(_call_tool("assess_qa_maturity", {
+        "project_description": _LEVEL2_PROCESS_TEXT,
+    }))
+    assert "error" not in result
+    assert result["indicative_tmmi_level"] in (1, 2, 3)
+    assert set(result["tmmi_dimension_scores"].keys()) == {
+        "test_policy_and_strategy", "test_planning", "test_monitoring_and_control",
+        "test_design_and_execution", "test_environment",
+        "test_organization", "test_training_program", "test_lifecycle_and_integration",
+        "non_functional_testing", "peer_reviews",
+    }
+    assert isinstance(result["findings"], list)
+    assert "disclaimer" in result and result["disclaimer"]
+    assert "kb_version" in result
+
+
+def test_assess_qa_maturity_findings_carry_kb_citations_list():
+    result = _run(_call_tool("assess_qa_maturity", {
+        "project_description": "We write some code and click around to test it. " * 20,
+    }))
+    assert result["findings"], "expected findings on a weak process description"
+    for finding in result["findings"]:
+        assert set(finding.keys()) == {
+            "framework", "dimension", "level", "severity", "message", "evidence", "kb_citations",
+        }
+        assert isinstance(finding["kb_citations"], list)
+        for citation in finding["kb_citations"]:
+            assert set(citation.keys()) == {"source", "category", "score"}
+
+
+def test_assess_qa_maturity_insufficient_content_is_not_an_error():
+    result = _run(_call_tool("assess_qa_maturity", {"project_description": "Too short."}))
+    assert "error" not in result
+    assert result["indicative_tmmi_level"] == 0
+    assert result["findings"] == []
+
+
+def test_assess_qa_maturity_ai_act_omitted_for_non_ai_project():
+    result = _run(_call_tool("assess_qa_maturity", {
+        "project_description": "We test a standard e-commerce checkout flow. " * 20,
+    }))
+    assert result["ai_act_relevant"] is False
+    assert result["ai_act_dimension_scores"] == {}
+
+
+def test_assess_qa_maturity_ai_act_scored_for_ai_project():
+    ai_text = (
+        "We are building a machine learning model for loan screening, trained on "
+        "historical applicant data, with a documented risk management process. " * 3
+    )
+    result = _run(_call_tool("assess_qa_maturity", {"project_description": ai_text}))
+    assert result["ai_act_relevant"] is True
+    assert set(result["ai_act_dimension_scores"].keys()) == {
+        "risk_management", "data_governance", "technical_documentation",
+        "record_keeping", "transparency_instructions", "human_oversight",
+        "accuracy_robustness_security",
+    }
+    assert "ai_act_note" in result and result["ai_act_note"]

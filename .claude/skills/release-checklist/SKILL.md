@@ -8,7 +8,7 @@ description: The exact files to update together whenever a version bump ships in
 **Whenever a version bump ships (a new `__version__` in `src/version.py`), update all of the following together in the same change — do this automatically as part of the release, don't wait to be asked file-by-file:**
 
 - `src/version.py` — `__version__` and `__release_date__`
-- `pyproject.toml` — `[project] version`, kept in lockstep with `src/version.py` (`tests/test_packaging.py` doesn't check this, but drift here breaks the published wheel's version)
+- `pyproject.toml` — `[project] version`, kept in lockstep with `src/version.py` (`tests/system/release/test_packaging.py` doesn't check this, but drift here breaks the published wheel's version)
 - `CHANGELOG.md` — new `## [X.Y.Z] - YYYY-MM-DD` entry at the top, in end-user terms (Keep a Changelog format, see existing entries for tone)
 - `README.md` (root) — version badge, intro paragraph if the feature set changed, MCP tools table if the tool surface changed, Roadmap section
 - `README_MCP.md` — description line + tools table if the MCP tool surface changed
@@ -16,7 +16,7 @@ description: The exact files to update together whenever a version bump ships in
 
 **Merge gate: never merge a release PR to `master` before `CHANGELOG.md` has the new version's entry in the same PR.** The version bump and the changelog entry must land together, not as a follow-up commit — a merged release with a stale top-of-file changelog is exactly what this checklist exists to prevent.
 
-`tests/test_changelog.py` only guards `version.py` ↔ `CHANGELOG.md` drift (`__version__` matches the top heading) — it does **not** catch a stale `README.md` or `README_MCP.md`. Found the hard way in v3.1: a docs pass updated `CHANGELOG.md`/`README_MCP.md`/`CLAUDE.md`/`MCP_PLAN.md` but missed the root `README.md` entirely (stale version badge, stale MCP tools table, stale Roadmap line), caught only when the user asked directly. Treat the list above as one atomic step of every release, not an optional follow-up.
+`tests/system/release/test_changelog.py` only guards `version.py` ↔ `CHANGELOG.md` drift (`__version__` matches the top heading) — it does **not** catch a stale `README.md` or `README_MCP.md`. Found the hard way in v3.1: a docs pass updated `CHANGELOG.md`/`README_MCP.md`/`CLAUDE.md`/`MCP_PLAN.md` but missed the root `README.md` entirely (stale version badge, stale MCP tools table, stale Roadmap line), caught only when the user asked directly. Treat the list above as one atomic step of every release, not an optional follow-up.
 
 **Run the `claude-md-hygiene` skill** after touching CLAUDE.md's Roadmap/Gotchas above:
 

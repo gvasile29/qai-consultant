@@ -169,7 +169,7 @@ py-modules = [
 # whose redistribution rights are unclear, and this whitelist is what keeps them
 # out — an explicit list forces a deliberate decision on every future addition,
 # per MCP_PLAN.md section 5 ("review every shipped .md for third-party text lifted
-# verbatim" before first publish). tests/test_packaging.py asserts zero .pdf files
+# verbatim" before first publish). tests/system/release/test_packaging.py asserts zero .pdf files
 # make it into the built wheel regardless, as the actual enforced gate.
 [tool.setuptools.packages.find]
 where = ["."]
@@ -189,3 +189,12 @@ namespaces = true
 "knowledge_base.standards" = ["*.md"]
 "knowledge_base.standards.eu_ai_act" = ["*.md"]
 "knowledge_base.standards.owasp" = ["*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: one module, collaborators mocked, no network (tests/unit/)",
+    "integration: several real modules together, mocked LLM/Pinecone (tests/integration/)",
+    "system: a whole surface driven end to end without live services (tests/system/)",
+    "e2e: live Pinecone/Mistral/OpenRouter or model downloads (tests/e2e/)",
+]

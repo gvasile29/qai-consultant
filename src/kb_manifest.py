@@ -8,7 +8,7 @@ evaluation_audit/ folder was added and ingested but never surfaced in the
 UI). KB_MANIFEST is now the one place that maps curated display groups to
 real paths under knowledge_base/, and app.py checks each path's existence
 before rendering a bullet — so a bullet can never claim content that isn't
-actually there, and tests/test_kb_manifest.py guards that every real
+actually there, and tests/unit/rag/test_kb_manifest.py guards that every real
 top-level subfolder (except generated_strategies/) is represented here.
 
 Each entry is a dict with:

@@ -19,7 +19,7 @@ Content under `knowledge_base/` feeds two surfaces that each have their own gate
 Third-party text whose redistribution rights are unclear must not ship. Decide before touching `pyproject.toml`:
 
 - **Self-authored `.md` in an already-whitelisted folder** (see `[tool.setuptools.package-data]`): it ships automatically. Make sure nothing in it is lifted verbatim from a third-party standard.
-- **New nested folder** (e.g. `standards/foo/`): it is *not* shipped until you add both `"knowledge_base.standards.foo" = ["*.md"]` to `pyproject.toml` and the folder to `_WHITELISTED_MD_FOLDERS` in `tests/test_packaging.py`. Leaving it out is the right choice for third-party material.
+- **New nested folder** (e.g. `standards/foo/`): it is *not* shipped until you add both `"knowledge_base.standards.foo" = ["*.md"]` to `pyproject.toml` and the folder to `_WHITELISTED_MD_FOLDERS` in `tests/system/release/test_packaging.py`. Leaving it out is the right choice for third-party material.
 - PDFs and HTML are blocked by `exclude-package-data` and asserted by `test_wheel_contains_zero_pdf_files`. Don't work around it.
 
 ## 3. Sidebar manifest
@@ -27,7 +27,7 @@ Third-party text whose redistribution rights are unclear must not ship. Decide b
 `KB_MANIFEST` in `src/kb_manifest.py` (emoji, label, paths relative to `knowledge_base/`) lists some content by folder and some by individual file:
 
 - **Picked up automatically:** a new file inside a folder-level entry (`methodologies`, `evaluation_audit`, `articles`, `expert_knowledge`, `standards/istqb`, `standards/owasp`).
-- **Needs its own entry:** a new file directly under `standards/` (those are listed one file at a time, e.g. `standards/IEEE_829_Test_Documentation.md`), or any new nested folder. `tests/test_kb_manifest.py` only checks top-level folders, so it will *not* catch the missing entry. Without one, the sidebar silently never shows the new standard.
+- **Needs its own entry:** a new file directly under `standards/` (those are listed one file at a time, e.g. `standards/IEEE_829_Test_Documentation.md`), or any new nested folder. `tests/unit/rag/test_kb_manifest.py` only checks top-level folders, so it will *not* catch the missing entry. Without one, the sidebar silently never shows the new standard.
 - **New top-level subfolder:** add an entry. Here the test does fail if you forget.
 
 Also update CLAUDE.md's "Knowledge Base → Contents" bullet if counts or pillars changed.
@@ -43,7 +43,7 @@ Add at least one line to `evals/rag_golden.jsonl` for a query the new doc should
 ## 5. Verify locally
 
 ```bash
-python -m pytest tests/test_kb_manifest.py tests/test_packaging.py -v
+python -m pytest tests/unit/rag/test_kb_manifest.py tests/system/release/test_packaging.py -v
 python -m evals.local_index_parity      # keyless: chunk-level recall/MRR over what the MCP server serves
 ```
 
