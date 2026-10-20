@@ -3,7 +3,7 @@ exit non-zero if either fails.
 
 The 4 deterministic "tier-1" checks (estimate_integrity, review_integrity,
 results_integrity, maturity_integrity) moved to ordinary pytest tests
-(tests/test_estimate_integrity.py etc.) in the 2026-09-17 CI/evals
+(tests/integration/estimation/test_estimate_integrity.py etc.) in the 2026-09-17 CI/evals
 simplification — they no longer need a separate runner or the --det flag
 that used to select them. Both surviving modules already SKIP (not fail)
 without the embedding stack / an LLM key, so no flag is needed to make this

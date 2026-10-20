@@ -8,7 +8,7 @@ functional boundary -- see docs/superpowers/plans/2026-09-17-architecture-cleanu
 All functions are pure (a token dict plus plain arguments -> an HTML string);
 callers render the result via st.markdown(html, unsafe_allow_html=True). No
 Streamlit dependency in this module itself, so every function here is
-directly unit-testable without a Streamlit runtime -- see tests/test_components.py.
+directly unit-testable without a Streamlit runtime -- see tests/unit/ui/test_components.py.
 
 All user-supplied text (labels, descriptions, project-context field
 values) is HTML-escaped via html.escape() before interpolation -- this

@@ -138,7 +138,7 @@ def retrieve_qa_knowledge(
     query: str,
     category: Optional[str] = None,
     k: int = 5,
-    min_score: float = 0.40,  # literal (keep == DEFAULT_MIN_SCORE; tests/test_skill_doc.py parses it)
+    min_score: float = 0.40,  # literal (keep == DEFAULT_MIN_SCORE; tests/system/release/test_skill_doc.py parses it)
 ) -> dict:
     """Retrieve grounding chunks from the local QA knowledge base (Markdown
     guides: testing methodologies, IEEE/ISO/OWASP Markdown standards,

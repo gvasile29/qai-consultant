@@ -37,5 +37,5 @@ jobs:
           set -o pipefail
           echo "## Live API contract tests" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          python -m pytest tests/test_live_contracts.py -v | tee -a "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/e2e/rag/test_live_contracts.py -v | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

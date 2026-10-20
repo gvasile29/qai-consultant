@@ -40,11 +40,11 @@ Unit tests passing is not evidence the user sees the right thing. Pick the surfa
 | Streamlit UI / CSS / session state | `browser-ui-testing` skill (Playwright Python script) |
 | LLM provider, model, prompts, generators | Full in-app generation run; read the saved `output/*.md` content, not just stage badges |
 | MCP server / `local_index.py` / embedding backend | `python scripts/verify_mcp_stdio_no_deadlock.py` + a real tool call |
-| `effort_core` | `tests/test_estimate_integrity.py` + `tests/test_effort_core.py` (no CLI flag) |
-| `review_core` | `tests/test_review_integrity.py` + `python src/cli.py --review <doc.md>` |
-| `results_core` | `tests/test_results_integrity.py` + `python src/cli.py --results <junit.xml>` |
-| `maturity_core` | `tests/test_maturity_integrity.py` + `python src/cli.py --maturity <description.txt>` |
-| `risk_ledger` | `tests/test_risk_ledger.py` + parse a real saved `output/risk_register_*.md` (no CLI flag) |
+| `effort_core` | `tests/integration/estimation/test_estimate_integrity.py` + `tests/unit/estimation/test_effort_core.py` (no CLI flag) |
+| `review_core` | `tests/integration/review/test_review_integrity.py` + `python src/cli.py --review <doc.md>` |
+| `results_core` | `tests/integration/results/test_results_integrity.py` + `python src/cli.py --results <junit.xml>` |
+| `maturity_core` | `tests/integration/maturity/test_maturity_integrity.py` + `python src/cli.py --maturity <description.txt>` |
+| `risk_ledger` | `tests/unit/generation/test_risk_ledger.py` + parse a real saved `output/risk_register_*.md` (no CLI flag) |
 | Docs only | Render or re-read the changed section |
 
 For a bug fix, capture the failure on `master` and the fix on the branch (a `git worktree add` of `origin/master` beside the checkout works). Exercise the failure path too: trigger the error and read the message a visitor would get. Keep the output for the PR's `## Verified` section.

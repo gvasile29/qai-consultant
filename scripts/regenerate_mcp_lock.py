@@ -74,9 +74,9 @@ def main() -> int:
     _PYPROJECT.write_text(new_text, encoding="utf-8")
     print(f"Wrote {len(new_deps)} pinned dependencies to pyproject.toml.")
 
-    print("\nVerifying: pytest tests/test_packaging.py::test_all_dependencies_are_exact_pinned")
+    print("\nVerifying: pytest tests/system/release/test_packaging.py::test_all_dependencies_are_exact_pinned")
     check = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/test_packaging.py::test_all_dependencies_are_exact_pinned", "-q"],
+        [sys.executable, "-m", "pytest", "tests/system/release/test_packaging.py::test_all_dependencies_are_exact_pinned", "-q"],
         cwd=_REPO_ROOT,
     )
     if check.returncode != 0:

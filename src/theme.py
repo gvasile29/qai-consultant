@@ -34,7 +34,7 @@ DARK_TOKENS = {
 def build_css(tokens: dict) -> str:
     """Pure function: token dict -> full <style> block. Kept pure (no
     Streamlit calls) so it's directly unit-testable without a Streamlit
-    runtime -- see tests/test_theme.py."""
+    runtime -- see tests/unit/ui/test_theme.py."""
     return f"""
 <style>
 @font-face {{ font-family: 'Plex Mono'; font-weight: 400; font-style: normal; font-display: swap; src: url('{MONO_400}') format('woff2'); }}

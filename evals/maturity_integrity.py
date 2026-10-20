@@ -4,7 +4,7 @@ as failing checks, not prose; a green table means the rubric scores honestly. Ke
 and instant (no LLM, no keys, no heavy deps — maturity_core.py is stdlib-only), so it
 drops straight into CI.
 
-    pytest tests/test_maturity_integrity.py
+    pytest tests/integration/maturity/test_maturity_integrity.py
 
 Golden cases live in ``maturity_golden.jsonl``; description fixtures live under
 ``fixtures/maturity/*.txt``.

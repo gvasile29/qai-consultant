@@ -26,7 +26,7 @@ Runs the same Context Recall@k and Precision (MRR) metrics as `rag`, but against
 
 ## Archived — Deterministic checks (moved to pytest)
 
-The four deterministic "tier-1" modules (`estimate_integrity`, `review_integrity`, `results_integrity`, `maturity_integrity`) moved to ordinary pytest tests in `tests/` as of 2026-09-17 (Task 2 and Task 3 of the CI/evals simplification). The `pytest tests/` suite (run by the CI `test` job) now covers them. They are no longer part of `evals.run` — see `tests/test_estimate_integrity.py` et al. and CLAUDE.md's Evals section. **Their check logic and fixtures were not deleted** — only the CLI entry point (`python -m evals.<module>`) moved to pytest; the modules, golden files, and fixtures below still live in `evals/` and are what `tests/test_*.py` imports and runs against.
+The four deterministic "tier-1" modules (`estimate_integrity`, `review_integrity`, `results_integrity`, `maturity_integrity`) moved to ordinary pytest tests in `tests/` as of 2026-09-17 (Task 2 and Task 3 of the CI/evals simplification). The `pytest tests/` suite (run by the CI `test` job) now covers them. They are no longer part of `evals.run` — see `tests/integration/estimation/test_estimate_integrity.py` et al. and CLAUDE.md's Evals section. **Their check logic and fixtures were not deleted** — only the CLI entry point (`python -m evals.<module>`) moved to pytest; the modules, golden files, and fixtures below still live in `evals/` and are what `tests/integration/*/test_*_integrity.py` imports and runs against.
 
 ## Layout
 
@@ -36,10 +36,10 @@ local_index_parity.py                       # LocalIndex parity eval
 thresholds.py                               # the gate spec (every floor + why)
 run.py                                      # aggregate gate over rag + local_index_parity
 
-estimate_integrity.py  golden.jsonl  captured_test_plan.md     # invoked via pytest tests/test_estimate_integrity.py
-review_integrity.py    review_golden.jsonl  fixtures/review/*.md    # invoked via pytest tests/test_review_integrity.py
-results_integrity.py   results_golden.jsonl fixtures/results/*      # invoked via pytest tests/test_results_integrity.py
-maturity_integrity.py  maturity_golden.jsonl fixtures/maturity/*.txt # invoked via pytest tests/test_maturity_integrity.py
+estimate_integrity.py  golden.jsonl  captured_test_plan.md     # invoked via pytest tests/integration/estimation/test_estimate_integrity.py
+review_integrity.py    review_golden.jsonl  fixtures/review/*.md    # invoked via pytest tests/integration/review/test_review_integrity.py
+results_integrity.py   results_golden.jsonl fixtures/results/*      # invoked via pytest tests/integration/results/test_results_integrity.py
+maturity_integrity.py  maturity_golden.jsonl fixtures/maturity/*.txt # invoked via pytest tests/integration/maturity/test_maturity_integrity.py
 ```
 
-Add a case to `rag`/`local_index_parity` by appending a line to `rag_golden.jsonl` — the dataset *is* the suite; no new test files. The four migrated modules' golden/fixture files above work the same way — append a case to the relevant `*_golden.jsonl` and it's picked up by the corresponding `tests/test_*.py` (see the Archived section above).
+Add a case to `rag`/`local_index_parity` by appending a line to `rag_golden.jsonl` — the dataset *is* the suite; no new test files. The four migrated modules' golden/fixture files above work the same way — append a case to the relevant `*_golden.jsonl` and it's picked up by the corresponding `tests/integration/*/test_*_integrity.py` (see the Archived section above).
