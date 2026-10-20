@@ -23,7 +23,8 @@ _LEVEL_ORDER = ["critical", "high", "medium", "low"]
 class ExecutiveReadout:
     overall_risk: str = ""            # "Critical" | "High" | "Medium" | "Low" | ""
     risk_breakdown: str = ""          # e.g. "1 Critical · 2 High · 1 Medium"
-    effort_range: str = ""            # e.g. "42 to 51 person-days"
+    effort_range: str = ""            # e.g. "42 to 51 person-days" (planning band)
+    expected_effort: str = ""         # e.g. "46.5 person-days" (PERT expected, the headline)
     capacity: str = ""                # e.g. "36 person-days available, 9 short of expected effort"
     capacity_deficit: bool = False
     confidence: str = ""              # e.g. "Medium (59/100)"
@@ -74,6 +75,7 @@ def build_readout(risk_rows: list, effort_data) -> Optional[ExecutiveReadout]:
         readout.effort_range = (
             f"{_fmt_days(effort_data.final_effort_min)} to {_fmt_days(effort_data.final_effort_max)} person-days"
         )
+        readout.expected_effort = f"{_fmt_days(round(effort_data.pert_total_expected, 1))} person-days"
         available = _fmt_days(round(effort_data.available_person_days, 1))
         gap = round(effort_data.capacity_gap, 1)
         if gap < 0:
