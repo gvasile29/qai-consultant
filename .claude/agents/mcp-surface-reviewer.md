@@ -1,6 +1,6 @@
 ---
 name: mcp-surface-reviewer
-description: Reviewer for changes that touch the qai-consultant-mcp package surface — any module listed in pyproject.toml's py-modules (mcp_server, dialogue, effort_core, local_index, telemetry, prompts, kb_config, logger, version, review_core, results_core, maturity_core, risk_ledger), a new module those import, pyproject.toml, server.json, or whitelisted knowledge_base/ .md folders. Use before opening or merging a PR with such a diff; reports findings only, never edits.
+description: Reviewer for changes that touch the qai-consultant-mcp package surface — any module under src/qai_consultant/common/, core/ or mcp/ (the three wheel tiers shipped by pyproject.toml's packages.find), a new module those import, pyproject.toml, server.json, or whitelisted knowledge_base/ .md folders. Use before opening or merging a PR with such a diff; reports findings only, never edits.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -11,27 +11,27 @@ Start with `git diff origin/master...HEAD --stat`, then read the full diff of th
 
 ## Invariants to check
 
-1. **MCP rule.** No MCP tool may expose LLM generation. Tools return retrieval results, deterministic computations, or static templates. Flag any new `@mcp.tool()` that calls `ask()`, `ask_streaming()`, `LLMClient`, or a `*_generator.py` module. Rationale: `MCP_PLAN.md`.
+1. **MCP rule.** No MCP tool may expose LLM generation. Tools return retrieval results, deterministic computations, or static templates. Flag any new `@mcp.tool()` that calls `ask()`, `ask_streaming()`, `LLMClient`, or a `*_generator` module. Rationale: `MCP_PLAN.md`.
 
-2. **Keyless import graph.** Starting from `src/mcp_server.py`, follow imports transitively, including imports inside functions. Nothing reachable may import `agent`, `app`, `ingest`, `streamlit`, `pinecone`, `mistralai`, `openai`, `langchain*`, `torch`, `sentence_transformers`, or any `*_generator` module. A new module that the server imports must also be listed in `pyproject.toml`'s `[tool.setuptools] py-modules`, or the wheel ships without it and the server crashes on import.
+2. **Keyless import graph.** The wheel ships exactly three tiers, `qai_consultant.common` <- `core` <- `mcp` (plus the empty `qai_consultant/__init__.py`); nothing else, notably not `qai_consultant/cli.py` (excluded by `setup.py`'s `build_py` override). Run `python -m pytest tests/system/release/test_package_layout.py -q`: it AST-walks every wheel module (including lazy imports) and fails on any app-side import (`agent`, `ingest`, `streamlit`, `pinecone`, `mistralai`, `openai`, `langchain*`, any `*_generator`) or a tier-order violation. A new module the MCP server needs goes into `common/`, `core/` or `mcp/`, never a new top-level subpackage (that would need a `packages.find` include).
 
 3. **Exact pins.** Every `[project] dependencies` entry is `==`. A newly added dependency means the whole array must be regenerated with `scripts/regenerate_mcp_lock.py`, not hand-added. A single bumped line from Dependabot desynchronizes the lock.
 
-4. **Warmup ordering.** `main()` in `mcp_server.py` must call `index.warmup_embedder()` before `mcp.run()`. Moving embedder init back to lazy/first-call reintroduces the Windows stdio deadlock (`docs/postmortems/2026-07-30-mcp-windows-stdio-deadlock.md`). Heavy full-corpus embedding must stay lazy (`_ensure_built()`), or cold attach exceeds Claude Desktop's ~60s timeout.
+4. **Warmup ordering.** `main()` in `qai_consultant/mcp/server.py` must call `index.warmup_embedder()` before `mcp.run()`. Moving embedder init back to lazy/first-call reintroduces the Windows stdio deadlock (`docs/postmortems/2026-07-30-mcp-windows-stdio-deadlock.md`). Heavy full-corpus embedding must stay lazy (`_ensure_built()`), or cold attach exceeds Claude Desktop's ~60s timeout.
 
 5. **Licensing gate.** No `.pdf`/`.html` reaches the wheel. A newly whitelisted `knowledge_base.*` package-data folder needs a matching `_WHITELISTED_MD_FOLDERS` entry in `tests/system/release/test_packaging.py`, and its content must be self-authored.
 
 6. **FastMCP argument coercion.** A new tool `str` parameter that clients might send as a JSON array must be typed `Optional[Union[str, list]]` and branch on `isinstance(value, list)`.
 
-7. **Version sync.** If `src/version.py` changed, `pyproject.toml`, `server.json`, `CHANGELOG.md`, `README.md`, and `README_MCP.md` must change with it. A version merged to master is not the same as a version published: note that PyPI publish (`twine upload`) and registry sync remain manual follow-ups.
+7. **Version sync.** If `src/qai_consultant/common/version.py` changed, `pyproject.toml`, `server.json`, `CHANGELOG.md`, `README.md`, and `README_MCP.md` must change with it. A version merged to master is not the same as a version published: note that PyPI publish (`twine upload`) and registry sync remain manual follow-ups.
 
-8. **Telemetry.** Any `telemetry.py` change keeps the opt-out working (`QAI_TELEMETRY=0`, `DO_NOT_TRACK=1`) and the stderr startup notice, never persists an identifier to disk, never writes to stdout, stays fire-and-forget with every exception swallowed, and sends no free-text payloads.
+8. **Telemetry.** Any `common/telemetry.py` change keeps the opt-out working (`QAI_TELEMETRY=0`, `DO_NOT_TRACK=1`) and the stderr startup notice, never persists an identifier to disk, never writes to stdout, stays fire-and-forget with every exception swallowed, and sends no free-text payloads.
 
 ## Run these (read-only, keyless)
 
 ```bash
 python -m pytest tests/system/release/test_packaging.py tests/system/mcp/test_mcp_server.py -q
-python scripts/verify_mcp_stdio_no_deadlock.py   # if mcp_server.py or local_index.py changed
+python scripts/verify_mcp_stdio_no_deadlock.py   # if mcp/server.py or mcp/local_index.py changed
 ```
 
 ## Output

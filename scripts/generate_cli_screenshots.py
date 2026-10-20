@@ -15,9 +15,9 @@ sys.path.insert(0, str(REPO / "src"))
 
 from rich.console import Console  # noqa: E402
 
-import cli  # noqa: E402
-from dialogue import DialogueManager  # noqa: E402
-from templates import TEMPLATES  # noqa: E402
+from qai_consultant import cli  # noqa: E402
+from qai_consultant.core.dialogue import DialogueManager  # noqa: E402
+from qai_consultant.generation.templates import TEMPLATES  # noqa: E402
 
 OUT = REPO / "docs" / "screenshots"
 WIDTH = 110

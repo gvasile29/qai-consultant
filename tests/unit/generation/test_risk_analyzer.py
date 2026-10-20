@@ -1,5 +1,5 @@
 """
-Tests for src/risk_analyzer.py — RiskAnalyzer module.
+Tests for src/qai_consultant/generation/risk_analyzer.py — RiskAnalyzer module.
 
 Strategy: build ProjectContext directly (no interactive dialogue),
 call RiskAnalyzer.analyze() + .save(), then verify:
@@ -23,11 +23,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from dialogue import ProjectContext
-from agent import QAIAgent
-from risk_analyzer import RiskAnalyzer, append_execution_data_appendix, build_risk_prompt
+from qai_consultant.core.dialogue import ProjectContext
+from qai_consultant.rag.agent import QAIAgent
+from qai_consultant.generation.risk_analyzer import RiskAnalyzer, append_execution_data_appendix, build_risk_prompt
 
 # ── BMW Infotainment sample context ──────────────────────────────────────────
 

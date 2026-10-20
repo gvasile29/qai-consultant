@@ -17,13 +17,11 @@ SRC_DIR = REPO_ROOT / "src"
 pytest.importorskip("streamlit.testing.v1")
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
-_SCRIPT = f"""
-import sys
-sys.path.insert(0, {str(SRC_DIR)!r})
+_SCRIPT = """
 import app
 app.load_agent = lambda: (object(), None)
 app.get_and_increment_visit_count = lambda: 1
-app._adoption_snapshot = lambda: {{}}
+app._adoption_snapshot = lambda: {}
 app.main()
 """
 

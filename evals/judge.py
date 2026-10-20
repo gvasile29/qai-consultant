@@ -27,7 +27,7 @@ def _secret(name: str) -> str:
     broken import would be silently misreported as an unconfigured .env."""
     ensure_src_on_path()
     try:
-        from agent import _get_secret  # noqa: PLC0415
+        from qai_consultant.rag.agent import _get_secret  # noqa: PLC0415
         return _get_secret(name)
     except (ValueError, ModuleNotFoundError):
         return ""
@@ -44,7 +44,7 @@ def _get_client():
         with _client_lock:
             if _client is None:
                 ensure_src_on_path()
-                from agent import LLMClient  # noqa: PLC0415
+                from qai_consultant.rag.agent import LLMClient  # noqa: PLC0415
                 # Placeholder for an empty key on either provider: an empty Mistral key
                 # builds a malformed `Bearer ` header (hard error, not a clean fallback),
                 # and openai>=2.x rejects an empty key at construction. "unset" makes both

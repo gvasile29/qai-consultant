@@ -29,9 +29,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from agent import LLMClient, QAIConnectionError, _get_secret
+from qai_consultant.rag.agent import LLMClient, QAIConnectionError, _get_secret
 from pinecone import Pinecone
 
 NAMESPACE = "ci-contract-tests"

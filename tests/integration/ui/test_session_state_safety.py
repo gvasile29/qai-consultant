@@ -29,7 +29,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
-sys.path.insert(0, str(APP_SRC))
 
 
 # ── Helpers (same pattern as test_app_v03.py) ─────────────────────────────────

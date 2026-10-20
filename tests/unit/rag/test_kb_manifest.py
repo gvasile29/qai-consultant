@@ -1,5 +1,5 @@
 """
-Regression/drift guard for src/kb_manifest.py.
+Regression/drift guard for src/qai_consultant/ui/kb_manifest.py.
 
 Covers:
 1. Full coverage — every top-level subfolder of knowledge_base/ (except
@@ -17,9 +17,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from kb_manifest import KB_MANIFEST
+from qai_consultant.ui.kb_manifest import KB_MANIFEST
 
 KNOWLEDGE_BASE_DIR = REPO_ROOT / "knowledge_base"
 EXCLUDED_TOP_LEVEL_FOLDERS = {"generated_strategies"}
@@ -51,7 +50,7 @@ def test_every_top_level_kb_subfolder_is_covered_by_manifest():
 
     assert not uncovered, (
         f"knowledge_base/ subfolder(s) {uncovered} exist on disk but are not "
-        f"covered by any path in src/kb_manifest.py's KB_MANIFEST — the "
+        f"covered by any path in src/qai_consultant/ui/kb_manifest.py's KB_MANIFEST — the "
         f"sidebar will silently omit them. Add a manifest entry."
     )
     print(f"  PASS: all top-level knowledge_base/ subfolders "
@@ -71,7 +70,7 @@ def test_every_manifest_path_exists_on_disk():
                 missing.append(f"{entry['label']!r} -> {rel_path}")
 
     assert not missing, (
-        f"src/kb_manifest.py declares path(s) that don't exist under "
+        f"src/qai_consultant/ui/kb_manifest.py declares path(s) that don't exist under "
         f"knowledge_base/: {missing}"
     )
     print("  PASS: every KB_MANIFEST path exists on disk")

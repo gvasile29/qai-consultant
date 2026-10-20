@@ -1,5 +1,5 @@
 """
-Tests for get_and_increment_visit_count() in src/visit_counter.py.
+Tests for get_and_increment_visit_count() in src/qai_consultant/observability/visit_counter.py.
 
 All tests use unittest.mock — no real Pinecone network calls are made,
 following the mocking style of test_llm_client.py (mock the client class,
@@ -35,10 +35,9 @@ from unittest.mock import patch, MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import visit_counter
-from visit_counter import get_and_increment_visit_count, NAMESPACE, VECTOR_ID, VECTOR_DIM
+from qai_consultant.observability import visit_counter
+from qai_consultant.observability.visit_counter import get_and_increment_visit_count, NAMESPACE, VECTOR_ID, VECTOR_DIM
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────

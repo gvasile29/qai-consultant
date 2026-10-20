@@ -1,5 +1,5 @@
 """
-Tests for src/test_plan_generator.py — structural tests (no LLM required).
+Tests for src/qai_consultant/generation/test_plan_generator.py — structural tests (no LLM required).
 
 Covers:
 1. Module imports and class structure
@@ -19,12 +19,11 @@ from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
-sys.path.insert(0, str(APP_SRC))
 
 
 def test_module_imports():
     """TestPlanGenerator, build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT importable."""
-    from test_plan_generator import TestPlanGenerator, build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator, build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
     assert TestPlanGenerator is not None
     assert callable(build_test_plan_prompt)
     assert isinstance(TEST_PLAN_SYSTEM_PROMPT, str) and len(TEST_PLAN_SYSTEM_PROMPT) > 50
@@ -33,7 +32,7 @@ def test_module_imports():
 
 def test_system_prompt_content():
     """TEST_PLAN_SYSTEM_PROMPT references IEEE 829 and tactical planning."""
-    from test_plan_generator import TEST_PLAN_SYSTEM_PROMPT
+    from qai_consultant.generation.test_plan_generator import TEST_PLAN_SYSTEM_PROMPT
     assert "IEEE 829" in TEST_PLAN_SYSTEM_PROMPT
     assert "WHO" in TEST_PLAN_SYSTEM_PROMPT or "tactical" in TEST_PLAN_SYSTEM_PROMPT.lower() or "WHAT" in TEST_PLAN_SYSTEM_PROMPT
     print("  PASS: system prompt references IEEE 829 and tactical scope")
@@ -41,8 +40,8 @@ def test_system_prompt_content():
 
 def test_build_test_plan_prompt_contains_project_name():
     """build_test_plan_prompt includes project name in output."""
-    from test_plan_generator import build_test_plan_prompt
-    from dialogue import ProjectContext
+    from qai_consultant.generation.test_plan_generator import build_test_plan_prompt
+    from qai_consultant.core.dialogue import ProjectContext
 
     context = ProjectContext(
         project_name="TestApp",
@@ -66,8 +65,8 @@ def test_build_test_plan_prompt_contains_project_name():
 
 def test_build_test_plan_query_non_empty():
     """_build_test_plan_query returns a non-empty string."""
-    from test_plan_generator import TestPlanGenerator
-    from dialogue import ProjectContext
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator
+    from qai_consultant.core.dialogue import ProjectContext
 
     mock_agent = MagicMock()
     generator = TestPlanGenerator(mock_agent)
@@ -94,8 +93,8 @@ def test_build_test_plan_query_non_empty():
 
 def test_generate_uses_provided_chunks():
     """generate() uses pre-fetched chunks and does not call retrieve_knowledge."""
-    from test_plan_generator import TestPlanGenerator
-    from dialogue import ProjectContext
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator
+    from qai_consultant.core.dialogue import ProjectContext
 
     mock_agent = MagicMock()
     mock_agent.format_knowledge_context.return_value = "test knowledge context"
@@ -130,12 +129,12 @@ def test_generate_uses_provided_chunks():
 
 def test_save_creates_file_with_correct_name(tmp_path):
     """save() creates a file named test_plan_<ProjectName>_<timestamp>.md."""
-    from test_plan_generator import TestPlanGenerator
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator
 
     mock_agent = MagicMock()
     generator = TestPlanGenerator(mock_agent)
 
-    from dialogue import ProjectContext
+    from qai_consultant.core.dialogue import ProjectContext
     context = ProjectContext(
         project_name="MyProject",
         project_description="desc",
@@ -162,8 +161,8 @@ def test_save_creates_file_with_correct_name(tmp_path):
 
 def test_save_includes_ai_generated_footer(tmp_path):
     """save() appends the visible AI-generated footer to the saved Test Plan body (v2.5.2)."""
-    from test_plan_generator import TestPlanGenerator
-    from dialogue import ProjectContext
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator
+    from qai_consultant.core.dialogue import ProjectContext
 
     generator = TestPlanGenerator(MagicMock())
     context = ProjectContext(
@@ -192,7 +191,7 @@ def test_save_includes_ai_generated_footer(tmp_path):
 
 def test_class_has_required_methods():
     """TestPlanGenerator exposes generate(), save(), _build_test_plan_query()."""
-    from test_plan_generator import TestPlanGenerator
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator
     assert hasattr(TestPlanGenerator, "generate")
     assert hasattr(TestPlanGenerator, "save")
     assert hasattr(TestPlanGenerator, "_build_test_plan_query")

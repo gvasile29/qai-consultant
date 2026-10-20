@@ -5,6 +5,13 @@ end-user terms. The format is based on [Keep a Changelog](https://keepachangelog
 
 ## [Unreleased]
 
+### Changed
+- `src/` is now the `qai_consultant` package, grouped by dependency tier (`common`, `core`, `mcp` ship in the PyPI wheel; `rag`, `generation`, `compliance`, `ui`, `observability` are app-side). Imports are absolute and no `sys.path` hacks remain in `src/` or `tests/`.
+- New import-tier guard (`tests/system/release/test_package_layout.py`) enforces that the wheel tiers stay keyless and acyclic (`common` <- `core` <- `mcp`).
+- The MCP console script now points at `qai_consultant.mcp.server:main`; the wheel is built from `packages.find` plus a small `setup.py` that keeps the app-side `qai_consultant/cli.py` out of it.
+- `src/cli.py`, `src/ingest.py` and `src/mcp_server.py` are thin shims, so `python src/cli.py`, `python src/ingest.py`, `python src/mcp_server.py` and `streamlit run src/app.py` work as before.
+- No behaviour change.
+
 ### Fixed
 - The Executive Readout above the result tabs (effort range, team capacity, "Address first" rows) and the app's own messages and help text no longer use em or en dashes as punctuation; ranges read "114.5 to 332.5 person-days".
 

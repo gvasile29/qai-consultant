@@ -1,5 +1,5 @@
 """
-Tests for src/ai_disclosure.py — EU AI Act Article 50 transparency (v2.5.2).
+Tests for src/qai_consultant/compliance/ai_disclosure.py — EU AI Act Article 50 transparency (v2.5.2).
 
 Covers:
 1. AI_INTERACTION_NOTICE — sidebar disclosure text mentions AI system interaction
@@ -14,9 +14,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from ai_disclosure import (
+from qai_consultant.compliance.ai_disclosure import (
     AI_INTERACTION_NOTICE,
     AI_GENERATED_FOOTER,
     EU_AI_ICON_DIR,

@@ -20,7 +20,7 @@ official bundle are not used here.
 |---|---|---|
 | `eu_ai_generated_icon.svg` | `LABEL_AI GENERATED_black transparent.svg` | Streamlit sidebar, light theme |
 | `eu_ai_generated_icon_dark.svg` | `LABEL_AI GENERATED_white transparent.svg` | Streamlit sidebar, dark theme |
-| `eu_ai_generated_icon.png` | `LABEL_AI GENERATED_black transparent.png`, downscaled from 7459x2363px to 240x76px | PDF export (`src/ai_disclosure.py`'s `pdf_icon_html()`) — xhtml2pdf renders raster images, not SVG; PDF pages are always white background regardless of the app's Streamlit theme, so only the black variant is needed here |
+| `eu_ai_generated_icon.png` | `LABEL_AI GENERATED_black transparent.png`, downscaled from 7459x2363px to 240x76px | PDF export (`src/qai_consultant/compliance/ai_disclosure.py`'s `pdf_icon_html()`) — xhtml2pdf renders raster images, not SVG; PDF pages are always white background regardless of the app's Streamlit theme, so only the black variant is needed here |
 
 Deepfake-labelling icon variants (image/audio/video) are not vendored here —
 QAI Consultant produces only text documents.

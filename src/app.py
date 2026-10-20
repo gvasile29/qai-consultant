@@ -10,52 +10,51 @@ import sys
 
 from pathlib import Path
 from typing import Optional
-sys.path.append(str(Path(__file__).resolve().parent))
 
 import streamlit as st
 from streamlit.runtime.scriptrunner import RerunException, StopException
-from agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
-from ai_disclosure import AI_INTERACTION_NOTICE, pdf_icon_html, pdf_meta_html, with_ai_footer
-from dialogue import DialogueManager, InputValidator, QUESTIONS
-from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
-from risk_analyzer import RiskAnalyzer, append_execution_data_appendix
-from effort_estimator import EffortEstimator
-from agent import QAIConnectionError, QAIKnowledgeBaseError
-from logger import setup_logging, get_logger
-from version import __version__
-from templates import TEMPLATES, TEMPLATE_OPTIONS
-from pdf_export import markdown_to_pdf
-from test_plan_generator import TestPlanGenerator
-from kb_manifest import KB_MANIFEST
-from source_labels import build_source_labels
-from review_core import MIN_CONTENT_CHARS as REVIEW_MIN_CONTENT_CHARS, review_document
-from review_generator import (
+from qai_consultant.rag.agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
+from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, pdf_icon_html, pdf_meta_html, with_ai_footer
+from qai_consultant.core.dialogue import DialogueManager, InputValidator, QUESTIONS
+from qai_consultant.generation.strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
+from qai_consultant.generation.risk_analyzer import RiskAnalyzer, append_execution_data_appendix
+from qai_consultant.generation.effort_estimator import EffortEstimator
+from qai_consultant.rag.agent import QAIConnectionError, QAIKnowledgeBaseError
+from qai_consultant.common.logger import setup_logging, get_logger
+from qai_consultant.common.version import __version__
+from qai_consultant.generation.templates import TEMPLATES, TEMPLATE_OPTIONS
+from qai_consultant.compliance.pdf_export import markdown_to_pdf
+from qai_consultant.generation.test_plan_generator import TestPlanGenerator
+from qai_consultant.ui.kb_manifest import KB_MANIFEST
+from qai_consultant.compliance.source_labels import build_source_labels
+from qai_consultant.core.review_core import MIN_CONTENT_CHARS as REVIEW_MIN_CONTENT_CHARS, review_document
+from qai_consultant.generation.review_generator import (
     REVIEW_SYSTEM_PROMPT,
     build_review_prompt,
     build_review_report_markdown,
     save_review_report,
 )
-from results_core import (
+from qai_consultant.core.results_core import (
     analyze as compute_results_analysis,
     parse_junit_xml,
     parse_results_csv,
     summarize_for_prompt,
 )
-from maturity_core import MIN_CONTENT_CHARS as MATURITY_MIN_CONTENT_CHARS, assess_maturity
-from maturity_generator import (
+from qai_consultant.core.maturity_core import MIN_CONTENT_CHARS as MATURITY_MIN_CONTENT_CHARS, assess_maturity
+from qai_consultant.generation.maturity_generator import (
     MATURITY_SYSTEM_PROMPT,
     build_maturity_prompt,
     build_maturity_report_markdown,
     save_maturity_report,
 )
-from doc_bundle import build_zip
-from visit_counter import (
+from qai_consultant.generation.doc_bundle import build_zip
+from qai_consultant.observability.visit_counter import (
     download_counter_id,
     feedback_counter_id,
     get_and_increment_visit_count,
     record_event,
 )
-from usage_guard import consume_run
+from qai_consultant.observability.usage_guard import consume_run
 
 setup_logging()
 logger = get_logger(__name__)
@@ -112,7 +111,7 @@ else:
     )
 
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
-from theme import inject_theme_css
+from qai_consultant.ui.theme import inject_theme_css
 
 inject_theme_css()
 
@@ -393,8 +392,8 @@ and [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers).
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 def render_sidebar():
     with st.sidebar:
-        from components import build_sidebar_polish_css
-        from theme import DARK_TOKENS, LIGHT_TOKENS
+        from qai_consultant.ui.components import build_sidebar_polish_css
+        from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
         _sidebar_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
         st.markdown(build_sidebar_polish_css(_sidebar_tokens), unsafe_allow_html=True)
@@ -409,7 +408,7 @@ def render_sidebar():
             if _theme_type == "dark"
             else "eu_ai_generated_icon.svg"
         )
-        from components import inline_image_html
+        from qai_consultant.ui.components import inline_image_html
         st.markdown(
             inline_image_html(
                 (EU_AI_ICON_DIR / _eu_icon_svg).read_bytes(),
@@ -421,7 +420,7 @@ def render_sidebar():
         )
         st.info(AI_INTERACTION_NOTICE)
 
-        from components import APP_MODES, build_sidebar_nav_css
+        from qai_consultant.ui.components import APP_MODES, build_sidebar_nav_css
         _active_mode = _current_mode(st.session_state.get("current_step", "intro"))
         _nav_locked = _generation_in_progress()
         st.markdown(build_sidebar_nav_css(_sidebar_tokens, _active_mode), unsafe_allow_html=True)
@@ -551,7 +550,7 @@ def _cached_adoption_snapshot() -> dict:
     per-rerun path. Raises when every source failed: st.cache_data doesn't
     cache exceptions, so a total outage is retried on the next visit
     instead of hiding the strip for an hour."""
-    from adoption_metrics import collect_adoption
+    from qai_consultant.observability.adoption_metrics import collect_adoption
     snapshot = collect_adoption()
     if not any(snapshot.values()):
         raise RuntimeError("all adoption sources failed")
@@ -567,20 +566,20 @@ def _adoption_snapshot() -> dict:
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
-    from components import build_landing_hero_html
-    from theme import DARK_TOKENS, LIGHT_TOKENS
+    from qai_consultant.ui.components import build_landing_hero_html
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
     _hero_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
     st.markdown(build_landing_hero_html(_hero_tokens), unsafe_allow_html=True)
 
     st.markdown("---")
 
-    from components import build_landing_deliverables_html
+    from qai_consultant.ui.components import build_landing_deliverables_html
     st.markdown(build_landing_deliverables_html(_hero_tokens), unsafe_allow_html=True)
 
     st.markdown("---")
 
-    from components import (
+    from qai_consultant.ui.components import (
         APP_MODES,
         build_landing_cta_css,
         build_landing_details_css,
@@ -638,7 +637,7 @@ The MCP server (v3.0+) is built from the same knowledge base and the same determ
 
     # Last on the page: a cold cache fetches over the network (<=6s), and
     # nothing above — above all the Start button — should wait on it.
-    from components import build_adoption_strip_html
+    from qai_consultant.ui.components import build_adoption_strip_html
     _adoption_html = build_adoption_strip_html(_hero_tokens, _adoption_snapshot())
     if _adoption_html:
         st.markdown("---")
@@ -670,8 +669,8 @@ def render_dialogue():
 
     total = len(QUESTIONS)
 
-    from components import build_dialogue_header_html
-    from theme import DARK_TOKENS, LIGHT_TOKENS
+    from qai_consultant.ui.components import build_dialogue_header_html
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
     _dialogue_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
     # The progress header sits above the form, but answers only reach
@@ -778,8 +777,8 @@ def render_review():
 
     context = st.session_state.dialogue.get_context()
 
-    from components import build_review_summary_html
-    from theme import DARK_TOKENS, LIGHT_TOKENS
+    from qai_consultant.ui.components import build_review_summary_html
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
     _review_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
     _animate = not st.session_state.get("review_intro_animated")
@@ -829,7 +828,7 @@ def render_review():
 
         analysis = st.session_state.get("results_analysis")
         if analysis is not None:
-            from components import signal_ledger_html
+            from qai_consultant.ui.components import signal_ledger_html
 
             pass_rate_pct = round(analysis.overall_pass_rate * 100)
             m1, m2, m3, m4 = st.columns(4)
@@ -860,7 +859,7 @@ def render_review():
                 st.rerun()
 
     st.markdown("---")
-    from components import GENERATION_TIME_ESTIMATE
+    from qai_consultant.ui.components import GENERATION_TIME_ESTIMATE
     st.caption(f"Generating all 4 documents takes {GENERATION_TIME_ESTIMATE}.")
     col1, col2 = st.columns(2)
     with col1:
@@ -970,13 +969,13 @@ def render_strategy():
         )
         st.stop()
 
-    from components import (
+    from qai_consultant.ui.components import (
         GENERATION_TIME_ESTIMATE,
         build_content_polish_css,
         build_output_eyebrow_html,
         build_stage_sequence_html,
     )
-    from theme import DARK_TOKENS, LIGHT_TOKENS
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
     _strategy_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
     st.markdown(build_content_polish_css(_strategy_tokens), unsafe_allow_html=True)
@@ -1031,8 +1030,8 @@ def render_strategy():
 
     if needs_generation:
         from concurrent.futures import ThreadPoolExecutor
-        from agent import RAG_K_GENERATION
-        from risk_analyzer import build_risk_prompt, RISK_SYSTEM_PROMPT
+        from qai_consultant.rag.agent import RAG_K_GENERATION
+        from qai_consultant.generation.risk_analyzer import build_risk_prompt, RISK_SYSTEM_PROMPT
 
         # A Streamlit rerun during the multi-minute streamed pipeline below
         # (e.g. a websocket reconnect) re-enters this branch before `strategy`
@@ -1179,7 +1178,7 @@ def render_strategy():
         _render_stages()
 
         # Test Plan (streaming)
-        from test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
+        from qai_consultant.generation.test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
         _render_stages(active_key="test_plan")
         if st.session_state.get("test_plan") is None:
             st.markdown("#### 📝 Generating Test Plan...")
@@ -1221,9 +1220,9 @@ def render_strategy():
         st.rerun()
 
     # ── Executive Readout (deterministic "so what?" above the tabs) ───────
-    from executive_readout import build_readout
-    from components import executive_readout_html
-    from risk_ledger import parse_risk_matrix as _parse_risk_matrix
+    from qai_consultant.generation.executive_readout import build_readout
+    from qai_consultant.ui.components import executive_readout_html
+    from qai_consultant.core.risk_ledger import parse_risk_matrix as _parse_risk_matrix
 
     _readout_html = executive_readout_html(
         build_readout(
@@ -1243,8 +1242,8 @@ def render_strategy():
     st.session_state.output_intro_animated = True
 
     with tab1:
-        from risk_ledger import parse_risk_matrix
-        from components import risk_ledger_table_html
+        from qai_consultant.core.risk_ledger import parse_risk_matrix
+        from qai_consultant.ui.components import risk_ledger_table_html
 
         risk_rows = parse_risk_matrix(st.session_state.risk_register)
         if risk_rows:
@@ -1283,7 +1282,7 @@ def render_strategy():
             )
 
     with tab2:
-        from components import signal_ledger_html
+        from qai_consultant.ui.components import signal_ledger_html
 
         effort_data = st.session_state.get("effort_data")
         if effort_data is not None:
@@ -1532,8 +1531,8 @@ def render_doc_review():
     computed findings and saves an Article-50(2)-marked report, mirroring
     render_strategy()'s save/PDF conventions."""
 
-    from components import build_content_polish_css, build_output_eyebrow_html
-    from theme import DARK_TOKENS, LIGHT_TOKENS
+    from qai_consultant.ui.components import build_content_polish_css, build_output_eyebrow_html
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
     _doc_review_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
     st.markdown(build_content_polish_css(_doc_review_tokens), unsafe_allow_html=True)
@@ -1546,7 +1545,7 @@ def render_doc_review():
     st.markdown("---")
 
     if st.session_state.get("review_result") is None:
-        from components import build_doc_review_input_tray_css
+        from qai_consultant.ui.components import build_doc_review_input_tray_css
         st.markdown(build_doc_review_input_tray_css(_doc_review_tokens), unsafe_allow_html=True)
 
         with st.container(key="doc-review-input"):
@@ -1611,7 +1610,7 @@ def render_doc_review():
             st.rerun()
         return
 
-    from components import signal_ledger_html
+    from qai_consultant.ui.components import signal_ledger_html
 
     _doc_review_animate_class = " animate" if not st.session_state.get("doc_review_intro_animated") else ""
     st.session_state.doc_review_intro_animated = True
@@ -1762,7 +1761,7 @@ def _render_score_grid(scores: dict, per_row: int = 5) -> None:
     """Signal Ledger cards in rows of `per_row`. One st.columns() per dimension
     squeezed 10 TMMi cards into a single row at desktop width, wrapping "100"
     across lines and overflowing the bars out of their cards."""
-    from components import signal_ledger_html
+    from qai_consultant.ui.components import signal_ledger_html
     items = list(scores.items())
     for start in range(0, len(items), per_row):
         cols = st.columns(per_row)
@@ -1779,8 +1778,8 @@ def render_maturity_assessment():
     Article-50(2)-marked report, mirroring render_doc_review()'s save/PDF
     conventions."""
 
-    from components import build_content_polish_css, build_output_eyebrow_html
-    from theme import DARK_TOKENS, LIGHT_TOKENS
+    from qai_consultant.ui.components import build_content_polish_css, build_output_eyebrow_html
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
     _maturity_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
     st.markdown(build_content_polish_css(_maturity_tokens), unsafe_allow_html=True)
@@ -1795,7 +1794,7 @@ def render_maturity_assessment():
     st.markdown("---")
 
     if st.session_state.get("maturity_result") is None:
-        from components import build_doc_review_input_tray_css
+        from qai_consultant.ui.components import build_doc_review_input_tray_css
         st.markdown(build_doc_review_input_tray_css(_maturity_tokens), unsafe_allow_html=True)
 
         with st.container(key="maturity-input"):
@@ -1846,7 +1845,7 @@ def render_maturity_assessment():
             st.rerun()
         return
 
-    from components import signal_ledger_html
+    from qai_consultant.ui.components import signal_ledger_html
 
     _maturity_animate_class = " animate" if not st.session_state.get("maturity_intro_animated") else ""
     st.session_state.maturity_intro_animated = True
@@ -2011,7 +2010,7 @@ def main():
                 if st.context.theme.type == "dark"
                 else "qai_logo_horizontal_1680.png"
             )
-            from components import header_logo_html
+            from qai_consultant.ui.components import header_logo_html
             st.markdown(header_logo_html((BRAND_DIR / _header_logo).read_bytes()), unsafe_allow_html=True)
 
     # ── Load agent — show clear error if API keys not ready ──────────────────

@@ -1,5 +1,5 @@
 """
-Tests for LLMClient in src/agent.py.
+Tests for LLMClient in src/qai_consultant/rag/agent.py.
 
 All tests use unittest.mock — no real Mistral or OpenRouter API calls are made.
 
@@ -24,9 +24,8 @@ from unittest.mock import patch, MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from agent import LLMClient, QAIConnectionError
+from qai_consultant.rag.agent import LLMClient, QAIConnectionError
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -191,7 +190,7 @@ def test_streaming_both_fail_raises_connection_error():
 def test_openrouter_calls_send_the_free_model_fallback_chain():
     """Both OpenRouter paths send OpenRouter's `models` fallback array so a
     rate-limited/removed free model falls through to the next one."""
-    import agent
+    from qai_consultant.rag import agent
 
     client = _make_client()
     messages = [{"role": "user", "content": "x"}]
@@ -301,7 +300,7 @@ def test_openrouter_fallback_chain_uses_only_free_models():
     would silently accrue charges on an account with no credits. Auto-routers
     ("openrouter/free", "openrouter/auto") are banned: live, one routed the
     Risk Register to a content-safety classifier that returned "User Safety: safe"."""
-    import agent
+    from qai_consultant.rag import agent
 
     assert 1 <= len(agent.OPENROUTER_MODELS) <= 3
     for model in agent.OPENROUTER_MODELS:

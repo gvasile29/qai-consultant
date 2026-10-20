@@ -1,14 +1,13 @@
-"""Tests for src/executive_readout.py and components.executive_readout_html()."""
+"""Tests for src/qai_consultant/generation/executive_readout.py and components.executive_readout_html()."""
 
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from components import executive_readout_html
-from effort_core import EstimationData
-from executive_readout import build_readout
+from qai_consultant.ui.components import executive_readout_html
+from qai_consultant.core.effort_core import EstimationData
+from qai_consultant.generation.executive_readout import build_readout
 
 ROWS = [
     {"risk_id": "R03", "description": "Flaky CI", "likelihood": "High", "impact": "Low",

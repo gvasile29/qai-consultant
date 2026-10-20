@@ -3,7 +3,7 @@
 The skill is published outside this repo and tells agents which tools and
 prompts to call, so a renamed tool or a changed default must fail CI here
 instead of shipping a skill that points at tools that no longer exist.
-Parses src/mcp_server.py with ast so the test needs none of the server's
+Parses src/qai_consultant/mcp/server.py with ast so the test needs none of the server's
 runtime dependencies.
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SKILL = (ROOT / "skills" / "qai-consultant" / "SKILL.md").read_text(encoding="utf-8")
-SERVER = ast.parse((ROOT / "src" / "mcp_server.py").read_text(encoding="utf-8"))
+SERVER = ast.parse((ROOT / "src" / "qai_consultant" / "mcp" / "server.py").read_text(encoding="utf-8"))
 
 
 def _registered(kind: str) -> dict[str, ast.FunctionDef]:

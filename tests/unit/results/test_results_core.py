@@ -1,5 +1,5 @@
 """
-Tests for src/results_core.py — deterministic test-results analysis (v3.1).
+Tests for src/qai_consultant/core/results_core.py — deterministic test-results analysis (v3.1).
 
 Pure stdlib module: JUnit XML / CSV parsing, flaky/ever-failing/never-run/
 slowest detection, failure clustering, and a bounded prompt summary.
@@ -10,9 +10,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from results_core import (  # noqa: E402
+from qai_consultant.core.results_core import (  # noqa: E402
     TestRecord,
     analyze,
     parse_junit_xml,

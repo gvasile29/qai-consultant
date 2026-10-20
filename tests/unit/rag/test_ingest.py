@@ -1,5 +1,5 @@
 """
-Tests for src/ingest.py — load_documents() encoding regression guard.
+Tests for src/qai_consultant/rag/ingest.py — load_documents() encoding regression guard.
 
 Background (bug fixed alongside this test): TextLoader, when constructed
 without an explicit `encoding` argument, falls back to the platform-default
@@ -29,9 +29,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from ingest import load_documents, KNOWLEDGE_BASE_DIR  # noqa: E402
+from qai_consultant.rag.ingest import load_documents, KNOWLEDGE_BASE_DIR  # noqa: E402
 
 # The 4 files that previously raised UnicodeDecodeError under cp1252 and were
 # skipped entirely (hard-crash symptom).

@@ -1,4 +1,4 @@
-"""Tests for src/adoption_metrics.py, the landing-page adoption tiles in
+"""Tests for src/qai_consultant/observability/adoption_metrics.py, the landing-page adoption tiles in
 components.py, and scripts/usage_report.py — no network, no Pinecone."""
 
 import importlib.util
@@ -10,11 +10,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
-import adoption_metrics  # noqa: E402
-from components import ADOPTION_MIN_RATINGS, adoption_tiles, build_adoption_strip_html  # noqa: E402
-from theme import LIGHT_TOKENS  # noqa: E402
+from qai_consultant.observability import adoption_metrics  # noqa: E402
+from qai_consultant.ui.components import ADOPTION_MIN_RATINGS, adoption_tiles, build_adoption_strip_html  # noqa: E402
+from qai_consultant.ui.theme import LIGHT_TOKENS  # noqa: E402
 
 
 # ── adoption_metrics ────────────────────────────────────────────────────────────

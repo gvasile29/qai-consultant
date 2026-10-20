@@ -1,4 +1,4 @@
-"""Tests for src/components.py -- Signal Ledger / Risk Ledger HTML builders
+"""Tests for src/qai_consultant/ui/components.py -- Signal Ledger / Risk Ledger HTML builders
 (Ledger section) and Landing hero + "What you get" (Landing section).
 
 These build HTML strings only (no Streamlit runtime needed to test them --
@@ -9,9 +9,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from components import (  # noqa: E402
+from qai_consultant.ui.components import (  # noqa: E402
     build_content_polish_css,
     build_dialogue_header_html,
     build_doc_review_input_tray_css,
@@ -25,7 +24,7 @@ from components import (  # noqa: E402
     score_tier,
     signal_ledger_html,
 )
-from theme import DARK_TOKENS, LIGHT_TOKENS  # noqa: E402
+from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS  # noqa: E402
 
 SAMPLE_ROWS = [
     {"risk_id": "R01", "description": "Auth token expiry untested", "likelihood": "High",
@@ -162,7 +161,7 @@ def test_build_landing_hero_html_relies_on_theme_global_rule_for_duration():
     # prefers-reduced-motion rule (build_css()) to zero out
     # animation-duration/transition-duration -- confirm that global rule
     # still exists so this reliance stays valid.
-    from theme import build_css
+    from qai_consultant.ui.theme import build_css
     assert "prefers-reduced-motion" in build_css(LIGHT_TOKENS)
 
 
@@ -409,13 +408,13 @@ def test_doc_review_input_tray_css_scopes_to_the_keyed_container():
 # ── Landing CTAs, kick-off note & sidebar mode nav ─────────────────────────
 
 def test_app_modes_order_and_ids():
-    from components import APP_MODES
+    from qai_consultant.ui.components import APP_MODES
     assert [m[0] for m in APP_MODES] == ["strategy", "doc_review", "maturity"]
     assert [m[1] for m in APP_MODES] == ["01", "02", "03"]
 
 
 def test_landing_note_names_all_four_documents_without_em_dash():
-    from components import build_landing_note_html
+    from qai_consultant.ui.components import build_landing_note_html
     for tokens in (LIGHT_TOKENS, DARK_TOKENS):
         html = build_landing_note_html(tokens)
         assert "four baseline documents" in html
@@ -426,7 +425,7 @@ def test_landing_note_names_all_four_documents_without_em_dash():
 
 
 def test_landing_cta_css_repaints_primary_with_accent_and_surface_label():
-    from components import build_landing_cta_css
+    from qai_consultant.ui.components import build_landing_cta_css
     for tokens in (LIGHT_TOKENS, DARK_TOKENS):
         css = build_landing_cta_css(tokens)
         assert ".st-key-landing-cta" in css
@@ -439,14 +438,14 @@ def test_landing_cta_css_repaints_primary_with_accent_and_surface_label():
 
 
 def test_landing_details_css_is_scoped():
-    from components import build_landing_details_css
+    from qai_consultant.ui.components import build_landing_details_css
     css = build_landing_details_css(DARK_TOKENS)
     rules = [line for line in css.splitlines() if "{" in line and "<style>" not in line]
     assert rules and all(line.startswith(".st-key-landing-details") for line in rules)
 
 
 def test_sidebar_nav_css_indexes_every_mode():
-    from components import APP_MODES, build_sidebar_nav_css
+    from qai_consultant.ui.components import APP_MODES, build_sidebar_nav_css
     css = build_sidebar_nav_css(DARK_TOKENS, None)
     for mode_id, idx, _label in APP_MODES:
         assert f'.st-key-nav-{mode_id} button p::before {{ content: "{idx}"' in css
@@ -454,7 +453,7 @@ def test_sidebar_nav_css_indexes_every_mode():
 
 
 def test_sidebar_nav_css_marks_only_the_active_mode():
-    from components import build_sidebar_nav_css
+    from qai_consultant.ui.components import build_sidebar_nav_css
     css = build_sidebar_nav_css(LIGHT_TOKENS, "maturity")
     assert ".st-key-nav-maturity button:disabled" in css
     assert ".st-key-nav-strategy button:disabled" not in css
@@ -462,13 +461,13 @@ def test_sidebar_nav_css_marks_only_the_active_mode():
 
 
 def test_sidebar_nav_css_ignores_unknown_mode():
-    from components import build_sidebar_nav_css
+    from qai_consultant.ui.components import build_sidebar_nav_css
     assert "button:disabled" not in build_sidebar_nav_css(LIGHT_TOKENS, "bogus")
 
 
 def test_pending_stage_is_labelled_queued_not_just_faded():
-    from components import build_stage_sequence_html
-    from theme import LIGHT_TOKENS
+    from qai_consultant.ui.components import build_stage_sequence_html
+    from qai_consultant.ui.theme import LIGHT_TOKENS
 
     html = build_stage_sequence_html(LIGHT_TOKENS, [("Plan", "pending")])
     assert "stage-item pending" in html and "content: 'queued'" in html

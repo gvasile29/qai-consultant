@@ -5,9 +5,8 @@ import sys
 import zipfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src"))
 
-from doc_bundle import build_zip  # noqa: E402
+from qai_consultant.generation.doc_bundle import build_zip  # noqa: E402
 
 
 def test_zip_contains_nonempty_files_and_skips_empty_ones():

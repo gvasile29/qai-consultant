@@ -8,10 +8,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
 
-from maturity_core import DETECTION_CAVEAT, assess_maturity  # noqa: E402
+from qai_consultant.core.maturity_core import DETECTION_CAVEAT, assess_maturity  # noqa: E402
 
 MATURE = (REPO_ROOT / "evals" / "fixtures" / "maturity" / "mature_paraphrased.txt").read_text(encoding="utf-8")
 

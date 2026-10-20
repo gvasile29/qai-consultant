@@ -29,10 +29,10 @@ _PACKAGE_NAME = "qai-consultant-mcp"
 
 
 def _local_version() -> str:
-    text = (_REPO_ROOT / "src" / "version.py").read_text(encoding="utf-8")
+    text = (_REPO_ROOT / "src" / "qai_consultant" / "common" / "version.py").read_text(encoding="utf-8")
     match = re.search(r'__version__\s*=\s*"([^"]+)"', text)
     if not match:
-        raise RuntimeError("Could not find __version__ in src/version.py")
+        raise RuntimeError("Could not find __version__ in src/qai_consultant/common/version.py")
     return match.group(1)
 
 
@@ -47,7 +47,7 @@ def check_live_version() -> int:
         return 1
 
     live = data["info"]["version"]
-    print(f"local (src/version.py): {local}")
+    print(f"local (src/qai_consultant/common/version.py): {local}")
     print(f"live  (PyPI):           {live}")
     if local == live:
         print("MATCH: the local version is what's actually published.")
@@ -114,7 +114,7 @@ def _smoke_install(artifacts: list[str]) -> int:
         print(
             "For the full stdio handshake / cold-start deadlock check against a real "
             "install, point scripts/verify_mcp_stdio_no_deadlock.py's StdioServerParameters "
-            f"command at {entry} instead of src/mcp_server.py."
+            f"command at {entry} instead of src/qai_consultant/mcp/server.py."
         )
     return 0
 

@@ -25,13 +25,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
-sys.path.insert(0, str(APP_SRC))
 
 
 @pytest.fixture(scope="module")
 def agent():
     """Real QAIAgent for the LLM smoke test; SKIP (not ERROR) without live API keys."""
-    from agent import QAIAgent
+    from qai_consultant.rag.agent import QAIAgent
     try:
         return QAIAgent()
     except Exception as exc:
@@ -380,7 +379,7 @@ def test_risk_analyzer_imported_at_module_level():
     source = read_app_source()
     # Check it's a top-level import, not inside a function
     top_imports = source.split("def ")[0]  # everything before first function def
-    assert "from risk_analyzer import RiskAnalyzer" in top_imports, \
+    assert "from qai_consultant.generation.risk_analyzer import RiskAnalyzer" in top_imports, \
         "RiskAnalyzer should be imported at module level, not lazily"
     print("  PASS: RiskAnalyzer imported at module level")
 
@@ -466,9 +465,9 @@ def test_both_documents_generated_and_stored(agent):
     Smoke test: RiskAnalyzer + StrategyGenerator both produce non-empty output
     and the simulated session state stores all six keys correctly.
     """
-    from dialogue import ProjectContext
-    from risk_analyzer import RiskAnalyzer
-    from strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
+    from qai_consultant.core.dialogue import ProjectContext
+    from qai_consultant.generation.risk_analyzer import RiskAnalyzer
+    from qai_consultant.generation.strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 
     context = ProjectContext(
         project_name="SmokeTester",
@@ -528,8 +527,8 @@ def test_both_documents_generated_and_stored(agent):
 
 
 def test_risk_ledger_table_renders_for_well_formed_risk_register():
-    from risk_ledger import parse_risk_matrix
-    from components import risk_ledger_table_html
+    from qai_consultant.core.risk_ledger import parse_risk_matrix
+    from qai_consultant.ui.components import risk_ledger_table_html
 
     sample = """## Risk Matrix Overview
 
@@ -545,8 +544,8 @@ def test_risk_ledger_table_renders_for_well_formed_risk_register():
 
 
 def test_risk_ledger_table_is_skipped_gracefully_for_freeform_risk_register():
-    from risk_ledger import parse_risk_matrix
-    from components import risk_ledger_table_html
+    from qai_consultant.core.risk_ledger import parse_risk_matrix
+    from qai_consultant.ui.components import risk_ledger_table_html
 
     rows = parse_risk_matrix("Just some prose the LLM wrote, no table.")
     assert rows == []
@@ -554,7 +553,7 @@ def test_risk_ledger_table_is_skipped_gracefully_for_freeform_risk_register():
 
 
 def test_effort_data_confidence_renders_as_signal_ledger():
-    from components import signal_ledger_html
+    from qai_consultant.ui.components import signal_ledger_html
 
     html = signal_ledger_html("Confidence", 72, sub="Medium confidence")
     assert "72" in html
@@ -562,7 +561,7 @@ def test_effort_data_confidence_renders_as_signal_ledger():
 
 
 def test_review_dimension_scores_render_as_signal_ledgers():
-    from components import signal_ledger_html
+    from qai_consultant.ui.components import signal_ledger_html
 
     dimension_scores = {"structure_completeness": 92, "traceability": 70, "measurability": 45}
     for dim, score in dimension_scores.items():
@@ -571,14 +570,14 @@ def test_review_dimension_scores_render_as_signal_ledgers():
         assert str(score) in html
     # Sanity: the three thresholds actually land in different tiers, proving
     # the display isn't silently uniform.
-    from components import score_tier
+    from qai_consultant.ui.components import score_tier
     assert score_tier(92) == "pass"
     assert score_tier(70) == "hold"
     assert score_tier(45) == "fail"
 
 
 def test_results_analysis_flaky_count_tier_is_inverted():
-    from components import signal_ledger_html
+    from qai_consultant.ui.components import signal_ledger_html
 
     # Zero flaky tests is good news -> pass tier, not score_tier(0) == "fail".
     html_zero = signal_ledger_html("Flaky Tests", 0, tier="pass")
@@ -647,7 +646,7 @@ if __name__ == "__main__":
     print(f"{'=' * 68}")
 
     try:
-        from agent import QAIAgent
+        from qai_consultant.rag.agent import QAIAgent
         agent = QAIAgent()
         print("\n[TEST] Both documents generated and stored in session state")
         test_both_documents_generated_and_stored(agent)

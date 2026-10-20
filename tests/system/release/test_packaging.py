@@ -13,6 +13,7 @@ backend's package, too slow for every CI run.
 """
 
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -23,10 +24,16 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 _EXPECTED_PY_MODULES = {
-    "mcp_server.py", "dialogue.py", "effort_core.py", "local_index.py",
-    "telemetry.py", "prompts.py", "kb_config.py", "logger.py", "version.py",
-    "review_core.py", "results_core.py", "maturity_core.py", "risk_ledger.py",
-    "text_checks.py",
+    "qai_consultant/__init__.py",
+    "qai_consultant/mcp/__init__.py", "qai_consultant/mcp/server.py",
+    "qai_consultant/mcp/local_index.py", "qai_consultant/mcp/prompts.py",
+    "qai_consultant/core/__init__.py", "qai_consultant/core/dialogue.py",
+    "qai_consultant/core/effort_core.py", "qai_consultant/core/review_core.py",
+    "qai_consultant/core/results_core.py", "qai_consultant/core/maturity_core.py",
+    "qai_consultant/core/risk_ledger.py",
+    "qai_consultant/common/__init__.py", "qai_consultant/common/telemetry.py",
+    "qai_consultant/common/kb_config.py", "qai_consultant/common/logger.py",
+    "qai_consultant/common/version.py", "qai_consultant/common/text_checks.py",
 }
 
 # Must match pyproject.toml's [tool.setuptools.package-data] whitelist exactly —
@@ -108,6 +115,8 @@ def built_wheel(tmp_path_factory) -> Path:
     pytest.importorskip("build", reason="PyPA `build` is not installed; cannot build the wheel")
     pytest.importorskip("setuptools", reason="setuptools is not installed; cannot build the wheel")
     out_dir = tmp_path_factory.mktemp("qai_mcp_dist")
+    # A stale in-tree build/lib once leaked old flat modules into the wheel.
+    shutil.rmtree(REPO_ROOT / "build", ignore_errors=True)
     result = subprocess.run(
         [sys.executable, "-m", "build", "--wheel", "--no-isolation", "--outdir", str(out_dir)],
         cwd=REPO_ROOT, capture_output=True, text=True, timeout=180,
@@ -142,8 +151,13 @@ def test_wheel_excludes_forbidden_paths(wheel_namelist):
         assert matches == [], f"Wheel must not contain anything under '{fragment}': {matches}"
 
 
+def test_every_py_member_of_the_wheel_is_inside_the_package(wheel_namelist):
+    stray = [n for n in wheel_namelist if n.endswith(".py") and not n.startswith("qai_consultant/")]
+    assert stray == [], f"Only qai_consultant/ may carry .py files (no setup.py, no flat modules): {stray}"
+
+
 def test_wheel_contains_expected_py_modules(wheel_namelist):
-    found = {n for n in wheel_namelist if n.endswith(".py") and "/" not in n}
+    found = {n for n in wheel_namelist if n.endswith(".py") and n.startswith("qai_consultant/")}
     assert found == _EXPECTED_PY_MODULES
 
 
@@ -159,8 +173,10 @@ def test_wheel_does_not_ship_agent_or_app_modules(wheel_namelist):
         "effort_estimator.py", "risk_analyzer.py",
         "strategy_generator.py", "test_plan_generator.py", "ai_disclosure.py",
     }
-    found = {n for n in wheel_namelist if n.endswith(".py") and "/" not in n}
-    overlap = found & forbidden
+    found = {n for n in wheel_namelist if n.endswith(".py")}
+    app_tiers = ("rag", "generation", "compliance", "ui", "observability")
+    overlap = {n for n in found if n.rsplit("/", 1)[-1] in forbidden
+               or any(n.startswith(f"qai_consultant/{t}/") for t in app_tiers)}
     assert overlap == set(), f"Wheel must not ship: {overlap}"
 
 
@@ -191,4 +207,4 @@ def test_entry_point_content(built_wheel):
     with zipfile.ZipFile(built_wheel) as z:
         entry_points_file = next(n for n in z.namelist() if n.endswith("entry_points.txt"))
         content = z.read(entry_points_file).decode("utf-8")
-    assert "qai-consultant-mcp = mcp_server:main" in content
+    assert "qai-consultant-mcp = qai_consultant.mcp.server:main" in content

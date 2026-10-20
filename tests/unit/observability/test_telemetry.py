@@ -1,5 +1,5 @@
 """
-Tests for src/telemetry.py — default-on (opt-out) MCP server usage telemetry.
+Tests for src/qai_consultant/common/telemetry.py — default-on (opt-out) MCP server usage telemetry.
 
 Covers the engineering contract from MCP_PLAN.md section 7 (as revised in
 v3.7.0): on unless QAI_TELEMETRY=0 / DO_NOT_TRACK=1, fire-and-forget (never blocks/raises on the caller's
@@ -18,9 +18,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import telemetry
+from qai_consultant.common import telemetry
 
 
 # ── is_enabled(): on by default, opt-out ───────────────────────────────────────
@@ -70,7 +69,7 @@ def test_startup_notice_silent_when_opted_out(monkeypatch, capsys):
 def test_track_tool_called_spawns_no_thread_when_disabled(monkeypatch):
     monkeypatch.setenv("QAI_TELEMETRY", "0")
     threads_before = threading.active_count()
-    with patch("telemetry._send") as mock_send:
+    with patch("qai_consultant.common.telemetry._send") as mock_send:
         telemetry.track_tool_called("retrieve_qa_knowledge", True, 12.3)
         time.sleep(0.05)  # give a stray thread a chance to appear, if one did
         mock_send.assert_not_called()
@@ -81,7 +80,7 @@ def test_track_tool_called_spawns_no_thread_when_disabled(monkeypatch):
 
 def test_track_server_start_fires_when_enabled(monkeypatch):
     monkeypatch.setenv("QAI_TELEMETRY", "1")
-    with patch("telemetry._send") as mock_send:
+    with patch("qai_consultant.common.telemetry._send") as mock_send:
         telemetry.track_server_start()
         _join_all_daemon_threads()
         mock_send.assert_called_once()
@@ -92,7 +91,7 @@ def test_track_server_start_fires_when_enabled(monkeypatch):
 
 def test_track_tool_called_fires_when_enabled(monkeypatch):
     monkeypatch.setenv("QAI_TELEMETRY", "1")
-    with patch("telemetry._send") as mock_send:
+    with patch("qai_consultant.common.telemetry._send") as mock_send:
         telemetry.track_tool_called("retrieve_qa_knowledge", True, 42.567, k=5, category="Standard")
         _join_all_daemon_threads()
         mock_send.assert_called_once()
@@ -107,7 +106,7 @@ def test_track_tool_called_fires_when_enabled(monkeypatch):
 
 def test_track_tool_called_omits_k_and_category_when_not_given(monkeypatch):
     monkeypatch.setenv("QAI_TELEMETRY", "1")
-    with patch("telemetry._send") as mock_send:
+    with patch("qai_consultant.common.telemetry._send") as mock_send:
         telemetry.track_tool_called("estimate_qa_effort", False, 5.0)
         _join_all_daemon_threads()
         _, properties = mock_send.call_args[0]
@@ -119,7 +118,7 @@ def test_track_tool_called_drops_unknown_category(monkeypatch):
     """category arrives before LocalIndex validates it, so free text a client
     puts there must never be sent (module contract: no free-text)."""
     monkeypatch.setenv("QAI_TELEMETRY", "1")
-    with patch("telemetry._send") as mock_send:
+    with patch("qai_consultant.common.telemetry._send") as mock_send:
         telemetry.track_tool_called(
             "retrieve_qa_knowledge", False, 1.0, k=5, category="payments service for ACME Corp",
         )
@@ -132,7 +131,7 @@ def test_track_tool_called_drops_unknown_category(monkeypatch):
 def test_track_tool_called_ignores_unhashable_category(monkeypatch):
     """A client can send a list as category; it must not crash the tool."""
     monkeypatch.setenv("QAI_TELEMETRY", "1")
-    with patch("telemetry._send") as mock_send:
+    with patch("qai_consultant.common.telemetry._send") as mock_send:
         telemetry.track_tool_called("retrieve_qa_knowledge", False, 1.0, category=["Standard"])
         _join_all_daemon_threads()
         _, properties = mock_send.call_args[0]
@@ -149,7 +148,7 @@ def _join_all_daemon_threads(timeout: float = 2.0) -> None:
 
 def test_send_swallows_network_errors(monkeypatch):
     monkeypatch.setenv("QAI_TELEMETRY", "1")
-    with patch("telemetry._urllib_request.urlopen", side_effect=OSError("network unreachable")):
+    with patch("qai_consultant.common.telemetry._urllib_request.urlopen", side_effect=OSError("network unreachable")):
         telemetry._send("tool_called", {"tool": "retrieve_qa_knowledge"})  # must not raise
 
 
@@ -166,7 +165,7 @@ def test_fire_and_forget_does_not_block_caller(monkeypatch):
     def _slow_send(*_args, **_kwargs):
         time.sleep(1.0)
 
-    with patch("telemetry._send", side_effect=_slow_send):
+    with patch("qai_consultant.common.telemetry._send", side_effect=_slow_send):
         start = time.monotonic()
         telemetry.track_tool_called("list_kb_sources", True, 1.0)
         elapsed = time.monotonic() - start
@@ -195,7 +194,7 @@ def test_payload_shape_has_no_unexpected_keys(monkeypatch):
         captured["data"] = json.loads(req.data.decode("utf-8"))
         return MagicMock()
 
-    with patch("telemetry._urllib_request.urlopen", side_effect=_fake_urlopen):
+    with patch("qai_consultant.common.telemetry._urllib_request.urlopen", side_effect=_fake_urlopen):
         telemetry._send("tool_called", {"tool": "retrieve_qa_knowledge", "success": True,
                                           "duration_ms": 10.0, "k": 5, "category": "Standard"})
 
@@ -216,7 +215,7 @@ def test_payload_never_contains_query_text_or_free_text_fields(monkeypatch):
         captured["raw"] = req.data.decode("utf-8")
         return MagicMock()
 
-    with patch("telemetry._urllib_request.urlopen", side_effect=_fake_urlopen):
+    with patch("qai_consultant.common.telemetry._urllib_request.urlopen", side_effect=_fake_urlopen):
         telemetry._send("tool_called", {"tool": "retrieve_qa_knowledge", "success": True, "duration_ms": 1.0})
 
     raw = captured["raw"]
@@ -232,7 +231,7 @@ def test_distinct_id_is_a_per_process_uuid_and_nothing_is_written_to_disk(monkey
         captured.append(json.loads(req.data.decode("utf-8")))
         return MagicMock()
 
-    with patch("telemetry._urllib_request.urlopen", side_effect=_fake_urlopen),             patch("pathlib.Path.write_text") as mock_write, patch("builtins.open") as mock_open:
+    with patch("qai_consultant.common.telemetry._urllib_request.urlopen", side_effect=_fake_urlopen),             patch("pathlib.Path.write_text") as mock_write, patch("builtins.open") as mock_open:
         telemetry._send("server_start", {})
         telemetry._send("server_start", {})
     mock_write.assert_not_called()

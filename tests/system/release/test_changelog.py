@@ -13,9 +13,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from version import __version__
+from qai_consultant.common.version import __version__
 
 CHANGELOG_PATH = REPO_ROOT / "CHANGELOG.md"
 
@@ -56,7 +55,7 @@ def test_changelog_top_version_matches_version_py():
 
 
 def test_pyproject_version_matches_version_py():
-    """pyproject.toml's [project] version must match src/version.py's
+    """pyproject.toml's [project] version must match src/qai_consultant/common/version.py's
     __version__ -- these were kept in sync by hand 3 times in one day
     (v3.1.1/3.1.2/3.1.3) with nothing catching a slip."""
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")

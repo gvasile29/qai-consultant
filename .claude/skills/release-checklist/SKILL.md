@@ -1,14 +1,14 @@
 ---
 name: release-checklist
-description: The exact files to update together whenever a version bump ships in this repo (src/version.py, pyproject.toml, CHANGELOG.md, README.md, README_MCP.md, CLAUDE.md). Use whenever bumping __version__ or preparing a release PR.
+description: The exact files to update together whenever a version bump ships in this repo (src/qai_consultant/common/version.py, pyproject.toml, CHANGELOG.md, README.md, README_MCP.md, CLAUDE.md). Use whenever bumping __version__ or preparing a release PR.
 ---
 
 # Release Checklist (QAI Consultant)
 
-**Whenever a version bump ships (a new `__version__` in `src/version.py`), update all of the following together in the same change — do this automatically as part of the release, don't wait to be asked file-by-file:**
+**Whenever a version bump ships (a new `__version__` in `src/qai_consultant/common/version.py`), update all of the following together in the same change — do this automatically as part of the release, don't wait to be asked file-by-file:**
 
-- `src/version.py` — `__version__` and `__release_date__`
-- `pyproject.toml` — `[project] version`, kept in lockstep with `src/version.py` (`tests/system/release/test_packaging.py` doesn't check this, but drift here breaks the published wheel's version)
+- `src/qai_consultant/common/version.py` — `__version__` and `__release_date__`
+- `pyproject.toml` — `[project] version`, kept in lockstep with `src/qai_consultant/common/version.py` (`tests/system/release/test_packaging.py` doesn't check this, but drift here breaks the published wheel's version)
 - `CHANGELOG.md` — new `## [X.Y.Z] - YYYY-MM-DD` entry at the top, in end-user terms (Keep a Changelog format, see existing entries for tone)
 - `README.md` (root) — version badge, intro paragraph if the feature set changed, MCP tools table if the tool surface changed, Roadmap section
 - `README_MCP.md` — description line + tools table if the MCP tool surface changed
@@ -26,7 +26,7 @@ bash .claude/skills/claude-md-hygiene/check.sh
 
 Keep new entries terse (one line for Roadmap, rule + one-line why + doc link for Gotchas) and push real narrative into `CHANGELOG.md`/`docs/postmortems/` instead — this is what keeps CLAUDE.md from bloating back up release over release.
 
-**If this release changes `qai-consultant-mcp`'s published tool surface** (any `src/` module in `pyproject.toml`'s `py-modules`/knowledge base whitelist), run before asking for the human-gated `twine upload`:
+**If this release changes `qai-consultant-mcp`'s published tool surface** (any module under `src/qai_consultant/{common,core,mcp}/` or the knowledge base whitelist), run before asking for the human-gated `twine upload`:
 
 ```bash
 python scripts/mcp_release_check.py --preflight       # tests/lint/mypy/bandit/build/twine-check/smoke-install
@@ -35,7 +35,7 @@ python scripts/mcp_release_check.py --preflight       # tests/lint/mypy/bandit/b
 and after the upload actually happens:
 
 ```bash
-python scripts/mcp_release_check.py --live-version     # confirms PyPI's info.version really matches src/version.py
+python scripts/mcp_release_check.py --live-version     # confirms PyPI's info.version really matches src/qai_consultant/common/version.py
 ```
 
 The live-version check exists because a version bump merged to `master` is not the same as a version published to PyPI — see the matching Gotcha in CLAUDE.md; this is what would have caught v3.5.0 sitting unpublished for days.

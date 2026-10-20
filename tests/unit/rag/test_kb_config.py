@@ -1,5 +1,5 @@
 """
-Tests for src/kb_config.py — shared knowledge-base configuration + drift guards.
+Tests for src/qai_consultant/common/kb_config.py — shared knowledge-base configuration + drift guards.
 
 kb_config.py is the single source of truth for the embedding model, chunking
 parameters, and the folder-to-category mapping, shared by agent.py,
@@ -14,18 +14,17 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import kb_config
-import agent
-import ingest
+from qai_consultant.common import kb_config
+from qai_consultant.rag import agent
+from qai_consultant.rag import ingest
 
 
 def test_kb_config_has_no_third_party_imports():
     """kb_config.py must stay dependency-free (stdlib only) — the MCP server
     path cannot import pinecone (ingest.py) or Streamlit-adjacent code
     (agent.py), and this module is the one place both sides can share."""
-    source = (SRC_DIR / "kb_config.py").read_text(encoding="utf-8")
+    source = (SRC_DIR / "qai_consultant" / "common" / "kb_config.py").read_text(encoding="utf-8")
     import ast
     tree = ast.parse(source)
     stdlib_allowed = {"pathlib"}

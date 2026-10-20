@@ -1,5 +1,5 @@
 """
-Tests for src/effort_core.py — the deterministic effort-estimation core.
+Tests for src/qai_consultant/core/effort_core.py — the deterministic effort-estimation core.
 
 effort_core.py was extracted out of EffortEstimator (v3.0 step 2) so the
 MCP server's estimate_qa_effort tool can call compute_estimation() directly
@@ -9,7 +9,7 @@ dependencies. Covers:
 1. Import-graph isolation: importing effort_core must never load agent,
    pinecone, mistralai, openai, or streamlit — the property this whole
    refactor exists for. (Before this refactor, evals/estimate_integrity.py
-   had to install a fake sys.modules["agent"] stub just to import
+   had to install a fake sys.modules["qai_consultant.rag.agent"] stub just to import
    effort_estimator.py; effort_core.py needs no such trick.)
 2. Golden-input parity: parse_duration()/parse_team_size() against the
    same cases evals/golden.jsonl uses for the release-gate checks.
@@ -25,11 +25,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import effort_core
-from dialogue import ProjectContext
-from effort_core import EstimationData, compute_estimation
+from qai_consultant.core import effort_core
+from qai_consultant.core.dialogue import ProjectContext
+from qai_consultant.core.effort_core import EstimationData, compute_estimation
 
 
 # ── 1. Import-graph isolation ───────────────────────────────────────────────────
@@ -39,8 +38,8 @@ def test_importing_effort_core_pulls_in_no_agent_or_llm_modules():
     agent.py imported by other test modules) so sys.modules starts clean."""
     script = (
         "import sys; sys.path.insert(0, r'" + str(SRC_DIR) + "'); "
-        "import effort_core; "
-        "forbidden = ['agent', 'pinecone', 'mistralai', 'openai', 'streamlit']; "
+        "from qai_consultant.core import effort_core; "
+        "forbidden = ['qai_consultant.rag.agent', 'qai_consultant.rag', 'qai_consultant.generation', 'qai_consultant.ui', 'pinecone', 'mistralai', 'openai', 'streamlit']; "
         "leaked = [m for m in forbidden if m in sys.modules]; "
         "print(','.join(leaked))"
     )
@@ -60,8 +59,8 @@ def test_importing_effort_core_pulls_in_no_agent_or_llm_modules():
 def test_effort_core_module_does_not_import_agent_by_name():
     """Static check on effort_core.py's own source (defense in depth alongside
     the subprocess check above, which also catches indirect/transitive leaks)."""
-    source = (SRC_DIR / "effort_core.py").read_text(encoding="utf-8")
-    for forbidden in ("import agent", "from agent"):
+    source = (SRC_DIR / "qai_consultant" / "core" / "effort_core.py").read_text(encoding="utf-8")
+    for forbidden in ("import agent", "from agent", "qai_consultant.rag"):
         assert forbidden not in source, (
             f"effort_core.py contains '{forbidden}' — it must have zero agent.py "
             "dependency so the MCP server path never pulls in Pinecone/LLM/Streamlit."
@@ -134,8 +133,7 @@ def test_effort_estimator_estimate_matches_compute_estimation_directly():
     """EffortEstimator.estimate()'s returned EstimationData must be identical
     (field-for-field) to calling compute_estimation() directly — proves the
     'extract-and-delegate, not reimplementation' rule actually holds."""
-    sys.path.insert(0, str(SRC_DIR))
-    from effort_estimator import EffortEstimator
+    from qai_consultant.generation.effort_estimator import EffortEstimator
 
     class _DummyAgent:
         def ask(self, *_args, **_kwargs):
@@ -151,8 +149,7 @@ def test_effort_estimator_estimate_matches_compute_estimation_directly():
 
 
 def test_effort_estimator_estimate_matches_compute_estimation_with_risk_register():
-    sys.path.insert(0, str(SRC_DIR))
-    from effort_estimator import EffortEstimator
+    from qai_consultant.generation.effort_estimator import EffortEstimator
 
     class _DummyAgent:
         def ask(self, *_args, **_kwargs):

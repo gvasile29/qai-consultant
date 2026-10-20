@@ -37,7 +37,7 @@ def _skip_all(note: str) -> list[Metric]:
 def run_all() -> list[Metric]:
     try:
         ensure_src_on_path()
-        from local_index import LocalIndex  # noqa: PLC0415
+        from qai_consultant.mcp.local_index import LocalIndex  # noqa: PLC0415
         index = LocalIndex()
     except Exception as exc:  # noqa: BLE001 — missing deps, uncached model, offline download, torch
         return _skip_all(f"SKIP (index unavailable: {type(exc).__name__})")

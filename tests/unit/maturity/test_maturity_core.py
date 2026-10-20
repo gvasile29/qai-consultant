@@ -1,5 +1,5 @@
 """
-Tests for src/maturity_core.py — deterministic TMMi process-maturity rubric
+Tests for src/qai_consultant/core/maturity_core.py — deterministic TMMi process-maturity rubric
 + conditional EU AI Act Articles 9-15 readiness dimension (v3.5).
 
 Pure stdlib module: mechanical regex/keyword checks. No LLM anywhere in
@@ -11,9 +11,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from maturity_core import (  # noqa: E402
+from qai_consultant.core.maturity_core import (  # noqa: E402
     MAX_INPUT_CHARS,
     MIN_CONTENT_CHARS,
     MaturityFinding,
@@ -171,7 +170,7 @@ def test_ai_act_note_present_when_relevant_and_empty_when_not():
     ai_result = assess_maturity(_AI_RELEVANT_TEXT)
     assert ai_result.ai_act_relevant is True
     assert ai_result.ai_act_note != ""
-    from maturity_core import _AI_ACT_NOTE  # noqa: PLC0415
+    from qai_consultant.core.maturity_core import _AI_ACT_NOTE  # noqa: PLC0415
     assert ai_result.ai_act_note == _AI_ACT_NOTE
 
     non_ai_result = assess_maturity(_NON_AI_TEXT)

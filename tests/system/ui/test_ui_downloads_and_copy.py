@@ -10,7 +10,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 REPO = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO / "src"))
 
 APP = (REPO / "src" / "app.py").read_text(encoding="utf-8")
 TOKENS = {k: "#000" for k in ("surface", "line", "ink", "ink_dim", "accent", "pass_", "hold", "fail")}
@@ -46,7 +45,7 @@ class _State(dict):
 
 
 def _run_apply_template(state, key):
-    from templates import TEMPLATES
+    from qai_consultant.generation.templates import TEMPLATES
 
     ns = {"st": SimpleNamespace(session_state=state), "TEMPLATES": TEMPLATES}
     exec(textwrap.dedent(_func_source("_apply_template")), ns)  # noqa: S102
@@ -81,7 +80,7 @@ def test_generate_another_keeps_answers_and_start_over_clears_them():
 
 
 def test_time_estimate_is_centralized_and_honest():
-    import components
+    from qai_consultant.ui import components
 
     assert components.GENERATION_TIME_ESTIMATE == "~5-10 min"
     html = components.build_landing_deliverables_html(TOKENS)
@@ -104,7 +103,7 @@ def test_mcp_panel_copy_is_accurate_and_discloses_telemetry():
 
 
 def test_deliverable_cards_have_uniform_style():
-    import components
+    from qai_consultant.ui import components
 
     css = components.build_landing_deliverables_html(TOKENS)
     card_delays = [float(d) for d in re.findall(r"\.pom-card:nth-child\(\d\) \{ animation-delay: ([\d.]+)s", css)]

@@ -1,5 +1,5 @@
 """
-Tests for src/local_index.py — the MCP server's local, keyless KB index.
+Tests for src/qai_consultant/mcp/local_index.py — the MCP server's local, keyless KB index.
 
 Uses a small synthetic knowledge_base/ (tmp_path) and a deterministic fake
 embedder (bag-of-words over a fixed vocabulary) instead of the real fastembed
@@ -18,9 +18,8 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from local_index import LocalIndex, VALID_CATEGORIES, _kb_content_hash
+from qai_consultant.mcp.local_index import LocalIndex, VALID_CATEGORIES, _kb_content_hash
 
 
 _VOCAB = ["apple", "banana", "cherry", "risk", "testing", "priority", "gdpr", "security"]
@@ -55,7 +54,7 @@ def _build_index(kb_dir: Path, cache_dir: Path) -> LocalIndex:
     lazy now (see local_index.py's _ensure_built() docstring), but these
     tests are about corpus/cache mechanics, not the lazy-build timing
     itself, so force it here to keep their original intent."""
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
         index = LocalIndex(kb_dir=kb_dir, cache_dir=cache_dir)
         index._ensure_built()
         return index
@@ -73,7 +72,7 @@ def test_short_document_becomes_one_chunk(tmp_path):
 
 
 def test_long_document_splits_into_multiple_chunks(tmp_path):
-    from local_index import CHUNK_SIZE, CHUNK_OVERLAP
+    from qai_consultant.mcp.local_index import CHUNK_SIZE, CHUNK_OVERLAP
     kb = tmp_path / "kb"
     paragraph = "This paragraph discusses testing priority and risk. " * 20  # ~1100 chars
     long_text = "# Long Doc\n\n" + "\n\n".join([paragraph] * 5)  # well over CHUNK_SIZE
@@ -160,12 +159,12 @@ def test_cache_round_trip_avoids_recomputing_embeddings(tmp_path):
     _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
 
     fake1 = _FakeEmbeddings()
-    with patch("local_index._FastEmbedEmbeddings", return_value=fake1):
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=fake1):
         idx1 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx1._ensure_built()
     assert len(list(cache_dir.glob("*.json"))) == 1, "First construction must write a cache file"
 
-    with patch("local_index._FastEmbedEmbeddings") as mock_cls:
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings") as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()
         mock_cls.assert_not_called()  # unchanged KB must load from cache, not re-embed
@@ -185,7 +184,7 @@ def test_cache_invalidates_when_kb_file_changes(tmp_path):
 
     _write_kb(kb, {"standards/std.md": "# Std\n\nCHANGED content about testing priority"})
 
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()
         assert mock_cls.called, "An edited KB file must invalidate the cache and trigger a rebuild"
@@ -220,7 +219,7 @@ def test_corrupted_cache_falls_back_to_rebuild(tmp_path):
     assert len(cache_files) == 1
     cache_files[0].write_text("{ this is not valid json !!!", encoding="utf-8")
 
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()  # must not raise
 
@@ -242,7 +241,7 @@ def test_cache_with_wrong_embedding_model_falls_back_to_rebuild(tmp_path):
     payload["embedding_model"] = "some/other-model"
     cache_files[0].write_text(json.dumps(payload), encoding="utf-8")
 
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()
         assert mock_cls.called, "A cache built with a different embedding model must not be trusted"
@@ -251,7 +250,7 @@ def test_cache_with_wrong_embedding_model_falls_back_to_rebuild(tmp_path):
 
 
 def test_cache_format_version_is_2():
-    from local_index import _CACHE_FORMAT_VERSION
+    from qai_consultant.mcp.local_index import _CACHE_FORMAT_VERSION
     assert _CACHE_FORMAT_VERSION == 2, (
         "Bumped for the fastembed backend switch — an old format-1 cache (built "
         "with sentence-transformers vectors) must never be read as if it were "
@@ -272,7 +271,7 @@ def test_cache_written_under_old_format_version_is_treated_as_miss(tmp_path):
     payload["format_version"] = 1  # simulate a pre-upgrade, sentence-transformers-era cache
     cache_files[0].write_text(json.dumps(payload), encoding="utf-8")
 
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()) as mock_cls:
         idx2 = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         idx2._ensure_built()
         assert mock_cls.called, "A format-1 cache must not be trusted after the format-2 bump"
@@ -321,7 +320,7 @@ def test_eviction_failure_does_not_break_index_construction(tmp_path, monkeypatc
     cache_dir = tmp_path / "cache"
     _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
 
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
         idx = LocalIndex(kb_dir=kb, cache_dir=cache_dir)
         with patch.object(LocalIndex, "_evict_stale_cache_files", side_effect=OSError("boom")):
             idx._ensure_built()  # must not raise
@@ -334,7 +333,7 @@ def test_eviction_failure_does_not_break_index_construction(tmp_path, monkeypatc
 # ── Query-vector LRU cache bound (architecture-review Minor finding #6) ────────────
 
 def test_qcache_evicts_least_recently_used_entry_past_the_cap(tmp_path):
-    from local_index import _MAX_QCACHE_ENTRIES
+    from qai_consultant.mcp.local_index import _MAX_QCACHE_ENTRIES
 
     kb = tmp_path / "kb"
     _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
@@ -353,7 +352,7 @@ def test_qcache_evicts_least_recently_used_entry_past_the_cap(tmp_path):
 
 
 def test_qcache_hit_refreshes_recency_and_protects_from_eviction(tmp_path):
-    from local_index import _MAX_QCACHE_ENTRIES
+    from qai_consultant.mcp.local_index import _MAX_QCACHE_ENTRIES
 
     kb = tmp_path / "kb"
     _write_kb(kb, {"standards/std.md": "# Std\n\nrisk testing content"})
@@ -399,8 +398,32 @@ def test_empty_kb_does_not_crash(tmp_path):
 
 
 def test_match_strength_labels_and_weak_note():
-    import local_index as li
+    from qai_consultant.mcp import local_index as li
 
     assert [li.match_strength(s) for s in (0.7, 0.55, 0.456, 0.40, 0.2)] == [
         "strong", "strong", "moderate", "moderate", "weak",
     ]
+
+
+def test_installed_layout_resolves_knowledge_base_beside_the_package(tmp_path):
+    """In an installed wheel the module sits at site/qai_consultant/mcp/local_index.py
+    and knowledge_base/ is a top-level sibling of qai_consultant/ (two levels up)."""
+    import importlib.util
+    import shutil
+
+    site = tmp_path / "site"
+    mod_dir = site / "qai_consultant" / "mcp"
+    mod_dir.mkdir(parents=True)
+    (site / "knowledge_base").mkdir()
+    copy = mod_dir / "local_index.py"
+    shutil.copy(SRC_DIR / "qai_consultant" / "mcp" / "local_index.py", copy)
+
+    spec = importlib.util.spec_from_file_location("_installed_local_index_copy", copy)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
+
+    assert module._DEFAULT_KB_DIR == (site / "knowledge_base").resolve()

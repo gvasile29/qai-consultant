@@ -1,12 +1,11 @@
-"""Tests for src/theme.py -- the Calibration Bench CSS token system."""
+"""Tests for src/qai_consultant/ui/theme.py -- the Calibration Bench CSS token system."""
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from theme import LIGHT_TOKENS, DARK_TOKENS, build_css  # noqa: E402
+from qai_consultant.ui.theme import LIGHT_TOKENS, DARK_TOKENS, build_css  # noqa: E402
 
 _REQUIRED_KEYS = {
     "surface", "surface_2", "ink", "ink_dim", "line",

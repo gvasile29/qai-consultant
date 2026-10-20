@@ -1,0 +1,246 @@
+"""
+QAI Consultant — Risk Analyzer
+Analyzes project context and generates a structured Risk Register
+with Likelihood × Impact matrix and concrete mitigations.
+
+Output is a markdown document saved to output/risk_register_*.md.
+The Risk Register is also passed to EffortEstimator to calculate risk buffers.
+"""
+
+import os
+import re
+from pathlib import Path
+from datetime import datetime
+from typing import Optional
+from qai_consultant.rag.agent import MISTRAL_MODEL, QAIAgent, RAG_K_GENERATION
+from qai_consultant.compliance.ai_disclosure import build_front_matter, with_ai_footer
+from qai_consultant.core.dialogue import ProjectContext
+from qai_consultant.compliance.source_labels import build_source_labels
+from qai_consultant.common.logger import get_logger
+from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
+
+logger = get_logger(__name__)
+
+# ── System Prompt ──────────────────────────────────────────────────────────────
+
+RISK_SYSTEM_PROMPT = """You are QAI Consultant, a senior QA Architect and Risk Management expert.
+You analyze software projects and identify testing risks based on:
+- Project type, tech stack, and team constraints
+- Known industry risks for specific domains
+- Compliance and regulatory requirements
+- Team size and experience relative to project complexity
+
+Your risk analysis is:
+- Specific to the project, never generic
+- Honest about likelihood and impact
+- Actionable, every risk has a concrete mitigation
+- Prioritized, Critical risks are called out clearly
+"""
+
+# ── Risk Prompt Builder ────────────────────────────────────────────────────────
+
+def build_risk_prompt(context: ProjectContext, knowledge_context: str, results_summary: Optional[str] = None) -> str:
+    execution_data_block = ""
+    if results_summary:
+        execution_data_block = f"""
+MEASURED EXECUTION DATA (deterministic, from the user's own attached test results,
+not from the knowledge base): treat this as direct evidence for specific risks (e.g.
+a flaky test suite is evidence of an "unreliable regression signal" risk; ever-failing
+tests are evidence of an untested/broken area; a failure cluster is evidence of a
+systemic root cause). Cite this evidence as [Execution Data], never as [Source N].
+{results_summary}
+"""
+    return f"""
+Analyze the following project and generate a comprehensive Risk Register for QA testing.
+
+PROJECT CONTEXT:
+{context.to_summary()}
+
+RELEVANT QA KNOWLEDGE BASE:
+{knowledge_context}
+{execution_data_block}
+{GROUNDING_RULES}
+{CITATION_RULES}
+{GENERATION_RULES}
+Generate a Risk Register using EXACTLY this structure:
+
+# Risk Register: {context.project_name}
+
+## Executive Summary
+2-3 sentences summarizing the overall risk profile of this project.
+State clearly if the project is Low / Medium / High / Critical risk overall.
+
+## Risk Matrix Overview
+
+Provide a summary table:
+
+| Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |
+|---|---|---|---|---|---|
+| R01 | ... | High/Medium/Low | High/Medium/Low | Critical/High/Medium/Low | 1/2/3/... |
+
+(List the 5-7 MOST CRITICAL risks, sorted by priority, a shorter register where every
+listed risk gets full detail below beats a longer one that runs out of space partway through)
+
+## Detailed Risk Analysis
+
+For each risk listed in the matrix above, provide:
+
+### R01: [Risk Title]
+- **Category:** [Technical / Process / Compliance / Resource / External]
+- **Description:** What is the risk and why does it exist for this project?
+- **Likelihood:** High / Medium / Low: explain why
+- **Impact:** High / Medium / Low: explain what happens if it materializes
+- **Risk Level:** Critical / High / Medium / Low
+- **Early Warning Signs:** What signals indicate this risk is materializing?
+- **Mitigation Strategy:** Concrete, specific actions to reduce this risk
+- **Contingency Plan:** What to do if the risk materializes despite mitigation
+
+## Risk-Based Testing Priorities
+
+Based on the risk analysis above, testing effort should be allocated as follows:
+
+| Priority | Area to Test | Risk Level | Recommended Test Types |
+|---|---|---|---|
+| 1 | ... | Critical | ... |
+| 2 | ... | High | ... |
+
+## Recommendations for QA Strategy
+
+Top 3-5 specific recommendations for this project based on the risk profile.
+
+Be specific, practical, and tailored to this exact project context.
+Reference relevant standards (ISO 26262, OWASP, ISTQB) where applicable.
+"""
+
+
+def append_execution_data_appendix(risk_register: str, results_summary: Optional[str]) -> str:
+    """Deterministically append the raw execution-data summary as an
+    appendix, so the saved Risk Register is self-contained regardless of
+    whether/how the LLM chose to reference it in the body."""
+    if not results_summary:
+        return risk_register
+    return f"{risk_register.rstrip()}\n\n## Appendix: Measured Execution Data\n\n{results_summary}\n"
+
+
+# ── Risk Analyzer ──────────────────────────────────────────────────────────────
+
+class RiskAnalyzer:
+    """
+    Analyzes project context and generates a structured Risk Register.
+
+    Uses RAG to retrieve risk-relevant knowledge (OWASP, ISO 26262, etc.)
+    then generates a markdown Risk Register via LLM (Mistral API) with:
+    - Risk matrix (Likelihood × Impact)
+    - Mitigation strategies per risk
+    - Risk-based testing priorities
+    """
+
+    def __init__(self, agent: QAIAgent):
+        """
+        Args:
+            agent: Initialized QAIAgent with Pinecone and LLM connections.
+        """
+        self.agent = agent
+
+    def analyze(self, context: ProjectContext, chunks: Optional[list] = None, results_summary: Optional[str] = None) -> tuple:
+        """
+        Analyze project risks using RAG + LLM and generate a Risk Register.
+
+        Args:
+            context: Collected ProjectContext from DialogueManager.
+            chunks: Optional pre-fetched knowledge chunks. If None, retrieves
+                    from Pinecone using the risk-focused query. Pass pre-fetched
+                    chunks to enable parallel RAG retrieval in the pipeline.
+            results_summary: Optional deterministic test-execution-data summary
+                    (results_core.summarize_for_prompt()) — when given, grounds
+                    the LLM's risk analysis in real pass/fail data and is
+                    appended verbatim as an appendix so the saved document is
+                    self-contained. Absence changes nothing (v3.0 behavior).
+
+        Returns:
+            Tuple of (risk_register_markdown: str, sources: list[str]).
+        """
+        logger.info(f"Analyzing risks for '{context.project_name}'...")
+        if chunks is None:
+            risk_query = self._build_risk_query(context)
+            chunks = self.agent.retrieve_knowledge(risk_query, k=RAG_K_GENERATION)
+        knowledge_context = self.agent.format_knowledge_context(chunks)
+        logger.info(f"Retrieved {len(chunks)} risk-relevant chunks")
+
+        prompt = build_risk_prompt(context, knowledge_context, results_summary=results_summary)
+        risk_register = self.agent.ask(prompt, system_prompt=RISK_SYSTEM_PROMPT)
+        risk_register = risk_register or ""
+        risk_register = append_execution_data_appendix(risk_register, results_summary)
+        logger.info(f"Risk Register generated ({len(risk_register)} chars)")
+
+        sources = build_source_labels(chunks)
+
+        return risk_register, sources
+
+    def _build_risk_query(self, context: ProjectContext) -> str:
+        """Build a risk-focused RAG query from project context."""
+        parts = [
+            f"risk based testing {context.project_type}",
+            f"testing risks {context.methodology}",
+        ]
+        if context.compliance_requirements and context.compliance_requirements.lower() not in ["no", "none", "n/a", ""]:
+            parts.append(f"compliance risks {context.compliance_requirements}")
+        if context.known_risks:
+            parts.append(f"risk analysis {context.known_risks}")
+        if context.tech_stack:
+            parts.append(f"testing risks {context.tech_stack}")
+        return " | ".join(parts)
+
+    def save(self, risk_register: str, context: ProjectContext, output_dir: Optional[Path] = None) -> Path:
+        """Save the generated Risk Register to a markdown file."""
+        if output_dir is None:
+            output_dir = Path(__file__).resolve().parents[3] / "output"
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = re.sub(r'[^\w\-.]', '_', context.project_name.replace(' ', '_'))
+        filename = f"risk_register_{safe_name}_{timestamp}.md"
+        output_path = output_dir / filename
+
+        front_matter = build_front_matter("Risk Register", context.project_name, MISTRAL_MODEL)
+        full_content = f"""{front_matter}
+
+{with_ai_footer(risk_register)}
+"""
+        output_path.write_text(full_content, encoding="utf-8")
+        return output_path
+
+
+# ── Quick test ─────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    from qai_consultant.core.dialogue import DialogueManager
+
+    agent = QAIAgent()
+    analyzer = RiskAnalyzer(agent)
+
+    dialogue = DialogueManager()
+    print("QAI Consultant — Risk Analyzer Test")
+    print("=" * 50)
+
+    while dialogue.has_next_question():
+        question = dialogue.get_next_question()
+        assert question is not None
+        current, total = dialogue.get_progress()
+        print(f"[{current}/{total}] {question['question']}")
+        print(f"  Hint: {question['hint']}")
+        answer = input("  Your answer: ")
+        dialogue.submit_answer(answer)
+
+    context = dialogue.get_context()
+    print("\n" + "=" * 50)
+    print("✅ Analyzing risks...\n")
+
+    risk_register, sources = analyzer.analyze(context)
+    output_path = analyzer.save(risk_register, context)
+
+    print(risk_register)
+    print("\n📚 Sources used:")
+    for s in sources:
+        print(f"  - {s}")
+    print(f"\n💾 Risk Register saved to: {output_path}")

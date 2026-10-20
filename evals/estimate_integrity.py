@@ -35,7 +35,7 @@ def _load_target():
 
     # ALWAYS install the stub (don't gate on "agent" not in sys.modules): the keyless
     # gate must not reach the real Pinecone/LLM client even if a prior import cached it.
-    stub = types.ModuleType("agent")
+    stub = types.ModuleType("qai_consultant.rag.agent")
 
     class QAIAgent:  # minimal stand-in; deterministic steps never call it
         def ask(self, *_args, **_kwargs):
@@ -46,11 +46,11 @@ def _load_target():
     # front-matter marking) alongside QAIAgent — the stub needs both names or
     # the import itself fails before any deterministic check runs.
     stub.MISTRAL_MODEL = "mistral-small-latest"
-    sys.modules["agent"] = stub
+    sys.modules["qai_consultant.rag.agent"] = stub
 
-    import effort_core  # noqa: PLC0415
-    from dialogue import InputValidator, ProjectContext  # noqa: PLC0415
-    from effort_estimator import EffortEstimator  # noqa: PLC0415
+    from qai_consultant.core import effort_core  # noqa: PLC0415
+    from qai_consultant.core.dialogue import InputValidator, ProjectContext  # noqa: PLC0415
+    from qai_consultant.generation.effort_estimator import EffortEstimator  # noqa: PLC0415
 
     return InputValidator, ProjectContext, EffortEstimator, effort_core
 
@@ -163,7 +163,7 @@ def check_confidence_magnitude_sanity(ProjectContext, EffortEstimator) -> tuple[
         existing_automation="unit tests only",
         compliance_requirements="GDPR",
     )
-    from agent import QAIAgent  # noqa: PLC0415 — the stub installed by _load_target()
+    from qai_consultant.rag.agent import QAIAgent  # noqa: PLC0415 — the stub installed by _load_target()
     _, data = EffortEstimator(QAIAgent()).estimate(ctx)
 
     impossible = (data.project_duration_days > T.CONFIDENCE_HIGH_FORBIDDEN_ABOVE_DAYS
@@ -222,10 +222,10 @@ def check_no_fabricated_versions() -> tuple[Finding, ...]:
 # ── Runner ───────────────────────────────────────────────────────────────────────
 
 def run_all() -> list[CheckOutcome]:
-    # _load_target() overwrites sys.modules["agent"] with a stub; restore the prior
+    # _load_target() overwrites sys.modules["qai_consultant.rag.agent"] with a stub; restore the prior
     # module afterwards so evals can share a process (e.g. a pytest session) without
     # leaving the real `agent` shadowed by the stub.
-    prev_agent = sys.modules.get("agent")
+    prev_agent = sys.modules.get("qai_consultant.rag.agent")
     try:
         iv_cls, ctx_cls, est_cls, effort_core = _load_target()  # installs the stub — inside
         iv = iv_cls()                                             # try so finally still runs
@@ -238,9 +238,9 @@ def run_all() -> list[CheckOutcome]:
         ]
     finally:
         if prev_agent is not None:
-            sys.modules["agent"] = prev_agent
+            sys.modules["qai_consultant.rag.agent"] = prev_agent
         else:
-            sys.modules.pop("agent", None)
+            sys.modules.pop("qai_consultant.rag.agent", None)
 
 
 def format_table(outcomes: list[CheckOutcome]) -> str:

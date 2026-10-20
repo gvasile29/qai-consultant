@@ -1,5 +1,5 @@
 """
-Tests for src/cli.py — the `--review` and `--results` flags (v3.1 F1/F2).
+Tests for src/qai_consultant/cli.py — the `--review` and `--results` flags (v3.1 F1/F2).
 
 Keeps to what's safely testable without a live LLM/interactive prompt:
 argparse wiring, load_results_summary()'s pure parsing behavior, and
@@ -17,9 +17,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import cli  # noqa: E402
+from qai_consultant import cli  # noqa: E402
 
 
 # ── parse_args() ─────────────────────────────────────────────────────────────────

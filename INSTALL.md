@@ -80,7 +80,7 @@ PINECONE_INDEX_NAME=qai-consultant
 | `PINECONE_INDEX_NAME` | Name of a Pinecone index you create (dimensions: **384**, metric: **cosine**, to match the `all-MiniLM-L6-v2` embedding model) |
 
 > Running on Streamlit Cloud instead? Add the same four keys to the app's
-> **Secrets** panel — `agent.py`'s `_get_secret()` checks Streamlit secrets first,
+> **Secrets** panel — `rag/agent.py`'s `_get_secret()` checks Streamlit secrets first,
 > then falls back to `.env`.
 
 ---

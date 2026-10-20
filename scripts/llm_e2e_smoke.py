@@ -58,12 +58,12 @@ def main() -> int:
     parser.add_argument("--require-mistral", action="store_true")
     args = parser.parse_args()
 
-    from agent import MISTRAL_MODEL, QAIAgent
-    from dialogue import ProjectContext
-    from output_guards import lint_output
-    from risk_ledger import parse_risk_matrix
-    from strategy_generator import StrategyGenerator
-    from templates import TEMPLATES
+    from qai_consultant.rag.agent import MISTRAL_MODEL, QAIAgent
+    from qai_consultant.core.dialogue import ProjectContext
+    from qai_consultant.compliance.output_guards import lint_output
+    from qai_consultant.core.risk_ledger import parse_risk_matrix
+    from qai_consultant.generation.strategy_generator import StrategyGenerator
+    from qai_consultant.generation.templates import TEMPLATES
 
     if args.template not in TEMPLATES:
         print(f"Unknown template {args.template!r}; choose from {sorted(TEMPLATES)}")

@@ -1,6 +1,6 @@
 """Usage report for QAI Consultant: Streamlit app metrics + MCP adoption.
 
-Same numbers the landing page's adoption strip shows (src/adoption_metrics.py),
+Same numbers the landing page's adoption strip shows (src/qai_consultant/observability/adoption_metrics.py),
 in full detail:
 
 Streamlit side (needs PINECONE_API_KEY / PINECONE_INDEX_NAME in .env, the same
@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from adoption_metrics import (  # noqa: E402 - needs src/ on sys.path first
+from qai_consultant.observability.adoption_metrics import (  # noqa: E402 - needs src/ on sys.path first
     fetch_app_metrics,
     fetch_github_metrics,
     fetch_pypi_metrics,

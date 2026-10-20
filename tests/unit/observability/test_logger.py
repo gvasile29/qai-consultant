@@ -1,5 +1,5 @@
 """
-Tests for src/logger.py — RotatingFileHandler (architecture-review Minor
+Tests for src/qai_consultant/common/logger.py — RotatingFileHandler (architecture-review Minor
 finding #7). Previously a plain logging.FileHandler with no rotation, so
 logs/qai_consultant.log grew forever for CLI/local usage.
 
@@ -16,9 +16,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import logger as logger_module
+from qai_consultant.common import logger as logger_module
 
 
 def _detach_qai_logger():

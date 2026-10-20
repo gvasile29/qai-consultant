@@ -40,7 +40,7 @@ def main() -> int:
         print(f"Dialogue progress fill at 0/11 answered (expect ~0px): {fill_width}")
 
         # Apply a template to answer all questions, then re-check the bar.
-        # Label verified against src/templates.py's TEMPLATE_OPTIONS.
+        # Label verified against src/qai_consultant/generation/templates.py's TEMPLATE_OPTIONS.
         page.locator('[data-testid="stSelectbox"]').first.click()
         page.get_by_text("🌐 Web Application", exact=False).click(timeout=10000)
         page.get_by_role("button", name="Apply template").click(timeout=10000)

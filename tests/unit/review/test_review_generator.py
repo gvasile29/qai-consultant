@@ -1,5 +1,5 @@
 """
-Tests for src/review_generator.py — narrative prompt building, report
+Tests for src/qai_consultant/generation/review_generator.py — narrative prompt building, report
 markdown assembly, and save() conventions for the QA Document Quality
 Review (F1, v3.1). No LLM call is made here — only the pure prompt/markdown
 builders and the file-save path.
@@ -12,10 +12,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from review_core import ReviewFinding, ReviewResult  # noqa: E402
-from review_generator import (  # noqa: E402
+from qai_consultant.core.review_core import ReviewFinding, ReviewResult  # noqa: E402
+from qai_consultant.generation.review_generator import (  # noqa: E402
     REVIEW_SYSTEM_PROMPT,
     build_review_prompt,
     build_review_report_markdown,

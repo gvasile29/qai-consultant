@@ -1,5 +1,5 @@
 """
-Tests for src/dialogue.py — InputValidator and DialogueManager (v1.0).
+Tests for src/qai_consultant/core/dialogue.py — InputValidator and DialogueManager (v1.0).
 
 No external dependencies — tests run without Ollama or ChromaDB.
 
@@ -37,9 +37,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR   = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from dialogue import (
+from qai_consultant.core.dialogue import (
     InputValidator, DialogueManager, ProjectContext,
     QUESTIONS, ValidationResult,
     MAX_ANSWER_LENGTH, MAX_PROJECT_NAME_LENGTH, MIN_DESCRIPTION_LENGTH,
