@@ -9,11 +9,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
 
-from review_core import MAX_REVIEW_CHARS, review_document  # noqa: E402
-from text_checks import detect_language, looks_like_qa_document  # noqa: E402
+from qai_consultant.core.review_core import MAX_REVIEW_CHARS, review_document  # noqa: E402
+from qai_consultant.common.text_checks import detect_language, looks_like_qa_document  # noqa: E402
 
 PASTA = (
     "Classic Pasta Carbonara. Ingredients: 400g spaghetti, 150g guanciale, 4 egg yolks, "

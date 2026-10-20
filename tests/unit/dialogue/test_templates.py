@@ -1,5 +1,5 @@
 """
-Tests for src/templates.py — project quick-start templates.
+Tests for src/qai_consultant/generation/templates.py — project quick-start templates.
 
 Covers:
 1.  TEMPLATES contains exactly 4 entries
@@ -16,9 +16,8 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from templates import TEMPLATES, TEMPLATE_OPTIONS
+from qai_consultant.generation.templates import TEMPLATES, TEMPLATE_OPTIONS
 
 REQUIRED_KEYS = {
     "project_name", "project_description", "project_type", "tech_stack",

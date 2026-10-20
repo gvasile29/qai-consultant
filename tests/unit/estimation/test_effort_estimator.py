@@ -1,5 +1,5 @@
 ﻿"""
-Tests for src/effort_estimator.py — v0.4 Effort Estimation module.
+Tests for src/qai_consultant/generation/effort_estimator.py — v0.4 Effort Estimation module.
 
 Covers:
 1.  Duration parsing: "2 years" -> 460 working days, "18 months" -> 378 days
@@ -37,18 +37,17 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
 APP_PY = SRC_DIR / "app.py"
-CLI_PY = SRC_DIR / "cli.py"
-sys.path.insert(0, str(SRC_DIR))
+CLI_PY = SRC_DIR / "qai_consultant" / "cli.py"
 
-from dialogue import ProjectContext
-from effort_estimator import EffortEstimator, EstimationData, BASELINE_QA_PERCENT
-import effort_core
+from qai_consultant.core.dialogue import ProjectContext
+from qai_consultant.generation.effort_estimator import EffortEstimator, EstimationData, BASELINE_QA_PERCENT
+from qai_consultant.core import effort_core
 
 
 @pytest.fixture(scope="module")
 def agent():
     """Real QAIAgent for the LLM smoke test; SKIP (not ERROR) without live API keys."""
-    from agent import QAIAgent
+    from qai_consultant.rag.agent import QAIAgent
     try:
         return QAIAgent()
     except Exception as exc:
@@ -603,7 +602,7 @@ def test_effort_estimator_imported_in_app():
     """EffortEstimator is imported at module level in app.py."""
     source = read_app_source()
     top_imports = source.split("def ")[0]
-    assert "from effort_estimator import EffortEstimator" in top_imports, \
+    assert "from qai_consultant.generation.effort_estimator import EffortEstimator" in top_imports, \
         "EffortEstimator should be imported at module level"
     print("  PASS: EffortEstimator imported at module level in app.py")
 
@@ -811,7 +810,7 @@ if __name__ == "__main__":
     print(f"{'=' * 68}")
 
     try:
-        from agent import QAIAgent
+        from qai_consultant.rag.agent import QAIAgent
         agent = QAIAgent()
         print("\n[TEST] Full estimate: BMW ECU context, all sections, file saved")
         test_full_estimate_bmw(agent)
@@ -834,7 +833,7 @@ if __name__ == "__main__":
 
 
 def test_narrative_drops_sentences_with_unverified_person_day_figures():
-    from effort_core import EstimationData, drop_unverified_person_day_figures
+    from qai_consultant.core.effort_core import EstimationData, drop_unverified_person_day_figures
 
     data = EstimationData(pert_total_expected=20.5, pert_total_sd=2.0, available_person_days=30.0)
     text = (
@@ -850,7 +849,7 @@ def test_narrative_drops_sentences_with_unverified_person_day_figures():
 
 
 def test_narrative_guard_covers_unit_variants():
-    from effort_core import EstimationData, drop_unverified_person_day_figures
+    from qai_consultant.core.effort_core import EstimationData, drop_unverified_person_day_figures
 
     data = EstimationData(pert_total_expected=20.5)
     for variant in ("24 man-days", "24 working days", "24 PD", "24 person days"):

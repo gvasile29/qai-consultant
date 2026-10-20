@@ -17,7 +17,6 @@ from unittest.mock import MagicMock
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
-sys.path.insert(0, str(APP_SRC))
 
 import re
 
@@ -82,7 +81,7 @@ def test_max_upload_bytes_matches_mcp_server_clamp():
     """The app's guard should use the same ceiling as mcp_server.py's
     analyze_test_results tool, not an independently-chosen number."""
     import app
-    import mcp_server
+    from qai_consultant.mcp import server as mcp_server
 
     assert app.MAX_UPLOAD_BYTES == mcp_server._MAX_RESULTS_INPUT_BYTES
 

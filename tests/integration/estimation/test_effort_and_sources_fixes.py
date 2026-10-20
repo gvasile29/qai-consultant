@@ -8,17 +8,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src"))
 
-from dialogue import ProjectContext  # noqa: E402
-from effort_core import (  # noqa: E402
+from qai_consultant.core.dialogue import ProjectContext  # noqa: E402
+from qai_consultant.core.effort_core import (  # noqa: E402
     capacity_utilization_pct,
     compute_estimation,
     confidence_breakdown,
     explain_effort_range,
 )
-from executive_readout import build_readout  # noqa: E402
-from source_labels import build_source_labels, display_name  # noqa: E402
+from qai_consultant.generation.executive_readout import build_readout  # noqa: E402
+from qai_consultant.compliance.source_labels import build_source_labels, display_name  # noqa: E402
 
 
 def _ctx(**kw):
@@ -58,7 +57,7 @@ def test_pert_totals_equal_sum_of_rows(ctx):
 
 @pytest.mark.parametrize("ctx", GOLDEN)
 def test_rendered_report_table_total_row_matches_rows(ctx):
-    from effort_estimator import EffortEstimator
+    from qai_consultant.generation.effort_estimator import EffortEstimator
     est = EffortEstimator(MagicMock())
     d = compute_estimation(ctx)
     table = est._build_pert_table(d).splitlines()[2:]
@@ -88,7 +87,7 @@ def test_range_explanation_uses_real_numbers():
 
 
 def test_report_contains_explanation_and_utilization():
-    from effort_estimator import EffortEstimator
+    from qai_consultant.generation.effort_estimator import EffortEstimator
     agent = MagicMock()
     agent.ask.return_value = "EXECUTIVE_SUMMARY: ok\nASSUMPTIONS: - a\nRECOMMENDATIONS: - r"
     report, data = EffortEstimator(agent).estimate(GOLDEN[0])
@@ -112,7 +111,7 @@ def test_confidence_breakdown_sums_to_score(ctx):
 
 
 def test_readout_exposes_and_renders_explanations():
-    from components import executive_readout_html
+    from qai_consultant.ui.components import executive_readout_html
     d = compute_estimation(GOLDEN[0])
     ro = build_readout([], d)
     assert ro.range_explanation and len(ro.confidence_factors) == 4
@@ -142,7 +141,7 @@ def test_labels_keep_prompt_numbering_for_duplicate_documents():
 
 
 def test_every_prompt_source_number_appears_in_panel():
-    from agent import QAIAgent
+    from qai_consultant.rag.agent import QAIAgent
     chunks = [_chunk(f"doc{i % 3}.md") for i in range(5)]
     ctx = QAIAgent.format_knowledge_context(MagicMock(), chunks)
     in_prompt = {int(n) for n in re.findall(r"\[Source (\d+) —", ctx)}
@@ -167,6 +166,6 @@ def test_display_name(raw, clean):
 
 
 def test_prompt_context_uses_clean_names():
-    from agent import QAIAgent
+    from qai_consultant.rag.agent import QAIAgent
     ctx = QAIAgent.format_knowledge_context(MagicMock(), [_chunk("ISTQB_CTAL-TM_Syllabus_v3.0_zKjKsaN.pdf")])
     assert "zKjKsaN" not in ctx

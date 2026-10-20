@@ -18,7 +18,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_SERVER = _REPO_ROOT / "src" / "mcp_server.py"
+_SERVER = _REPO_ROOT / "src" / "qai_consultant" / "mcp" / "server.py"
 
 
 async def main() -> int:

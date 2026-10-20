@@ -17,10 +17,9 @@ from unittest.mock import patch, MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import agent
-from agent import LLMClient
+from qai_consultant.rag import agent
+from qai_consultant.rag.agent import LLMClient
 
 
 def test_num_predict_is_capped():

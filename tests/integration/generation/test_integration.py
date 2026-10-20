@@ -27,10 +27,9 @@ from unittest.mock import patch, MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR   = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from dialogue import DialogueManager, ProjectContext
-from strategy_generator import StrategyGenerator
+from qai_consultant.core.dialogue import DialogueManager, ProjectContext
+from qai_consultant.generation.strategy_generator import StrategyGenerator
 
 
 # ── Mock helpers ──────────────────────────────────────────────────────────────

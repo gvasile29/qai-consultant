@@ -1,5 +1,5 @@
 """
-Tests for src/strategy_generator.py — StrategyGenerator.save() (structural, no LLM required).
+Tests for src/qai_consultant/generation/strategy_generator.py — StrategyGenerator.save() (structural, no LLM required).
 
 Covers:
 1. save() creates a file named test_strategy_<ProjectName>_<timestamp>.md with frontmatter
@@ -16,11 +16,10 @@ from unittest.mock import MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from dialogue import ProjectContext
-import strategy_generator as sg_module
-from strategy_generator import StrategyGenerator
+from qai_consultant.core.dialogue import ProjectContext
+from qai_consultant.generation import strategy_generator as sg_module
+from qai_consultant.generation.strategy_generator import StrategyGenerator
 
 SAMPLE_CONTEXT = ProjectContext(
     project_name="MyProject",

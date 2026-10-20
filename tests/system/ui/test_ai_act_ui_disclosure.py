@@ -19,7 +19,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
-sys.path.insert(0, str(APP_SRC))
 
 
 def read_app_source() -> str:
@@ -42,7 +41,7 @@ def extract_function(source: str, fn_name: str) -> str:
 def test_app_imports_ai_disclosure_helpers():
     """app.py imports AI_INTERACTION_NOTICE and with_ai_footer from ai_disclosure."""
     source = read_app_source()
-    assert "from ai_disclosure import" in source, "app.py does not import from ai_disclosure"
+    assert "from qai_consultant.compliance.ai_disclosure import" in source, "app.py does not import from ai_disclosure"
     assert "AI_INTERACTION_NOTICE" in source, "AI_INTERACTION_NOTICE not referenced in app.py"
     assert "with_ai_footer" in source, "with_ai_footer not referenced in app.py"
     print("  PASS: app.py imports ai_disclosure helpers")

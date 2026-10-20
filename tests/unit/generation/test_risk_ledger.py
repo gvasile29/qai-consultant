@@ -1,8 +1,8 @@
 """
-Tests for src/risk_ledger.py -- deterministic parsing of the "Risk Matrix
+Tests for src/qai_consultant/core/risk_ledger.py -- deterministic parsing of the "Risk Matrix
 Overview" markdown table that risk_analyzer.py's RISK prompt already forces
 the LLM to produce in an exact column format (see build_risk_prompt() in
-src/risk_analyzer.py):
+src/qai_consultant/generation/risk_analyzer.py):
 
     | Risk ID | Risk Description | Likelihood | Impact | Risk Level | Priority |
 """
@@ -11,9 +11,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from risk_ledger import parse_risk_matrix, severity_tier  # noqa: E402
+from qai_consultant.core.risk_ledger import parse_risk_matrix, severity_tier  # noqa: E402
 
 SAMPLE_REGISTER = """
 # Risk Register — Example Project

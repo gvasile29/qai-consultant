@@ -1,5 +1,5 @@
 """
-Tests for src/mcp_server.py — the MCP server's tool surface (v3.0 step 6).
+Tests for src/qai_consultant/mcp/server.py — the MCP server's tool surface (v3.0 step 6).
 
 Uses the MCP SDK's in-memory client/server session (mcp.shared.memory) —
 no subprocess, no real stdio transport — to exercise the server exactly as
@@ -19,13 +19,12 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
 from mcp.shared.memory import create_connected_server_and_client_session
 
-import mcp_server
-from effort_core import compute_estimation
-from dialogue import ProjectContext
+from qai_consultant.mcp import server as mcp_server
+from qai_consultant.core.effort_core import compute_estimation
+from qai_consultant.core.dialogue import ProjectContext
 
 
 def _run(coro):
@@ -471,7 +470,7 @@ def test_all_four_prompts_registered():
 
 
 def test_qa_project_interview_lists_all_eleven_questions():
-    from dialogue import QUESTIONS
+    from qai_consultant.core.dialogue import QUESTIONS
     text = _run(_get_prompt("qa_project_interview"))
     for q in QUESTIONS:
         assert q["key"] in text

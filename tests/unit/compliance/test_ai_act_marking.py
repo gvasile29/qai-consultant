@@ -19,17 +19,16 @@ import pypdf
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from ai_disclosure import build_front_matter, pdf_meta_html
-from agent import MISTRAL_MODEL
-from dialogue import ProjectContext
-from effort_estimator import EffortEstimator
-from pdf_export import markdown_to_pdf
-from risk_analyzer import RiskAnalyzer
-from strategy_generator import StrategyGenerator
-from test_plan_generator import TestPlanGenerator
-from version import __version__
+from qai_consultant.compliance.ai_disclosure import build_front_matter, pdf_meta_html
+from qai_consultant.rag.agent import MISTRAL_MODEL
+from qai_consultant.core.dialogue import ProjectContext
+from qai_consultant.generation.effort_estimator import EffortEstimator
+from qai_consultant.compliance.pdf_export import markdown_to_pdf
+from qai_consultant.generation.risk_analyzer import RiskAnalyzer
+from qai_consultant.generation.strategy_generator import StrategyGenerator
+from qai_consultant.generation.test_plan_generator import TestPlanGenerator
+from qai_consultant.common.version import __version__
 
 SAMPLE_CONTEXT = ProjectContext(
     project_name="MarkingTestProject",
@@ -106,15 +105,15 @@ def test_ai_disclosure_module_has_no_third_party_or_agent_imports():
     (AST), not a substring scan, since the module's own docstring discusses
     agent.py in prose (explaining why it's NOT imported)."""
     import ast
-    source = (SRC_DIR / "ai_disclosure.py").read_text(encoding="utf-8")
+    source = (SRC_DIR / "qai_consultant" / "compliance" / "ai_disclosure.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
-    allowed = {"datetime", "version", "__future__", "base64", "pathlib", "re"}
+    allowed = {"datetime", "qai_consultant.common.version", "__future__", "base64", "pathlib", "re"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 assert alias.name.split(".")[0] in allowed, f"Unexpected import: {alias.name}"
         elif isinstance(node, ast.ImportFrom):
-            assert node.module and node.module.split(".")[0] in allowed, f"Unexpected import from: {node.module}"
+            assert node.module and (node.module in allowed or node.module.split(".")[0] in allowed), f"Unexpected import from: {node.module}"
 
 
 # ── Markdown front matter present in every generator's save() path ─────────────

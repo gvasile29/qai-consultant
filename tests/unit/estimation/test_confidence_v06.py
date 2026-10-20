@@ -1,5 +1,5 @@
 ﻿"""
-Tests for src/effort_estimator.py — v0.6 Confidence Level Algorithm.
+Tests for src/qai_consultant/generation/effort_estimator.py — v0.6 Confidence Level Algorithm.
 
 Four-factor score-based algorithm (0-100 pts):
 
@@ -53,11 +53,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-import effort_core
-from dialogue import ProjectContext
-from effort_estimator import EffortEstimator, EstimationData
+from qai_consultant.core import effort_core
+from qai_consultant.core.dialogue import ProjectContext
+from qai_consultant.generation.effort_estimator import EffortEstimator, EstimationData
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

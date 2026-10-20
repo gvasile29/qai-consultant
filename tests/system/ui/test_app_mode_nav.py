@@ -18,12 +18,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
-sys.path.insert(0, str(APP_SRC))
 
 import streamlit as st  # noqa: E402
 
 import app  # noqa: E402
-from components import APP_MODES  # noqa: E402
+from qai_consultant.ui.components import APP_MODES  # noqa: E402
 
 _NAV_KEYS = [
     "current_step", "strategy_resume_step", "results_complete", "generation_started",

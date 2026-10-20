@@ -192,6 +192,7 @@ namespaces = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 markers = [
     "unit: one module, collaborators mocked, no network (tests/unit/)",
     "integration: several real modules together, mocked LLM/Pinecone (tests/integration/)",

@@ -14,7 +14,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
-sys.path.insert(0, str(APP_SRC))
 
 
 def read_app_source() -> str:
@@ -67,7 +66,7 @@ def test_render_review_stores_results_analysis_in_session_state():
 
 def test_render_review_shows_compact_metrics_panel():
     # v3.4 Calibration Bench redesign replaced the raw st.metric() calls with
-    # signal_ledger_html() Signal Ledger cards (see src/components.py).
+    # signal_ledger_html() Signal Ledger cards (see src/qai_consultant/ui/components.py).
     fn = extract_function(read_app_source(), "render_review")
     for metric in ("Runs", "Pass Rate", "Flaky Tests", "Ever-Failing"):
         assert f'signal_ledger_html("{metric}"' in fn, f"Missing Signal Ledger entry: {metric}"
@@ -116,7 +115,7 @@ def test_init_session_state_sets_results_analysis_none_in_real_session_state():
 
 def test_app_imports_results_core_symbols():
     source = read_app_source()
-    assert "from results_core import" in source
+    assert "from qai_consultant.core.results_core import" in source
     for symbol in ("parse_junit_xml", "parse_results_csv", "summarize_for_prompt"):
         assert symbol in source
     assert "append_execution_data_appendix" in source

@@ -1,4 +1,4 @@
-"""Tests for src/usage_guard.py — server-side daily run limits (no Pinecone calls)."""
+"""Tests for src/qai_consultant/observability/usage_guard.py — server-side daily run limits (no Pinecone calls)."""
 
 import sys
 from datetime import datetime, timezone
@@ -6,10 +6,9 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
-import usage_guard
-from usage_guard import PineconeCounterStore, check_and_record, client_key
+from qai_consultant.observability import usage_guard
+from qai_consultant.observability.usage_guard import PineconeCounterStore, check_and_record, client_key
 
 NOW = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
 TOMORROW = datetime(2026, 9, 24, 0, 5, tzinfo=timezone.utc)
@@ -100,7 +99,7 @@ def test_store_failure_fails_open():
 
 
 def test_consume_run_fails_open_without_pinecone_credentials(monkeypatch):
-    import agent
+    from qai_consultant.rag import agent
     monkeypatch.setattr(agent, "_get_secret", MagicMock(side_effect=ValueError("missing")))
     assert usage_guard.consume_run({}, "8.8.8.8").allowed
 

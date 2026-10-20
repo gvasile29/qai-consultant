@@ -1,5 +1,5 @@
 """
-Tests for src/review_core.py — deterministic QA document quality review (v3.1).
+Tests for src/qai_consultant/core/review_core.py — deterministic QA document quality review (v3.1).
 
 Pure stdlib module: six weighted dimensions scored via mechanical
 regex/keyword checks. No LLM anywhere in this file's call path.
@@ -10,9 +10,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from review_core import (  # noqa: E402
+from qai_consultant.core.review_core import (  # noqa: E402
     DOC_TYPES,
     MIN_CONTENT_CHARS,
     WEIGHTS,
@@ -435,5 +434,5 @@ def test_review_document_never_raises_on_huge_input():
 
 
 def test_doc_types_constant_matches_section_synonym_keys():
-    from review_core import SECTION_SYNONYMS
+    from qai_consultant.core.review_core import SECTION_SYNONYMS
     assert set(DOC_TYPES) == set(SECTION_SYNONYMS.keys())

@@ -1,5 +1,5 @@
 """
-Tests for src/pdf_export.py — Markdown → PDF conversion.
+Tests for src/qai_consultant/compliance/pdf_export.py — Markdown → PDF conversion.
 
 Covers:
 1.  markdown_to_pdf() returns bytes for valid markdown
@@ -17,9 +17,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from pdf_export import markdown_to_pdf
+from qai_consultant.compliance.pdf_export import markdown_to_pdf
 
 _SIMPLE_MD = "# Hello\n\nThis is a **test** document.\n\n- item 1\n- item 2\n"
 

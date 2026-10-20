@@ -1,5 +1,5 @@
 """Results-integrity gate: deterministic checks over QAI Consultant's real shipped
-src/results_core.py test-results health analysis (flaky / ever-failing / failure
+src/qai_consultant/core/results_core.py test-results health analysis (flaky / ever-failing / failure
 clustering / malformed input / CSV-XML parity) — nothing re-implemented. Issues
 surface as failing checks, not prose; a green table means the analysis is honest.
 Keyless and instant (no LLM, no keys, no heavy deps — results_core.py is
@@ -26,7 +26,7 @@ def _load_target():
     """results_core.py is dependency-free (stdlib only) — no stubbing needed,
     unlike estimate_integrity.py's agent.py stub."""
     ensure_src_on_path()
-    from results_core import analyze, parse_junit_xml, parse_results_csv  # noqa: PLC0415
+    from qai_consultant.core.results_core import analyze, parse_junit_xml, parse_results_csv  # noqa: PLC0415
     return analyze, parse_junit_xml, parse_results_csv
 
 

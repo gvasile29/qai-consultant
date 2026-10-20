@@ -14,7 +14,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 APP_SRC = REPO_ROOT / "src"
 APP_PY = APP_SRC / "app.py"
-sys.path.insert(0, str(APP_SRC))
 
 
 def read_app_source() -> str:
@@ -114,7 +113,7 @@ def test_intro_has_review_document_entry_point():
     fn = extract_function(read_app_source(), "render_intro")
     assert "_go_to(_mode_id)" in fn, \
         "render_intro() must route its mode buttons through _go_to()"
-    from components import APP_MODES
+    from qai_consultant.ui.components import APP_MODES
     assert "doc_review" in [m[0] for m in APP_MODES]
     assert app._LANDING_CTA_LABELS["doc_review"] == "Review an existing QA document"
 
@@ -237,7 +236,7 @@ def test_render_doc_review_pdf_bytes_computed_once_gated():
 
 def test_app_imports_review_core_and_review_generator():
     source = read_app_source()
-    assert "from review_core import" in source
-    assert "from review_generator import" in source
+    assert "from qai_consultant.core.review_core import" in source
+    assert "from qai_consultant.generation.review_generator import" in source
     assert "review_document" in source
     assert "build_review_prompt" in source

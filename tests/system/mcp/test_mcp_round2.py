@@ -15,15 +15,14 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from unittest.mock import patch
 
 from mcp.shared.memory import create_connected_server_and_client_session
 
-import mcp_server
-import results_core
-from local_index import LOW_RELEVANCE_NOTE, LocalIndex
+from qai_consultant.mcp import server as mcp_server
+from qai_consultant.core import results_core
+from qai_consultant.mcp.local_index import LOW_RELEVANCE_NOTE, LocalIndex
 
 _VOCAB = ["apple", "banana", "cherry", "risk", "testing", "priority", "gdpr", "security"]
 
@@ -59,7 +58,7 @@ def _fake_index(tmp_path, files):
         p = kb / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
         idx = LocalIndex(kb_dir=kb, cache_dir=tmp_path / "cache")
         idx._ensure_built()
     return idx
@@ -373,7 +372,7 @@ def test_f21_background_build_builds_index_and_search_does_not_rebuild(tmp_path)
     (kb / "methodologies").mkdir(parents=True)
     (kb / "methodologies" / "a.md").write_text("# A\n\nrisk testing", encoding="utf-8")
     builds = []
-    with patch("local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
+    with patch("qai_consultant.mcp.local_index._FastEmbedEmbeddings", return_value=_FakeEmbeddings()):
         idx = LocalIndex(kb_dir=kb, cache_dir=tmp_path / "cache")
         original = idx._build_fresh
 

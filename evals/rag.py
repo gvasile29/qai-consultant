@@ -47,7 +47,7 @@ def _embedding_model() -> str:
     agent.py import this never needs a vendored fallback — if it's missing,
     that's a real repo problem, not an expected "deps not installed" case."""
     ensure_src_on_path()
-    from kb_config import EMBEDDING_MODEL  # noqa: PLC0415
+    from qai_consultant.common.kb_config import EMBEDDING_MODEL  # noqa: PLC0415
     return EMBEDDING_MODEL
 
 
@@ -102,7 +102,7 @@ class _Index:
     weights are unavailable; callers treat any failure as SKIP."""
 
     def __init__(self) -> None:
-        # Same embeddings class the app uses (src/agent.py) — no extra dependency.
+        # Same embeddings class the app uses (src/qai_consultant/rag/agent.py) — no extra dependency.
         from langchain_community.embeddings import HuggingFaceEmbeddings  # noqa: PLC0415
         self._emb = HuggingFaceEmbeddings(model_name=_embedding_model())
         self._docs = _kb_docs()

@@ -1,5 +1,5 @@
 """
-Tests for src/agent.py — QAIAgent error handling (v2.0).
+Tests for src/qai_consultant/rag/agent.py — QAIAgent error handling (v2.0).
 
 All tests use unittest.mock — no real Mistral, OpenRouter, or Pinecone required.
 
@@ -21,9 +21,8 @@ from unittest.mock import patch, MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from agent import QAIAgent, QAIConnectionError, QAIKnowledgeBaseError, clean_markdown_html
+from qai_consultant.rag.agent import QAIAgent, QAIConnectionError, QAIKnowledgeBaseError, clean_markdown_html
 
 
 def _mock_pinecone_client(vector_count: int = 5):
@@ -39,8 +38,8 @@ def _mock_pinecone_client(vector_count: int = 5):
 
 def test_kb_missing_raises_error():
     """QAIKnowledgeBaseError raised when Pinecone connection fails."""
-    with patch("agent._get_secret", side_effect=ValueError("Missing required secret: 'PINECONE_API_KEY'")), \
-         patch("agent.HuggingFaceEmbeddings"):
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=ValueError("Missing required secret: 'PINECONE_API_KEY'")), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"):
         try:
             QAIAgent()
             assert False, "Expected QAIKnowledgeBaseError — not raised"
@@ -57,9 +56,9 @@ def test_kb_empty_raises_error():
             return "fake-value"
         raise ValueError(f"Missing required secret: '{key}'")
 
-    with patch("agent._get_secret", side_effect=fake_get_secret), \
-         patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Pinecone", return_value=mock_pc):
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=fake_get_secret), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"), \
+         patch("qai_consultant.rag.agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIKnowledgeBaseError — not raised"
@@ -78,9 +77,9 @@ def test_missing_mistral_key_raises_connection_error():
             raise ValueError(f"Missing required secret: '{key}'")
         return "fake-key"
 
-    with patch("agent._get_secret", side_effect=fake_get_secret), \
-         patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Pinecone", return_value=mock_pc):
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=fake_get_secret), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"), \
+         patch("qai_consultant.rag.agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIConnectionError — not raised"
@@ -99,9 +98,9 @@ def test_missing_openrouter_key_raises_connection_error():
             raise ValueError(f"Missing required secret: '{key}'")
         return "fake-key"
 
-    with patch("agent._get_secret", side_effect=fake_get_secret), \
-         patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Pinecone", return_value=mock_pc):
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=fake_get_secret), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"), \
+         patch("qai_consultant.rag.agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIConnectionError — not raised"
@@ -111,8 +110,8 @@ def test_missing_openrouter_key_raises_connection_error():
 
 def test_kb_error_message_mentions_ingest():
     """QAIKnowledgeBaseError message includes 'python src/ingest.py'."""
-    with patch("agent._get_secret", side_effect=ValueError("Missing required secret: 'PINECONE_API_KEY'")), \
-         patch("agent.HuggingFaceEmbeddings"):
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=ValueError("Missing required secret: 'PINECONE_API_KEY'")), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"):
         try:
             QAIAgent()
             assert False, "Expected QAIKnowledgeBaseError — not raised"
@@ -132,9 +131,9 @@ def test_connection_error_message_mentions_api_keys():
             raise ValueError("Missing required secret: 'MISTRAL_API_KEY'. Add it to .env")
         return "fake-key"
 
-    with patch("agent._get_secret", side_effect=fake_get_secret), \
-         patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Pinecone", return_value=mock_pc):
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=fake_get_secret), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"), \
+         patch("qai_consultant.rag.agent.Pinecone", return_value=mock_pc):
         try:
             QAIAgent()
             assert False, "Expected QAIConnectionError — not raised"
@@ -147,10 +146,10 @@ def test_ask_streaming_yields_chunks():
     """ask_streaming() yields incremental text chunks from LLMClient."""
     mock_pc, mock_index = _mock_pinecone_client(vector_count=5)
 
-    with patch("agent._get_secret", side_effect=lambda k: "fake-value"), \
-         patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Pinecone", return_value=mock_pc), \
-         patch("agent.LLMClient") as mock_llm_cls:
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=lambda k: "fake-value"), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"), \
+         patch("qai_consultant.rag.agent.Pinecone", return_value=mock_pc), \
+         patch("qai_consultant.rag.agent.LLMClient") as mock_llm_cls:
         mock_llm = MagicMock()
         mock_llm.chat.return_value = iter(["Hello", " world", "!"])
         mock_llm_cls.return_value = mock_llm
@@ -179,10 +178,10 @@ def test_ask_applies_clean_markdown_html():
     """QAIAgent.ask() sanitizes <br> tags out of the LLM response before returning."""
     mock_pc, mock_index = _mock_pinecone_client(vector_count=5)
 
-    with patch("agent._get_secret", side_effect=lambda k: "fake-value"), \
-         patch("agent.HuggingFaceEmbeddings"), \
-         patch("agent.Pinecone", return_value=mock_pc), \
-         patch("agent.LLMClient") as mock_llm_cls:
+    with patch("qai_consultant.rag.agent._get_secret", side_effect=lambda k: "fake-value"), \
+         patch("qai_consultant.rag.agent.HuggingFaceEmbeddings"), \
+         patch("qai_consultant.rag.agent.Pinecone", return_value=mock_pc), \
+         patch("qai_consultant.rag.agent.LLMClient") as mock_llm_cls:
         mock_llm = MagicMock()
         mock_llm.chat.return_value = "Item one. <br> - Item two."
         mock_llm_cls.return_value = mock_llm

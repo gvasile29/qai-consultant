@@ -8,12 +8,11 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src"))
 
-import output_guards as g  # noqa: E402
-from components import header_logo_html  # noqa: E402
-from dialogue import ProjectContext  # noqa: E402
-from theme import LIGHT_TOKENS, build_css  # noqa: E402
+from qai_consultant.compliance import output_guards as g  # noqa: E402
+from qai_consultant.ui.components import header_logo_html  # noqa: E402
+from qai_consultant.core.dialogue import ProjectContext  # noqa: E402
+from qai_consultant.ui.theme import LIGHT_TOKENS, build_css  # noqa: E402
 
 SRC = Path(__file__).resolve().parent.parent.parent.parent / "src"
 
@@ -59,7 +58,7 @@ def test_no_source_means_no_stripping():
 
 def test_clean_markdown_html_applies_guards():
     pytest.importorskip("langchain_community")
-    from agent import clean_markdown_html
+    from qai_consultant.rag.agent import clean_markdown_html
 
     out = clean_markdown_html("x -> **risk\nISTQB-CT-MAT (3.1.3 Foo)", source_text="kb")
     assert "**" not in out and "3.1.3" not in out
@@ -77,9 +76,9 @@ def test_prompt_rule_blocks_do_not_leak_example_section_numbers():
 # -- every generator prompt carries the rules --------------------------------
 
 def test_generator_prompts_embed_guard_rules():
-    from risk_analyzer import build_risk_prompt
-    from strategy_generator import build_strategy_prompt
-    from test_plan_generator import build_test_plan_prompt
+    from qai_consultant.generation.risk_analyzer import build_risk_prompt
+    from qai_consultant.generation.strategy_generator import build_strategy_prompt
+    from qai_consultant.generation.test_plan_generator import build_test_plan_prompt
 
     ctx = _context()
     for prompt in (
@@ -94,8 +93,8 @@ def test_generator_prompts_embed_guard_rules():
 def test_review_and_maturity_prompts_embed_standards_rules():
     import inspect
 
-    import maturity_generator
-    import review_generator
+    from qai_consultant.generation import maturity_generator
+    from qai_consultant.generation import review_generator
 
     for module in (review_generator, maturity_generator):
         source = inspect.getsource(module)
@@ -132,7 +131,7 @@ def test_signal_ledger_label_never_breaks_mid_word():
 
 
 def test_landing_time_claim_is_not_two_minutes():
-    text = (SRC / "components.py").read_text(encoding="utf-8")
+    text = (SRC / "qai_consultant" / "ui" / "components.py").read_text(encoding="utf-8")
     assert "~2 min" not in text
 
 
@@ -175,7 +174,7 @@ def test_lint_flags_defects_and_passes_sanitized_text():
 
 
 def _multipliers(automation: str) -> list:
-    from effort_core import compute_estimation
+    from qai_consultant.core.effort_core import compute_estimation
 
     ctx = ProjectContext(
         project_name="P", project_description="d", project_type="Web Application",
@@ -200,7 +199,7 @@ def test_genuine_no_automation_still_triggers_greenfield_multiplier():
 def test_effort_narrative_sections_are_emphasis_clean():
     import inspect
 
-    import effort_estimator
+    from qai_consultant.generation import effort_estimator
 
     assert "fix_stray_emphasis" in inspect.getsource(effort_estimator)
 
@@ -257,11 +256,11 @@ EN = "–"
 def test_generator_prompts_embed_numeric_scope_style_rules():
     import inspect
 
-    import maturity_generator
-    import review_generator
-    from risk_analyzer import build_risk_prompt
-    from strategy_generator import build_strategy_prompt
-    from test_plan_generator import build_test_plan_prompt
+    from qai_consultant.generation import maturity_generator
+    from qai_consultant.generation import review_generator
+    from qai_consultant.generation.risk_analyzer import build_risk_prompt
+    from qai_consultant.generation.strategy_generator import build_strategy_prompt
+    from qai_consultant.generation.test_plan_generator import build_test_plan_prompt
 
     for prompt in (
         build_risk_prompt(_context(), "kb"),
@@ -276,9 +275,9 @@ def test_generator_prompts_embed_numeric_scope_style_rules():
 
 
 def test_generator_templates_emit_no_em_dash_headings():
-    from risk_analyzer import build_risk_prompt
-    from strategy_generator import build_strategy_prompt
-    from test_plan_generator import build_test_plan_prompt
+    from qai_consultant.generation.risk_analyzer import build_risk_prompt
+    from qai_consultant.generation.strategy_generator import build_strategy_prompt
+    from qai_consultant.generation.test_plan_generator import build_test_plan_prompt
 
     for prompt in (
         build_risk_prompt(_context(), "kb"),
@@ -381,7 +380,7 @@ def test_dashes_replaced_in_headings_prose_and_tables():
 
 
 def test_sanitize_removes_dashes_and_keeps_risk_matrix_parseable():
-    from risk_ledger import parse_risk_matrix
+    from qai_consultant.core.risk_ledger import parse_risk_matrix
 
     md = (
         f"# Risk Register {EM} Acme\n\n## Risk Matrix Overview\n\n"
@@ -396,10 +395,10 @@ def test_sanitize_removes_dashes_and_keeps_risk_matrix_parseable():
 
 
 def test_review_and_maturity_static_reports_have_no_em_dash():
-    from maturity_core import assess_maturity
-    from maturity_generator import build_maturity_report_markdown
-    from review_core import review_document
-    from review_generator import build_review_report_markdown
+    from qai_consultant.core.maturity_core import assess_maturity
+    from qai_consultant.generation.maturity_generator import build_maturity_report_markdown
+    from qai_consultant.core.review_core import review_document
+    from qai_consultant.generation.review_generator import build_review_report_markdown
 
     review = build_review_report_markdown(review_document("# Test Plan\n\nshort"))
     maturity = build_maturity_report_markdown(assess_maturity("We test sometimes."))
@@ -438,7 +437,7 @@ def test_citation_rules_require_source_header_naming():
 
 
 def test_replace_dashes_turns_numeric_ranges_into_to():
-    from output_guards import replace_dashes
+    from qai_consultant.compliance.output_guards import replace_dashes
     dash = chr(0x2013)
     out = replace_dashes(f"| **Range** | 64.4 {dash} 181.8 person-days |\n- **QA %:** 20% {dash} 25% of effort")
     assert "64.4 to 181.8" in out and "20% to 25%" in out
@@ -447,8 +446,8 @@ def test_replace_dashes_turns_numeric_ranges_into_to():
 
 def test_executive_readout_has_no_dash_punctuation():
     """The readout is built in code, so replace_dashes never sees it (live QA, 3.8.1)."""
-    from components import executive_readout_html
-    from executive_readout import ExecutiveReadout
+    from qai_consultant.ui.components import executive_readout_html
+    from qai_consultant.generation.executive_readout import ExecutiveReadout
 
     readout = ExecutiveReadout(
         overall_risk="Critical", risk_breakdown="3 Critical", effort_range="114.5 to 332.5 person-days",
@@ -462,7 +461,7 @@ def test_executive_readout_has_no_dash_punctuation():
 def test_readout_builder_formats_range_and_capacity_without_dashes():
     import inspect
 
-    import executive_readout
+    from qai_consultant.generation import executive_readout
 
     src = inspect.getsource(executive_readout.build_readout)
     assert "—" not in src and "–" not in src

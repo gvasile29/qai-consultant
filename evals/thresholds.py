@@ -37,12 +37,12 @@ SOURCE_ATTRIBUTION_MIN = 0.9  # >=90% of [Source N] citations must point at a re
 JUDGED_QUORUM_MIN = 0.5       # >=half of judged cases must grade successfully, else the judged metrics SKIP (not pass on thin data)
 JUDGE_MAX_WORKERS = 3         # concurrent judged cases — capped low to stay under the paid API's rate limit
 
-# ── review_integrity (v3.1 — src/review_core.py QA document quality rubric) ──────
+# ── review_integrity (v3.1 — src/qai_consultant/core/review_core.py QA document quality rubric) ──────
 # A strong, IEEE-829-shaped test plan must score meaningfully higher than a
 # deliberately weak one — matches V3.1_PLAN.md's acceptance criterion (section 6).
 REVIEW_SCORE_ORDERING_DELTA_MIN = 20
 
-# ── maturity_integrity (v3.5 — src/maturity_core.py TMMi + EU AI Act rubric) ──
+# ── maturity_integrity (v3.5 — src/qai_consultant/core/maturity_core.py TMMi + EU AI Act rubric) ──
 # A strongly-evidenced Level 2+3 description must reach at least this indicative
 # level; a no-process description must never exceed Level 1.
 MATURITY_LEVEL_ORDERING_MIN_LEVEL = 3

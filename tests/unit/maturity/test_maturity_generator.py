@@ -1,5 +1,5 @@
 """
-Tests for src/maturity_generator.py — narrative prompt building, report
+Tests for src/qai_consultant/generation/maturity_generator.py — narrative prompt building, report
 markdown assembly, and save() conventions for the QA Maturity Assessment
 (v3.5). No LLM call is made here — only the pure prompt/markdown builders
 and the file-save path. Mirrors tests/unit/review/test_review_generator.py's structure.
@@ -12,10 +12,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC_DIR))
 
-from maturity_core import MaturityFinding, MaturityResult  # noqa: E402
-from maturity_generator import (  # noqa: E402
+from qai_consultant.core.maturity_core import MaturityFinding, MaturityResult  # noqa: E402
+from qai_consultant.generation.maturity_generator import (  # noqa: E402
     MATURITY_SYSTEM_PROMPT,
     build_maturity_prompt,
     build_maturity_report_markdown,

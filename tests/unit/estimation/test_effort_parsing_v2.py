@@ -7,11 +7,10 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src"))
 
-import effort_core  # noqa: E402
-from dialogue import ProjectContext  # noqa: E402
-from effort_core import compute_estimation, parse_duration, parse_team_size  # noqa: E402
+from qai_consultant.core import effort_core  # noqa: E402
+from qai_consultant.core.dialogue import ProjectContext  # noqa: E402
+from qai_consultant.core.effort_core import compute_estimation, parse_duration, parse_team_size  # noqa: E402
 
 
 def _ctx(**kw) -> ProjectContext:
@@ -224,6 +223,6 @@ def test_unrecognised_project_type_warns():
 
 
 def test_romanian_de_between_number_and_unit():
-    import effort_core as e
+    from qai_consultant.core import effort_core as e
     assert e.parse_duration('30 de zile', []) == 21
 

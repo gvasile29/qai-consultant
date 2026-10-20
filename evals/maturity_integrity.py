@@ -1,5 +1,5 @@
 """Maturity-integrity gate: deterministic checks over QAI Consultant's real shipped
-src/maturity_core.py TMMi + EU AI Act rubric — nothing re-implemented. Issues surface
+src/qai_consultant/core/maturity_core.py TMMi + EU AI Act rubric — nothing re-implemented. Issues surface
 as failing checks, not prose; a green table means the rubric scores honestly. Keyless
 and instant (no LLM, no keys, no heavy deps — maturity_core.py is stdlib-only), so it
 drops straight into CI.
@@ -26,7 +26,7 @@ def _load_target():
     """maturity_core.py is dependency-free (stdlib only) — no stubbing needed,
     unlike estimate_integrity.py's agent.py stub."""
     ensure_src_on_path()
-    from maturity_core import assess_maturity  # noqa: PLC0415
+    from qai_consultant.core.maturity_core import assess_maturity  # noqa: PLC0415
     return assess_maturity
 
 

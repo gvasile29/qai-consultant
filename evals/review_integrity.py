@@ -1,5 +1,5 @@
 """Review-integrity gate: deterministic checks over QAI Consultant's real shipped
-src/review_core.py QA Document Quality Review rubric — nothing re-implemented.
+src/qai_consultant/core/review_core.py QA Document Quality Review rubric — nothing re-implemented.
 Issues surface as failing checks, not prose; a green table means the rubric scores
 honestly. Keyless and instant (no LLM, no keys, no heavy deps — review_core.py is
 stdlib-only), so it drops straight into CI.
@@ -26,7 +26,7 @@ def _load_target():
     """review_core.py is dependency-free (stdlib only) — no stubbing needed,
     unlike estimate_integrity.py's agent.py stub."""
     ensure_src_on_path()
-    from review_core import review_document  # noqa: PLC0415
+    from qai_consultant.core.review_core import review_document  # noqa: PLC0415
     return review_document
 
 
