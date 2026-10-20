@@ -15,7 +15,7 @@ Success criteria:
 1. Same behaviour: the full suite passes with the same test count before and after (1025 at time of writing).
 2. Every documented command still works: `streamlit run src/app.py`, `python src/cli.py`, `python src/ingest.py`, `python src/mcp_server.py`, and `uvx qai-consultant-mcp`.
 3. The keyless guarantee of the MCP wheel is enforced by a test instead of by convention.
-4. No `sys.path` manipulation remains in `src/`, `tests/`, `evals/` or `scripts/`.
+4. No `sys.path` manipulation remains in `src/` or `tests/`; `scripts/` and `evals/` keep a single one-line bootstrap pointing at `src/`, because they run without an install.
 
 Non-goals: no behaviour change, no module splitting or merging, no renaming of
 public MCP tool names, no dependency changes.
@@ -57,6 +57,7 @@ Files in `src/` after the move:
 ## Packaging
 
 - `pyproject.toml`: replace `py-modules` with `[tool.setuptools.packages.find]` (`where = ["src"]`, include `qai_consultant`, `qai_consultant.common*`, `qai_consultant.core*`, `qai_consultant.mcp*`). The `knowledge_base` package-dir mapping and the exact-pin rule are untouched.
+- **As built:** the form that worked (needed to keep the top-level `knowledge_base` package alongside `src/`) is `[tool.setuptools.packages.find]` with `where = [".", "src"]`, `include = ["knowledge_base*", "qai_consultant", "qai_consultant.common*", "qai_consultant.core*", "qai_consultant.mcp*"]` and `namespaces = true`. `qai_consultant/cli.py` is app-side but lives in the top-level package, and `find` cannot exclude a single module, so a small `setup.py` overrides `build_py.find_package_modules` to drop it; `test_packaging.py` forbids it in the wheel.
 - Console script: `qai-consultant-mcp = "qai_consultant.mcp.server:main"`.
 - The licensing gate (`tests/system/release/test_packaging.py`: zero PDFs/HTML in the wheel) and the exact-pin test keep running unchanged. A new assertion checks that the built wheel contains only the three wheel subpackages.
 - `server.json`, `README_MCP.md` and `uvx qai-consultant-mcp` usage are unchanged apart from the version.
@@ -78,7 +79,7 @@ One scripted pass (same approach as the tests restructure), reviewed as a diff:
 1. `git mv` each module to its new path (preserves history).
 2. Rewrite imports with an AST-aware rewriter, not regex: `import x`, `from x import y`, and lazy in-function imports, in `src/`, `tests/`, `evals/`, `scripts/`.
 3. Rewrite string references that name modules: `mock.patch("agent.X")`, `monkeypatch.setattr("module.attr")`, `importlib`, and `sys.modules` stubs in evals. These are the main risk, since a pure import rewrite misses them and tests fail at runtime, not at import time.
-4. Remove the 7 `sys.path` hacks; add `pythonpath = ["src"]` to `[tool.pytest.ini_options]`; evals and scripts import the package.
+4. Remove the `sys.path` hacks from `src/` and `tests/`; add `pythonpath = ["src"]` to `[tool.pytest.ini_options]`; `scripts/` and `evals/` keep one one-line bootstrap pointing at `src/` (they run without an install) and import the package.
 5. Update path references in CI workflows, skills, `.claude/agents`, CLAUDE.md (architecture table, commands, import-graph rule), INSTALL.md, CONTRIBUTING.md and the README files. Historical docs (`docs/plans`, `docs/postmortems`, CHANGELOG entries) stay as written.
 6. Add a CHANGELOG entry and the new-module rows to CLAUDE.md in the same PR.
 

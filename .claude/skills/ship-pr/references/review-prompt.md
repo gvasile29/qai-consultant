@@ -19,7 +19,7 @@ You are reviewing a change in the QAI Consultant repo (Python: Streamlit app, CL
    - a loose (`>=`) dependency in `pyproject.toml`, or an OpenRouter model that is not `:free`
    - a CI `run:` block piping to `tee` without `set -o pipefail`
    - a user-visible error message that exposes API-key / `.env` / secrets hints (those go to logs only)
-4. Check the contracts: an MCP tool's name, arguments, or return shape changed without `README_MCP.md`, tests, and a version note; a module added to the MCP package without updating `pyproject.toml`'s `py-modules`; a `knowledge_base/` PDF or HTML that could reach the wheel (licensing gate in `tests/system/release/test_packaging.py`).
+4. Check the contracts: an MCP tool's name, arguments, or return shape changed without `README_MCP.md`, tests, and a version note; a wheel-tier module (`common/`, `core/`, `mcp/`) importing an app-side module (`tests/system/release/test_package_layout.py` guards this); a `knowledge_base/` PDF or HTML that could reach the wheel (licensing gate in `tests/system/release/test_packaging.py`).
 5. Check what agents leave behind: comments that narrate code, defensive checks or try/except the call site does not need, `# type: ignore` or `Any` to silence mypy, dead code, a second way of doing something the codebase already does one way (e.g. a new helper duplicating `components.py`, `kb_config.py`, or `gh_helpers.py`), hand-rolled retry or sleep loops.
 6. Check the tests: would they fail if the change were reverted? A test that passes with every dependency mocked proves nothing. LLM-output changes need a deterministic check on the parsed result, not just "no exception".
 

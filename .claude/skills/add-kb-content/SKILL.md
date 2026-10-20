@@ -9,7 +9,7 @@ Content under `knowledge_base/` feeds two surfaces that each have their own gate
 
 ## 1. Place the file
 
-- The top-level folder sets the metadata category via `src/kb_config.py`'s `SOURCE_CATEGORIES`: `standards/` = Standard, `methodologies/` = Methodology, `articles/` = Article, `expert_knowledge/` = Expert Knowledge, `evaluation_audit/` = Audit/Evaluation. A file outside these folders falls back to the generic `"General"` category.
+- The top-level folder sets the metadata category via `src/qai_consultant/common/kb_config.py`'s `SOURCE_CATEGORIES`: `standards/` = Standard, `methodologies/` = Methodology, `articles/` = Article, `expert_knowledge/` = Expert Knowledge, `evaluation_audit/` = Audit/Evaluation. A file outside these folders falls back to the generic `"General"` category.
 - Use `.md` (UTF-8) where you can. `.pdf` reaches Pinecone only and never ships in the MCP package.
 - Never put curated content in `generated_strategies/`. That folder holds user-feedback output, and the manifest test forbids referencing it.
 - Methodology guides end with a "QAI Consultant application" section. Match that if adding one.
@@ -24,7 +24,7 @@ Third-party text whose redistribution rights are unclear must not ship. Decide b
 
 ## 3. Sidebar manifest
 
-`KB_MANIFEST` in `src/kb_manifest.py` (emoji, label, paths relative to `knowledge_base/`) lists some content by folder and some by individual file:
+`KB_MANIFEST` in `src/qai_consultant/ui/kb_manifest.py` (emoji, label, paths relative to `knowledge_base/`) lists some content by folder and some by individual file:
 
 - **Picked up automatically:** a new file inside a folder-level entry (`methodologies`, `evaluation_audit`, `articles`, `expert_knowledge`, `standards/istqb`, `standards/owasp`).
 - **Needs its own entry:** a new file directly under `standards/` (those are listed one file at a time, e.g. `standards/IEEE_829_Test_Documentation.md`), or any new nested folder. `tests/unit/rag/test_kb_manifest.py` only checks top-level folders, so it will *not* catch the missing entry. Without one, the sidebar silently never shows the new standard.

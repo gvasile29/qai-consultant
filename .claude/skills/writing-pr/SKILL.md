@@ -17,7 +17,7 @@ Reviewers skim. Put the shape of the change on the first screen, then let tables
 The house layout is `## Why`, `## Changes`, `## Verified`. No essays.
 
 - **Why**: the problem in one to three sentences, with the evidence that it is real (an error code, a log line, a count).
-- **Changes**: one fact per bullet. Code refs (`src/agent.py:42`) instead of paraphrasing code. A before/after table for anything measurable (model comparison, token budget, timing, coverage).
+- **Changes**: one fact per bullet. Code refs (`src/qai_consultant/rag/agent.py:42`) instead of paraphrasing code. A before/after table for anything measurable (model comparison, token budget, timing, coverage).
 - **Verified** (required on every PR):
   - First line: `Ran it locally: yes`, or `Ran it locally: no - <why>` (docs-only, CI-only, needs a key you do not have).
   - With `yes`: the surface (see the `ship-pr` skill's step 2 table), the command or flow you ran, and what you saw: the saved `output/*.md` content, the CLI output as a fenced `text` block, or screenshots.
