@@ -6,12 +6,12 @@
     "url": "https://github.com/gvasile29/qai-consultant",
     "source": "github"
   },
-  "version": "3.8.1",
+  "version": "3.9.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "qai-consultant-mcp",
-      "version": "3.8.1",
+      "version": "3.9.0",
       "transport": {
         "type": "stdio"
       }
