@@ -57,22 +57,28 @@ def _strip_heredocs(command: str) -> str:
     """
     def repl(m: re.Match) -> str:
         opener = m.group(0).split("\n", 1)[0]
-        return opener if _heredoc_program(command, m) in _DATA_SINKS else m.group(0)
+        progs = _heredoc_programs(command, m)
+        return opener if progs and all(p in _DATA_SINKS for p in progs) else m.group(0)
 
     return _HEREDOC.sub(repl, command)
 
 
-def _heredoc_program(command: str, m: re.Match) -> str:
-    """Program on the command line that opens the heredoc matched by `m`."""
-    head = command[command.rfind("\n", 0, m.start()) + 1:m.start()]
-    toks = _tokens(head.split("&&")[-1].split(";")[-1].split("|")[-1])
-    return _program(toks[0]) if toks else ""
+def _heredoc_programs(command: str, m: re.Match) -> list[str]:
+    """Programs of every stage on the command line that opens the heredoc matched by `m`.
+
+    The whole line counts, so `cat <<EOF | bash` is an interpreter, not a data sink.
+    """
+    start = command.rfind("\n", 0, m.start()) + 1
+    end = command.find("\n", m.start())
+    line = command[start:end if end != -1 else len(command)]
+    stages = (_tokens(s) for s in re.split(r"&&|\|\||[;|&]", line))
+    return [_program(t[0]) for t in stages if t]
 
 
 def _python_heredoc_runs_ingest(command: str) -> bool:
-    """`python - <<EOF ... EOF`: the body is Python source, scanned like `python -c`."""
+    """`python - <<EOF ... EOF` or `cat <<EOF | python`: the body is Python source, scanned like `python -c`."""
     return any(
-        _PY.match(_heredoc_program(command, m)) and _INGEST_CODE.search(m.group(0).split("\n", 1)[1])
+        any(_PY.match(p) for p in _heredoc_programs(command, m)) and _INGEST_CODE.search(m.group(0).split("\n", 1)[1])
         for m in _HEREDOC.finditer(command)
     )
 
@@ -205,7 +211,9 @@ def _segment_decision(segment: str, branch_fn, depth: int = 0):
     prog = _program(toks[0])
     if prog in _SHELLS and depth < 3:
         for j, t in enumerate(toks[1:], start=1):
-            if _SHELL_ENCODED_FLAG.match(t):
+            # PowerShell's -enc/-ec also match the generic command-flag pattern, so test them first there;
+            # for sh-like shells `-e` is errexit and must never be read as "encoded".
+            if prog in {"powershell", "pwsh"} and _SHELL_ENCODED_FLAG.match(t):
                 return "ask", "Cannot inspect an encoded shell command. Confirm before running."
             if _SHELL_COMMAND_FLAG.match(t):
                 return evaluate(" ".join(toks[j + 1:]), branch_fn, depth + 1)
@@ -230,6 +238,11 @@ def evaluate(command: str, branch_fn=_current_branch, depth: int = 0):
     result = (None, "")
     if _python_heredoc_runs_ingest(command):
         return "deny", DENY_REASON
+    if depth < 3:  # command substitutions inside quotes, e.g. echo "$(python src/ingest.py)"
+        for inner in re.findall(r"\$\(([^()]*)\)|`([^`]*)`", command):
+            decision = evaluate(inner[0] or inner[1], branch_fn, depth + 1)
+            if decision[0] == "deny":
+                return decision
     for segment in _split_segments(_strip_heredocs(command)):
         decision = _segment_decision(segment, branch_fn, depth)
         if decision[0] == "deny":
