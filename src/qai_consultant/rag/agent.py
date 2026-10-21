@@ -214,16 +214,18 @@ class LLMClient:
 MISTRAL_MODEL    = "ministral-14b-2512"
 # OpenRouter fallback: free-tier models only (the account has no credits), sent
 # as OpenRouter's `models` fallback array so a rate-limited or removed free model
-# falls through to the next. Order = measured quality/latency on the real Risk
-# Register prompt (2026-09-23): Nemotron 3 Super (TTFT ~6s), then GLM 5.2
-# (slower, 32k ctx). Never add the "openrouter/free" auto-router: in a live
-# end-to-end run it routed the Risk Register to a content-safety classifier,
-# which "answered" with "User Safety: safe". Only explicitly vetted chat models.
-# Free endpoints may log/train on prompts — disclosed in
-# ai_disclosure.AI_INTERACTION_NOTICE.
+# falls through to the next. Re-vetted 2026-10-21 after the previous chain died
+# (Nemotron 3 Super: NVIDIA backend 404; GLM 5.2 :free removed from the catalog):
+# three providers. minimax-m3.1-flash was rejected: 64s of hidden reasoning, hit
+# the token cap, empty documents. Never add the
+# "openrouter/free" auto-router: in a live end-to-end run it routed the Risk
+# Register to a content-safety classifier, which "answered" with "User Safety:
+# safe". Only explicitly vetted chat models. Free endpoints may log/train on
+# prompts, disclosed in ai_disclosure.AI_INTERACTION_NOTICE.
 OPENROUTER_MODELS = [
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "z-ai/glm-5.2:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "google/gemma-4-31b-it:free",
+    "poolside/laguna-s-2.1:free",
 ]
 OPENROUTER_MODEL = OPENROUTER_MODELS[0]
 # EMBEDDING_MODEL imported from kb_config (shared with ingest.py, evals/rag.py,

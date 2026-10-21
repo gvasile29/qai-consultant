@@ -126,7 +126,7 @@ Table paths below are relative to `src/qai_consultant/`.
 
 ```python
 MISTRAL_MODEL    = "ministral-14b-2512"            # primary LLM provider (v3.6.2 — mistral-small is 429 on the Free plan)
-OPENROUTER_MODELS = ["nvidia/nemotron-3-super-120b-a12b:free", "z-ai/glm-5.2:free"]  # fallback chain, free tier only (v3.6.1)
+OPENROUTER_MODELS = ["nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free", "poolside/laguna-s-2.1:free"]  # fallback chain, free tier only, re-vetted 2026-10-21
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"   # must match ingest.py
 TOP_K_RESULTS    = 5          # default k for retrieve_knowledge()
 RAG_K_GENERATION = 5          # k for Risk + Strategy prompts
