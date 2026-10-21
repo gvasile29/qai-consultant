@@ -31,4 +31,4 @@ playwright==1.62.0
 # regenerating pyproject.toml's dependencies array per the comment above it
 # (the dependency-drift-check.yml workflow that used to also run this
 # command on a schedule was removed in v3.5.3 -- see CLAUDE.md's CI section).
-uv==0.11.28
+uv==0.13.4
