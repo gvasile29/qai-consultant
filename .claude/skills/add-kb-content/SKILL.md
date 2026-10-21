@@ -30,8 +30,6 @@ Third-party text whose redistribution rights are unclear must not ship. Decide b
 - **Needs its own entry:** a new file directly under `standards/` (those are listed one file at a time, e.g. `standards/IEEE_829_Test_Documentation.md`), or any new nested folder. `tests/unit/rag/test_kb_manifest.py` only checks top-level folders, so it will *not* catch the missing entry. Without one, the sidebar silently never shows the new standard.
 - **New top-level subfolder:** add an entry. Here the test does fail if you forget.
 
-Also update CLAUDE.md's "Knowledge Base → Contents" bullet if counts or pillars changed.
-
 ## 4. Eval case
 
 Add at least one line to `evals/rag_golden.jsonl` for a query the new doc should be retrieved for:

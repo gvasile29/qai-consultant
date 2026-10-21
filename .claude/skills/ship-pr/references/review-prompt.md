@@ -8,7 +8,7 @@ You are reviewing a change in the QAI Consultant repo (Python: Streamlit app, CL
 
 1. Read `CLAUDE.md`. Its Architecture table and Gotchas section are hard rules.
 2. Read the diff: `git fetch origin && git diff $(git merge-base origin/<base> HEAD)` (committed and uncommitted changes to tracked files; a local `<base>` can be stale) plus every untracked file `git status` lists. Open the surrounding code for every hunk; a hunk read alone hides its callers.
-3. Check the diff against every entry in CLAUDE.md's **Gotchas**. Common hits here:
+3. Check the diff against every entry in CLAUDE.md's **Gotchas**; if it touches `src/app.py`, `ui/` or `compliance/pdf_export.py`, also read `.claude/skills/streamlit-gotchas/SKILL.md`. Common hits here:
    - a bare `except Exception` around `st.*` calls without re-raising `StopException`/`RerunException` first
    - a new `st.session_state` key missing from the "Start Over" / "Generate Another Strategy" cleanup lists (`REVIEW_MODE_STATE_KEYS`, `MATURITY_MODE_STATE_KEYS`, ...)
    - `markdown_to_pdf()` called inside the tab render loop instead of cached in session state
