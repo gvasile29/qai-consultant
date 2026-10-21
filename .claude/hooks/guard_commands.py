@@ -12,6 +12,9 @@ own program and arguments are inspected, so a commit message or `echo` that mere
 `python src/ingest.py` is not blocked. Shell wrappers (`bash -c`, `powershell -Command`) are
 unwrapped one level at a time.
 
+Known limits (deliberate obfuscation is out of scope): variable indirection, `eval`, base64 payloads
+other than PowerShell `-EncodedCommand` (which asks), and scripts that themselves call ingest.
+
 Deny = exit 2 (reason on stderr). Ask = exit 0 with a permissionDecision JSON on stdout, so the
 user is prompted even under auto mode. An unreadable payload is allowed through (this guards
 accidents, it is not a security boundary; protect_files.py covers the file-edit tools).
@@ -25,8 +28,12 @@ import sys
 
 _TOKEN = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
 _PY = re.compile(r"^(?:python[\d.]*|py)$")
-_SHELLS = {"bash", "sh", "zsh", "cmd", "powershell", "pwsh"}
-_SHELL_FLAGS = {"-c", "-lc", "-command", "-c:", "/c", "-encodedcommand"}
+_SHELLS = {"bash", "sh", "zsh", "dash", "ksh", "cmd", "powershell", "pwsh"}
+_SHELL_COMMAND_FLAG = re.compile(r"^(?:-[a-z]*c|-command|-c:?|/[ck])$", re.IGNORECASE)
+_SHELL_ENCODED_FLAG = re.compile(r"^-e(?:c|nc\w*)?$", re.IGNORECASE)
+_DATA_SINKS = {"cat", "tee", "git", "gh", "echo", "printf", "cp", "mv", "sed", "awk", "grep", "head", "tail", "wc"}
+_WRAPPERS = {"env", "time", "nohup", "sudo", "command", "exec", "nice", "xargs", "call", "start", "uvx", "npx"}
+_RUNNER_PREFIXES = {"poetry", "pipx", "pdm", "hatch", "pipenv"}  # `<runner> run <program> ...`
 _INGEST_MODULES = {"qai_consultant.rag.ingest", "src.ingest", "ingest"}
 _INGEST_CODE = re.compile(r"ingest\.py|ingest\.main\s*\(|import\s+main\b[^;]*;\s*main\s*\(", re.IGNORECASE)
 _PROTECTED = {"main", "master"}
@@ -43,8 +50,31 @@ _HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.DOTALL 
 
 
 def _strip_heredocs(command: str) -> str:
-    """Drop here-document bodies (e.g. a PR description) so their text is not parsed as commands."""
-    return _HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], command)
+    """Drop here-document bodies (e.g. a PR description) so their text is not parsed as commands.
+
+    A body fed to an interpreter (`bash <<EOF`, `python - <<EOF`, `xargs ...`) is code, so it is kept
+    and scanned: only heredocs whose command line starts with a plain data sink are stripped.
+    """
+    def repl(m: re.Match) -> str:
+        opener = m.group(0).split("\n", 1)[0]
+        return opener if _heredoc_program(command, m) in _DATA_SINKS else m.group(0)
+
+    return _HEREDOC.sub(repl, command)
+
+
+def _heredoc_program(command: str, m: re.Match) -> str:
+    """Program on the command line that opens the heredoc matched by `m`."""
+    head = command[command.rfind("\n", 0, m.start()) + 1:m.start()]
+    toks = _tokens(head.split("&&")[-1].split(";")[-1].split("|")[-1])
+    return _program(toks[0]) if toks else ""
+
+
+def _python_heredoc_runs_ingest(command: str) -> bool:
+    """`python - <<EOF ... EOF`: the body is Python source, scanned like `python -c`."""
+    return any(
+        _PY.match(_heredoc_program(command, m)) and _INGEST_CODE.search(m.group(0).split("\n", 1)[1])
+        for m in _HEREDOC.finditer(command)
+    )
 
 
 def _split_segments(command: str) -> list[str]:
@@ -58,7 +88,7 @@ def _split_segments(command: str) -> list[str]:
         elif ch in "\"'":
             quote = ch
             buf.append(ch)
-        elif ch in ";&|\n(":
+        elif ch in ";&|\n()`":
             segments.append("".join(buf))
             buf = []
         else:
@@ -69,7 +99,7 @@ def _split_segments(command: str) -> list[str]:
 
 def _unquote(tok: str) -> str:
     # Also drops stray quotes left when a `bash -c "a && b"` string was split on the `&&` inside it.
-    return tok[1:-1] if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in "\"'" else tok.strip("\"'")
+    return tok[1:-1] if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in "\"'" else tok.strip("\"'{}")
 
 
 def _program(tok: str) -> str:
@@ -78,9 +108,18 @@ def _program(tok: str) -> str:
 
 
 def _tokens(segment: str) -> list[str]:
-    toks = [_unquote(t) for t in _TOKEN.findall(segment)]
-    while toks and (toks[0] == "&" or re.match(r"^[A-Za-z_]\w*=", toks[0])):
-        toks.pop(0)  # PowerShell call operator, VAR=value prefixes
+    toks = [t for t in (_unquote(t) for t in _TOKEN.findall(segment)) if t]
+    while toks:
+        if toks[0] == "&" or re.match(r"^[A-Za-z_]\w*=", toks[0]):
+            toks.pop(0)  # PowerShell call operator, VAR=value prefixes
+        elif _program(toks[0]) in _WRAPPERS:
+            toks.pop(0)  # `env`, `sudo`, `time`, ...: judge the program they launch
+            while toks and (toks[0].startswith("-") or "=" in toks[0]):
+                toks.pop(0)
+        elif _program(toks[0]) in _RUNNER_PREFIXES and toks[1:2] == ["run"]:
+            del toks[:2]
+        else:
+            break
     return toks
 
 
@@ -89,13 +128,16 @@ def _is_ingest_python(args: list[str]) -> bool:
     i = 0
     while i < len(args):
         a = args[i]
-        if a == "-m":
-            return i + 1 < len(args) and args[i + 1] in _INGEST_MODULES
-        if a == "-c":
-            return i + 1 < len(args) and bool(_INGEST_CODE.search(args[i + 1]))
         if a in _PY_VALUE_OPTS:
             i += 2
             continue
+        # `-m mod`, `-mmod`, `-Im mod`; `-c code`, `-ccode`: the value is attached or the next token
+        flag = re.match(r"^-([A-Za-z]*?)([mc])(.*)$", a)
+        if flag and not a.startswith("--"):
+            value = flag.group(3) or (args[i + 1] if i + 1 < len(args) else "")
+            if flag.group(2) == "m":
+                return value in _INGEST_MODULES
+            return bool(_INGEST_CODE.search(value))
         if a.startswith("-"):
             i += 1
             continue
@@ -163,7 +205,9 @@ def _segment_decision(segment: str, branch_fn, depth: int = 0):
     prog = _program(toks[0])
     if prog in _SHELLS and depth < 3:
         for j, t in enumerate(toks[1:], start=1):
-            if t.casefold() in _SHELL_FLAGS:
+            if _SHELL_ENCODED_FLAG.match(t):
+                return "ask", "Cannot inspect an encoded shell command. Confirm before running."
+            if _SHELL_COMMAND_FLAG.match(t):
                 return evaluate(" ".join(toks[j + 1:]), branch_fn, depth + 1)
         return None, ""
     if _is_ingest(toks):
@@ -184,6 +228,8 @@ def _segment_decision(segment: str, branch_fn, depth: int = 0):
 def evaluate(command: str, branch_fn=_current_branch, depth: int = 0):
     """Return ("deny"|"ask"|None, reason). A deny anywhere in the command wins over an ask."""
     result = (None, "")
+    if _python_heredoc_runs_ingest(command):
+        return "deny", DENY_REASON
     for segment in _split_segments(_strip_heredocs(command)):
         decision = _segment_decision(segment, branch_fn, depth)
         if decision[0] == "deny":

@@ -37,6 +37,19 @@ def decide(cmd, branch="feature"):
     "C:\\Python311\\python.exe src\\ingest.py",
     'bash -c "cd x && python src/ingest.py"',
     'powershell -Command "python src/ingest.py"',
+    "echo $(python src/ingest.py)",
+    "echo `python src/ingest.py`",
+    "{ python src/ingest.py; }",
+    "python -mingest",
+    "python -Im ingest",
+    "python -m ingest --x",
+    "env PYTHONPATH=. python src/ingest.py",
+    "sudo -E python src/ingest.py",
+    "time python src/ingest.py",
+    "poetry run python src/ingest.py",
+    'bash -lc "python src/ingest.py"',
+    "bash <<EOF\npython src/ingest.py\nEOF",
+    "python - <<EOF\nimport runpy; runpy.run_path('src/ingest.py')\nEOF",
     "python -m qai_consultant.rag.ingest",
     "py -m ingest",
     "python -c \"import runpy; runpy.run_path('src/ingest.py')\"",
@@ -58,6 +71,9 @@ def test_ingest_is_denied(cmd):
     "git commit -m 'run python src/ingest.py'",
     "echo python src/ingest.py",
     "uv run ruff check src/ingest.py",
+    "env FOO=1 ruff check src/ingest.py",
+    "python -m pytest -c pytest.ini tests",
+    "poetry run pytest tests/unit/rag/test_ingest.py",
     "git status",
 ])
 def test_ingest_lookalikes_are_allowed(cmd):
@@ -81,6 +97,11 @@ def test_ingest_lookalikes_are_allowed(cmd):
 ])
 def test_publish_steps_ask(cmd):
     assert decide(cmd) == "ask", cmd
+
+
+def test_encoded_shell_command_asks():
+    assert decide("powershell -EncodedCommand cABvAHcA") == "ask"
+    assert decide("pwsh -enc cABvAHcA") == "ask"
 
 
 def test_bare_push_asks_only_on_protected_branch():
