@@ -134,21 +134,66 @@ def project_context_of(prompt: Optional[str]) -> str:
     return m.group(1).lower() if m else ""
 
 
+_AUTOMATION_WORDS = {
+    "automation", "automated", "framework", "suite", "scripts", "tooling", "regression", "tests", "testing",
+}
+_NEGATED_VALUE = re.compile(
+    r"^\W*(?:no|none|not|without|zero|nil|n/a|nothing|never|absent|missing)\b|\bno\b[^.\n]{0,40}\byet\b|\bnone\b",
+    re.IGNORECASE,
+)
+
+
+def _claim_words(claim: str) -> set:
+    return {w for w in re.findall(r"[a-z0-9/]{5,}", claim.lower()) if w not in _CLAIM_FILLER}
+
+
+def _absence_verdict(claim: str, context_text: str) -> str:
+    """How the PROJECT CONTEXT relates to an absence claim: ``"asserted"`` (a
+    context line mentions the thing without negating it, so the denial is
+    false), ``"supported"`` (the only related lines themselves state the
+    absence, so the denial is true and must be left alone), or ``"unknown"``."""
+    if not context_text:
+        return "unknown"
+    words = _claim_words(claim)
+    if not words:
+        return "unknown"
+    automation_claim = bool(words & _AUTOMATION_WORDS)
+    asserted = supported = False
+    for line in context_text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        related = any(w in line for w in words) or (automation_claim and "automat" in line)
+        if not related:
+            continue
+        value = line.split(":", 1)[1] if ":" in line else line
+        if _NEGATED_VALUE.search(value.strip()):
+            supported = True
+        else:
+            asserted = True
+    if asserted:
+        return "asserted"
+    return "supported" if supported else "unknown"
+
+
 def qualify_absence_claims(text: str, context_text: str = "") -> str:
     """The model keeps asserting unprovided absences as fact ("No dedicated
     security specialist"). Whether something is missing is unknowable from the
     intake, so append an explicit "not stated" qualifier -- turning a false
-    finding into an honest gap. When the claim shares a content word with the
-    project context (e.g. "no dedicated regression suite" vs a listed "E2E test
-    suite"), the context actively contradicts it, so say that instead.
-    Idempotent."""
+    finding into an honest gap. When the project context itself lists the thing
+    (e.g. "no dedicated regression suite" vs a listed "E2E test suite"), it
+    contradicts the denial, so say that instead. When the context itself states
+    the absence ("Existing Automation: No automation yet"), the denial is
+    supported and left untouched. Idempotent."""
 
     def _repl(m: "re.Match") -> str:
         tail = text[m.end():m.end() + 80].lstrip("* ")
         if tail.startswith(("(not stated", "(project context")) or "not stated" in m.group(0):
             return m.group(0)
-        words = {w for w in re.findall(r"[a-z0-9]{5,}", m.group(0).lower()) if w not in _CLAIM_FILLER}
-        if context_text and any(w in context_text for w in words):
+        verdict = _absence_verdict(m.group(0), context_text)
+        if verdict == "supported":
+            return m.group(0)
+        if verdict == "asserted":
             # The context contradicts "no ..." outright, so don't keep the denial.
             return re.sub(r"^no\b", "Limited", m.group(0), flags=re.I) + _CONTRADICTION_NOTE
         return m.group(0) + _ABSENCE_QUALIFIER
@@ -166,7 +211,11 @@ def lint_output(text: str, context_text: str = "") -> list:
         problems.append("standards overstatement (mandated/unusable)")
     for m in _ABSENCE_CLAIM.finditer(text):
         tail = text[m.end():m.end() + 80].lstrip("* ")
-        if not tail.startswith(("(not stated", "(project context")) and "not stated" not in m.group(0):
+        if (
+            not tail.startswith(("(not stated", "(project context"))
+            and "not stated" not in m.group(0)
+            and _absence_verdict(m.group(0), context_text.lower()) != "supported"
+        ):
             problems.append(f"unqualified absence claim: {m.group(0)!r}")
     if replace_dashes(text) != text:
         problems.append("em/en dash used as punctuation")

@@ -465,3 +465,50 @@ def test_readout_builder_formats_range_and_capacity_without_dashes():
 
     src = inspect.getsource(executive_readout.build_readout)
     assert "—" not in src and "–" not in src
+
+
+# -- 2026-10 BESS run: absence claims the context supports must stay untouched --
+
+_BESS_PROMPT = (
+    "PROJECT CONTEXT:\n"
+    "Project Name: BESS trading\n"
+    "Team: 2 QA, 6 developers\n"
+    "Existing Automation:   No automation yet\n"
+    "Compliance: French and EU energy market regulations, GDPR\n\n"
+    "RELEVANT QA KNOWLEDGE BASE:\nx"
+)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "No existing automation framework",
+        "No existing framework",
+        "**No existing automation** today",
+        "- No documented regression suite",
+    ],
+)
+def test_absence_supported_by_context_is_left_untouched(sentence):
+    out = g.sanitize_llm_markdown(sentence, _BESS_PROMPT)
+    assert out == sentence
+    assert "Limited" not in out and "not stated" not in out
+    assert g.lint_output(out, project_context_of_prompt()) == []
+
+
+def project_context_of_prompt():
+    return g.project_context_of(_BESS_PROMPT)
+
+
+def test_absence_unrelated_to_context_is_still_qualified_not_rewritten():
+    out = g.sanitize_llm_markdown("No dedicated QA lead", _BESS_PROMPT)
+    assert out == "No dedicated QA lead (not stated in the project context)"
+    assert "Limited" not in out
+
+
+def test_absence_with_listed_suite_still_contradicted_next_to_negated_line():
+    prompt = (
+        "PROJECT CONTEXT:\nExisting Automation: Playwright E2E test suite\n"
+        "Notes: no manual testers\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    )
+    out = g.sanitize_llm_markdown("No dedicated regression suite here", prompt)
+    assert "Limited" in out and "related coverage" in out
