@@ -186,6 +186,9 @@ PERT EXPECTED EFFORT: {data.pert_total_expected} person-days
 AVAILABLE CAPACITY: {data.available_person_days} person-days{utilization_line}
 CAPACITY GAP: {"SURPLUS of " + str(data.capacity_gap) + " days" if data.capacity_gap >= 0 else "DEFICIT of " + str(abs(data.capacity_gap)) + " days"}
 
+PROJECT CONTEXT:
+{context.to_summary()}
+
 MULTIPLIERS APPLIED (the complete and exact list of uplift drivers):
 {multiplier_lines}
 WARNINGS FROM THE DETERMINISTIC PIPELINE:

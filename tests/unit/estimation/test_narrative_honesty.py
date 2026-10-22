@@ -66,6 +66,17 @@ def test_prompt_lists_multipliers_and_warnings_and_rules():
     assert "only" in prompt.lower() and "velocity" in prompt.lower()
 
 
+def test_prompt_carries_project_context_block_so_guards_know_the_intake():
+    from qai_consultant.compliance import output_guards as g
+
+    _, _, agent = _report()
+    prompt = agent.ask.call_args[0][0]
+    ctx = g.project_context_of(prompt)
+    assert "existing automation" in ctx and "multipliers applied" not in ctx
+    claim = "No existing automation requires a greenfield setup."
+    assert g.sanitize_llm_markdown(claim, source_text=prompt) == claim
+
+
 def test_second_range_is_labelled_statistical_approximation():
     report, _, _ = _report()
     assert "95% confidence range" not in report

@@ -71,6 +71,11 @@ def main() -> int:
     fields = {k: v for k, v in TEMPLATES[args.template].items() if k != "label"}
     context = ProjectContext(**fields)
     context_text = context.to_summary().lower()
+    # Figures quoted verbatim from the KB are legitimate; the sanitizer exempts
+    # them, so the gate must see the same corpus.
+    knowledge_text = "\n".join(
+        p.read_text(encoding="utf-8", errors="ignore") for p in (_REPO_ROOT / "knowledge_base").rglob("*.md")
+    )
 
     counter = _FallbackCounter()
     logging.getLogger("qai").addHandler(counter)
@@ -99,7 +104,7 @@ def main() -> int:
         hit = next((m for m in GARBAGE_MARKERS if m in text), None)
         if hit:
             problems.append(f"contains garbage marker {hit!r}")
-        problems += lint_output(text, context_text)
+        problems += lint_output(text, context_text, knowledge_text)
         if not path or not Path(path).is_file():
             problems.append("no saved file")
         elif len(Path(path).read_text(encoding="utf-8").strip()) < MIN_DOC_CHARS:

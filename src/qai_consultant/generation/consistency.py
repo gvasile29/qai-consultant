@@ -161,7 +161,7 @@ _RISK_ID_RE = re.compile(r"\bR\d{2}\b")
 
 
 def remove_unknown_risk_ids(text: str, ledger: list) -> str:
-    """Remove 'R\d\d' mentions that are not in the ledger. No-op without a
+    """Remove 'Rnn' risk-ID mentions that are not in the ledger. No-op without a
     ledger. Idempotent. Deliberately does not judge whether a *known* ID suits
     the adjacent text."""
     ids = {r["risk_id"] for r in ledger or []}

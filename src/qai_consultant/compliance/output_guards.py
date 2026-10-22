@@ -143,7 +143,7 @@ _ABSENCE_QUALIFIER = " (not stated in the project context)"
 
 
 _CONTEXT_BLOCK = re.compile(
-    r"PROJECT CONTEXT:\s*(.*?)(?=\n\s*(?:RELEVANT QA KNOWLEDGE BASE|RISK REGISTER|MEASURED EXECUTION DATA)|\Z)",
+    r"PROJECT CONTEXT:\s*(.*?)(?=\n\s*(?:RELEVANT QA KNOWLEDGE BASE|RISK REGISTER|MEASURED EXECUTION DATA|MULTIPLIERS APPLIED)|\Z)",
     re.DOTALL,
 )
 _CLAIM_FILLER = {"dedicated", "prior", "existing", "formal", "documented"}
@@ -157,7 +157,7 @@ def project_context_of(prompt: Optional[str]) -> str:
 
 
 _AUTOMATION_WORDS = {
-    "automation", "automated", "framework", "suite", "scripts", "tooling", "regression", "tests", "testing",
+    "automation", "automated", "framework", "suite", "scripts", "tooling", "regression",
 }
 _NEGATED_VALUE = re.compile(
     r"^\W*(?:no|none|not|without|zero|nil|n/a|nothing|never|absent|missing)\b|\bno\b[^.\n]{0,40}\byet\b|\bnone\b",
@@ -185,10 +185,26 @@ def _absence_verdict(claim: str, context_text: str) -> str:
         line = line.strip()
         if not line:
             continue
-        related = any(w in line for w in words) or (automation_claim and "automat" in line)
+        label, _, value = line.partition(":") if ":" in line else ("", "", line)
+        # Whole-word match only: "automatically trades the battery" in the project
+        # description is not a claim that an automation suite exists.
+        # With "Label: value" lines, only fields describing existing assets can
+        # contradict a denial ("Compliance: GDPR" is a requirement, not prior
+        # compliance testing); free text without a label keeps the whole-line match.
+        label = label.replace("_", " ")
+        label_ok = (
+            not label
+            or bool(re.search(r"\bautomat\w*|\btests?\b|\btool\w*|\bexisting\b|\bsetup\b|\binfrastructure\b|\bprocess\w*", label))
+            or (
+                any(w in label for w in words)
+                and not re.search(r"\bdescri\w*|\bcompliance\b|\bregulat\w*|\brisks?\b|\bcontext\b", label)
+            )
+        )
+        related = (label_ok and any(re.search(rf"\b{re.escape(w)}\b", line) for w in words)) or (
+            automation_claim and bool(re.search(r"\bautomat(?:ion|ed)\b|\btests?\b", label))
+        )
         if not related:
             continue
-        value = line.split(":", 1)[1] if ":" in line else line
         if _NEGATED_VALUE.search(value.strip()):
             supported = True
         else:
@@ -247,7 +263,7 @@ def qualify_assumed_people_traits(text: str, context_text: str = "") -> str:
     return _ASSUMED_PEOPLE.sub(_repl, text)
 
 
-def lint_output(text: str, context_text: str = "") -> list:
+def lint_output(text: str, context_text: str = "", knowledge_text: str = "") -> list:
     """Problems that must never survive sanitizing (used by the live smoke
     script and tests as the "won't happen again" gate)."""
     problems = []
@@ -276,7 +292,7 @@ def lint_output(text: str, context_text: str = "") -> list:
             problems.append(f"unflagged invented threshold: {m.group(0)!r}")
         for snippet in _unflagged_regulatory_tokens(text, context_text.lower()):
             problems.append(f"unverified regulatory claim: {snippet!r}")
-        for _end, m in _figure_hits(text, context_text.lower()):
+        for _end, m in _figure_hits(text, context_text.lower() + "\n" + knowledge_text.lower(), context_text.lower()):
             problems.append(f"unflagged invented figure: {m.group(0)!r}")
         for _end, name in _tool_hits(text, context_text):
             problems.append(f"unflagged tool outside the stated stack: {name!r}")
@@ -530,19 +546,32 @@ _FIGURE_GROUPS = tuple(f"f{i}" for i in range(1, 11))
 FIGURE_FLAG = " (illustrative, not from the project context)"
 
 
-def _figure_hits(text: str, haystack: str):
-    """(end_offset, match) for each invented-looking figure with a unit whose
-    number is absent from ``haystack`` (the whole prompt: context + knowledge)
-    and whose line carries no flag word. Number-less claims ("cost millions")
-    are always hits."""
+def _norm_phrase(s: str) -> str:
+    return re.sub(r"[\s*_]+", " ", s.lower()).strip()
+
+
+def _figure_hits(text: str, haystack: str, context: str = ""):
+    """(end_offset, match) for each invented-looking figure with a unit that is
+    neither quoted verbatim in ``haystack`` (the whole prompt: context +
+    knowledge, e.g. "3-5 regression cycles") nor has its bare number in the
+    project ``context``, and whose line carries no flag word. A number that
+    merely occurs somewhere in the knowledge base does not exempt an unrelated
+    figure. Number-less claims ("cost millions") are always hits."""
+    hay = _norm_phrase(haystack)
     for line_start, line in _lines_with_offsets(text):
         if line.lstrip().startswith("#") or _FLAG_WORDS.search(line):
+            continue
+        if "[source " in line.lower():
+            # Attributed to a retrieved source; the citation guard validates the
+            # marker itself, so don't also call the figure invented.
             continue
         for m in _FIGURE.finditer(line):
             num = next((m.group(g) for g in _FIGURE_GROUPS if m.group(g)), None)
             if num and num.lower() not in ("millions", "thousands"):
+                if _norm_phrase(m.group(0)).lstrip("~") in hay:
+                    continue
                 bare = num.rstrip(".,")
-                if re.search(rf"(?<![\d.]){re.escape(bare)}(?![\d.])", haystack):
+                if re.search(rf"(?<![\d.]){re.escape(bare)}(?![\d.])", context):
                     continue
             yield line_start + m.end(), m
 
@@ -582,7 +611,7 @@ def flag_invented_thresholds(text: str, source_text: Optional[str]) -> str:
     context = project_context_of(source_text)
     if not context:
         return text
-    inserts = {e: FIGURE_FLAG for e, _ in _figure_hits(text, (source_text or "").lower())}
+    inserts = {e: FIGURE_FLAG for e, _ in _figure_hits(text, (source_text or "").lower(), context)}
     inserts.update({e: THRESHOLD_FLAG for e, _ in _threshold_hits(text, context)})
     for end in sorted(inserts, reverse=True):
         text = text[:end] + inserts[end] + text[end:]

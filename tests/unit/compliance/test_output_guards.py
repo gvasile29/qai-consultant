@@ -541,7 +541,7 @@ def test_invented_figures_with_units_are_flagged_once_and_idempotently(line):
 def test_figures_present_in_source_or_structural_are_not_flagged():
     prompt = (
         "PROJECT CONTEXT:\nSLA: 99 requests/sec peak, 24-hour SLA for Critical\n\n"
-        "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 — Standard: a.md]\nkeep SoC within 90% window\n"
+        "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 — Standard: a.md]\nkeep 90% SoC within the window\n"
     )
     same = (
         "- Handle 99 requests/sec\n- 24-hour SLA for Critical\n- Keep 90% SoC\n"
@@ -656,3 +656,42 @@ def test_generic_regulatory_wording_is_untouched():
     text = "Applicable regulations (to be confirmed with a domain/legal expert) govern reporting; the credit rating agency is out of scope."
     assert g.sanitize_llm_markdown(text, _BESS_PROMPT) == text
     assert g.sanitize_llm_markdown("ACPR") == "ACPR"  # no source text, no judgement
+
+
+# -- 2026-10 live re-run: gaps the first fix missed ---------------------------
+
+_LIVE_BESS_PROMPT = (
+    "PROJECT CONTEXT:\nPROJECT CONTEXT SUMMARY\n==========\nProject Name:  BESS\n"
+    "Description:   Control and trading software for a 100 MW battery. It automatically "
+    "trades the battery on the electricity markets.\nQA Team Size:  2\n"
+    "Existing Automation:   No automation yet\nCompliance:    GDPR\n\n"
+    "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 - Methodology: e.md]\nKeep logs for 24 hours.\n"
+)
+
+
+def test_automatically_in_description_does_not_assert_an_automation_suite():
+    text = "- No existing automation means manual regression is slow.\n- No existing framework."
+    assert g.sanitize_llm_markdown(text, _LIVE_BESS_PROMPT) == text
+
+
+def test_number_elsewhere_in_kb_does_not_exempt_an_unrelated_figure():
+    out = g.sanitize_llm_markdown("- Fix Critical defects within 24-hour SLA.", _LIVE_BESS_PROMPT)
+    assert "illustrative" in out
+
+
+def test_compliance_requirement_does_not_contradict_no_prior_compliance_testing():
+    text = "- No prior compliance testing exists."
+    out = g.sanitize_llm_markdown(text, _LIVE_BESS_PROMPT)
+    assert "Limited" not in out and "assess its adequacy" not in out
+    assert out.endswith("(not stated in the project context).") or "not stated in the project context" in out
+
+
+def test_lint_accepts_figure_quoted_verbatim_in_knowledge_text():
+    line = "- Break-even after 3-5 regression cycles."
+    assert g.lint_output(line, "x: y") != []
+    assert g.lint_output(line, "x: y", "automation pays off after 3-5 regression cycles") == []
+
+
+def test_source_cited_figure_is_not_called_invented():
+    line = "- Automation pays off after 3-5 regression cycles ([Source 1])."
+    assert g.sanitize_llm_markdown(line, _LIVE_BESS_PROMPT) == line
