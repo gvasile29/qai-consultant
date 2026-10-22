@@ -599,3 +599,60 @@ def test_seniority_stated_in_context_or_unrelated_assumption_untouched():
 def test_grounding_rules_forbid_unstated_seniority_and_process_facts():
     low = g.GROUNDING_RULES.lower()
     assert "seniority" in low and "experience" in low and "mark" in low
+
+
+# -- 2026-10 BESS run: regulators/statutes named from memory ------------------
+
+UNVERIFIED = "(unverified, confirm with a domain expert)"
+
+
+def test_regulatory_rules_exported_and_embedded_in_grounding_rules():
+    import re
+
+    assert g.REGULATORY_RULES.strip() in g.GROUNDING_RULES
+    low = g.REGULATORY_RULES.lower()
+    assert "regulator" in low and "penalt" in low and "retention" in low and "domain" in low
+    assert not re.search(r"\d+\.\d+", g.REGULATORY_RULES)
+    for token in ("ACPR", "ENTSO-E", "MiFID", "REMIT", "TTF"):
+        assert token not in g.GROUNDING_RULES  # rule text must not whitelist tokens by naming them
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Risk: French RTE or EU ENTSO-E penalties for outages.",
+        "Escalate to ACPR, ENTSO-E warnings if breached.",
+        "Validate NAP, TTF compliance reporting formats.",
+        "Retain records for 7+ years for EU MiFID II.",
+        "Fines up to 4% of annual global revenue apply.",
+        "REMIT reporting must be tested.",
+    ],
+)
+def test_unverified_regulatory_tokens_get_one_marker_per_sentence(sentence):
+    out = g.sanitize_llm_markdown(sentence, _BESS_PROMPT)
+    assert out.count(UNVERIFIED) == 1, out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+    assert g.lint_output(out, g.project_context_of(_BESS_PROMPT)) == []
+
+
+def test_regulatory_tokens_present_in_source_are_not_flagged():
+    prompt = (
+        "PROJECT CONTEXT:\nCompliance: MiFID II and REMIT, ACPR reporting, retain 7+ years\n\n"
+        "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 — Standard: a.md]\nENTSO-E network codes, TTF hub\n"
+    )
+    text = "ACPR and MiFID II, REMIT, ENTSO-E, TTF apply; keep 7+ years."
+    assert g.sanitize_llm_markdown(text, prompt) == text
+
+
+def test_regulatory_marker_sits_after_token_in_table_cell_and_skips_code_and_headings():
+    text = "| Reg | Check |\n| **ACPR** | verify |\n```\nACPR\n```\n## ACPR notes"
+    out = g.sanitize_llm_markdown(text, _BESS_PROMPT)
+    assert out.count(UNVERIFIED) == 1
+    assert out.splitlines()[1].count("|") == 3
+    assert out.splitlines()[3] == "ACPR" and out.splitlines()[-1] == "## ACPR notes"
+
+
+def test_generic_regulatory_wording_is_untouched():
+    text = "Applicable regulations (to be confirmed with a domain/legal expert) govern reporting; the credit rating agency is out of scope."
+    assert g.sanitize_llm_markdown(text, _BESS_PROMPT) == text
+    assert g.sanitize_llm_markdown("ACPR") == "ACPR"  # no source text, no judgement

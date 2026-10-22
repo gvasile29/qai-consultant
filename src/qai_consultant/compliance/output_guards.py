@@ -13,6 +13,18 @@ Two layers, both dependency-free (stdlib only):
 import re
 from typing import Optional
 
+# Also appended to GROUNDING_RULES, so every generator prompt that embeds
+# GROUNDING_RULES already carries it; exported separately for any prompt that
+# does not. The text deliberately names no regulator, so the prompt cannot
+# whitelist one for the sanitizer's "absent from the source" check.
+REGULATORY_RULES = """\
+- Never name a specific regulator, supervisory authority, statute, directive, market-code,
+  penalty or fine amount, record-retention period, or regulatory reporting format unless it
+  appears in the PROJECT CONTEXT or in the retrieved knowledge-base text. Do not recall
+  them from memory, and do not guess which body supervises or fines whom. Write
+  "applicable regulations (to be confirmed with a domain/legal expert)" instead.
+"""
+
 GROUNDING_RULES = """\
 GROUNDING RULES (these override any instinct to sound specific):
 - Treat the PROJECT CONTEXT as the ONLY source of facts about this project. Never state
@@ -35,7 +47,7 @@ GROUNDING RULES (these override any instinct to sound specific):
   points, or effort uplifts and present them as facts. A figure that is not in the PROJECT
   CONTEXT or the knowledge base must be labelled "illustrative, not from the project
   context", or replaced by "to be defined with the team".
-"""
+""" + REGULATORY_RULES
 
 CITATION_RULES = """\
 CITATION RULES:
@@ -262,6 +274,8 @@ def lint_output(text: str, context_text: str = "") -> list:
     if context_text:
         for _end, m in _threshold_hits(text, context_text.lower()):
             problems.append(f"unflagged invented threshold: {m.group(0)!r}")
+        for snippet in _unflagged_regulatory_tokens(text, context_text.lower()):
+            problems.append(f"unverified regulatory claim: {snippet!r}")
         for _end, m in _figure_hits(text, context_text.lower()):
             problems.append(f"unflagged invented figure: {m.group(0)!r}")
         for _end, name in _tool_hits(text, context_text):
@@ -613,6 +627,82 @@ def flag_unlisted_tools(text: str, source_text: Optional[str]) -> str:
     return text
 
 
+# Conservative allowlist: regulator/statute/penalty/retention tokens the model
+# tends to recall from memory (sometimes wrongly). The knowledge base has no
+# energy-market content, so none of these can be verified unless the prompt
+# itself carries them. Acronyms are case-sensitive to avoid common words.
+_REG_ACRONYM = re.compile(
+    r"(?<![\w-])(?:ACPR|ENTSO-E|RTE|CRE|ACER|REMIT|TTF|NAP|MiFID(?:\s+II)?)(?![\w-])"
+)
+_REG_PENALTY = re.compile(
+    r"\bup to \d+(?:\.\d+)?\s*%\s+of\s+(?:[\w-]+\s+){0,3}?(?:revenue|turnover)\b", re.IGNORECASE
+)
+_REG_RETENTION = re.compile(r"(?<![\w.])\d{1,2}\+\s+years\b", re.IGNORECASE)
+REGULATORY_FLAG = " (unverified, confirm with a domain expert)"
+_REG_FLAG_MARK = "unverified, confirm with a domain expert"
+
+
+def _regulatory_hits(sentence: str, haystack: str):
+    """End offsets of regulatory tokens in ``sentence`` absent from ``haystack``."""
+    for pattern in (_REG_ACRONYM, _REG_PENALTY, _REG_RETENTION):
+        for m in pattern.finditer(sentence):
+            token = m.group(0)
+            if pattern is _REG_PENALTY:
+                token = re.search(r"\d+(?:\.\d+)?\s*%", token).group(0).replace(" ", "")  # type: ignore[union-attr]
+            elif pattern is _REG_RETENTION:
+                token = re.sub(r"\s+", " ", token.lower())
+            if re.search(rf"(?<![\w-]){re.escape(token.lower())}(?![\w-])", haystack):
+                continue
+            yield m.end()
+
+
+def _sentences(line: str):
+    return re.split(r"(?<=[.!?])(\s+)", line)
+
+
+def _flag_sentence(sentence: str, haystack: str) -> str:
+    if _REG_FLAG_MARK in sentence:
+        return sentence
+    ends = sorted(_regulatory_hits(sentence, haystack))
+    if not ends:
+        return sentence
+    pos = ends[0]
+    while pos < len(sentence) and sentence[pos] in "*_":
+        pos += 1  # keep closing emphasis markers attached to the token
+    return sentence[:pos] + REGULATORY_FLAG + sentence[pos:]
+
+
+def flag_unverified_regulatory_claims(text: str, source_text: Optional[str]) -> str:
+    """Name-dropped regulators, market codes, fine percentages and retention
+    periods ("ACPR", "ENTSO-E", "7+ years") that are absent from the prompt were
+    recalled from memory and are sometimes wrong, so append one "(unverified,
+    confirm with a domain expert)" marker per sentence. Headings and fenced code
+    are skipped; without a source nothing is judged. Idempotent."""
+    if not source_text:
+        return text
+    haystack = source_text.lower()
+    out = []
+    in_fence = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and not line.lstrip().startswith("#"):
+            line = "".join(_flag_sentence(s, haystack) for s in _sentences(line))
+        out.append(line)
+    return "\n".join(out)
+
+
+def _unflagged_regulatory_tokens(text: str, haystack: str) -> list:
+    found = []
+    for _start, line in _lines_with_offsets(text):
+        if line.lstrip().startswith("#"):
+            continue
+        for s in _sentences(line):
+            if _REG_FLAG_MARK not in s and any(True for _ in _regulatory_hits(s, haystack)):
+                found.append(s.strip()[:60])
+    return found
+
+
 def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
     """Apply every deterministic guard. ``source_text`` is the prompt (or its
     knowledge block) the answer was generated from."""
@@ -626,6 +716,7 @@ def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
     text = strip_unverified_syllabus_versions(text, source_text)
     text = flag_invented_thresholds(text, source_text)
     text = flag_unlisted_tools(text, source_text)
+    text = flag_unverified_regulatory_claims(text, source_text)
     text = soften_absolute_tone(text)
     text = clean_separator_debris(text)
     return replace_dashes(text)
