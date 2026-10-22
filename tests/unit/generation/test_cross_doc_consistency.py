@@ -176,3 +176,81 @@ def test_generate_all_wires_risk_register(monkeypatch, tmp_path):
     agent.retrieve_knowledge.return_value = []
     StrategyGenerator(agent).generate_all(CTX)
     assert captured["risk"] == RISK_REGISTER
+
+
+# ── Finding 3c: scope consistency ─────────────────────────────────────────────
+
+STRATEGY_WITH_SCOPE = """# Test Strategy: BESS
+
+## 2. Scope: What Will Be Tested
+- Trading engine
+- Gateway adapters
+
+## 3. Scope: What Will NOT Be Tested
+- UI testing (backend-only)
+- Exploratory testing not feasible
+
+## 4. Risk Assessment
+irrelevant
+"""
+
+
+def test_scope_rules_text_forbids_contradiction_and_unstated_ui():
+    rules = cons.SCOPE_RULES.lower()
+    assert "out of scope" in rules and "must not" in rules
+    assert "ui not specified in the intake" in rules
+
+
+def test_strategy_prompt_has_scope_rules():
+    assert cons.SCOPE_RULES.strip().splitlines()[0] in build_strategy_prompt(CTX, "kb")
+
+
+def test_extract_scope_decisions_returns_only_scope_sections():
+    out = cons.extract_scope_decisions(STRATEGY_WITH_SCOPE)
+    assert "UI testing (backend-only)" in out and "Trading engine" in out
+    assert "irrelevant" not in out
+    assert cons.extract_scope_decisions("") == ""
+    assert cons.extract_scope_decisions("# no scope sections") == ""
+    assert len(cons.extract_scope_decisions("## 2. Scope: x\n" + "a" * 5000)) <= 1600
+
+
+def _plan_prompt(**kw):
+    from qai_consultant.generation.test_plan_generator import build_test_plan_prompt
+    return build_test_plan_prompt(CTX, RISK_REGISTER, "kb", **kw)
+
+
+def test_test_plan_prompt_has_scope_rules_and_strategy_scope():
+    p = _plan_prompt(strategy_scope="- UI testing (backend-only)")
+    assert cons.SCOPE_RULES.strip().splitlines()[0] in p
+    assert "STRATEGY SCOPE DECISIONS" in p and "UI testing (backend-only)" in p
+    assert "STRATEGY SCOPE DECISIONS" not in _plan_prompt()
+
+
+def test_test_plan_generate_accepts_strategy_scope():
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator
+    agent = MagicMock()
+    agent.format_knowledge_context.return_value = "kb"
+    agent.ask.return_value = "# Plan"
+    TestPlanGenerator(agent).generate(CTX, RISK_REGISTER, chunks=[], strategy_scope="- no UI")
+    assert "- no UI" in agent.ask.call_args[0][0]
+
+
+def test_generate_all_passes_strategy_scope_to_test_plan(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_plan(self, ctx, risk, chunks=None, strategy_scope=None):
+        captured["scope"] = strategy_scope
+        return "plan", []
+
+    monkeypatch.setattr(sg_module.RiskAnalyzer, "analyze", lambda self, c, chunks=None, results_summary=None: ("rr", []))
+    monkeypatch.setattr(sg_module.RiskAnalyzer, "save", lambda self, t, c: tmp_path / "r.md")
+    monkeypatch.setattr(sg_module.EffortEstimator, "estimate", lambda self, c, r: ("effort", {}))
+    monkeypatch.setattr(sg_module.EffortEstimator, "save", lambda self, t, c: tmp_path / "e.md")
+    monkeypatch.setattr(sg_module.StrategyGenerator, "generate", lambda self, c, chunks=None, **kw: (STRATEGY_WITH_SCOPE, []))
+    monkeypatch.setattr(sg_module.StrategyGenerator, "save", lambda self, t, c: tmp_path / "s.md")
+    monkeypatch.setattr(sg_module.TestPlanGenerator, "generate", fake_plan)
+    monkeypatch.setattr(sg_module.TestPlanGenerator, "save", lambda self, t, c: tmp_path / "p.md")
+    agent = MagicMock()
+    agent.retrieve_knowledge.return_value = []
+    StrategyGenerator(agent).generate_all(CTX)
+    assert "UI testing (backend-only)" in captured["scope"]

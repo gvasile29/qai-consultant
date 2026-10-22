@@ -24,7 +24,7 @@ from qai_consultant.generation.test_plan_generator import TestPlanGenerator
 from qai_consultant.generation.effort_estimator import EffortEstimator
 from qai_consultant.common.logger import get_logger
 from qai_consultant.generation.consistency import (
-    effort_facts, effort_prompt_block, enforce_effort_totals, ledger_prompt_block, risk_ledger,
+    SCOPE_RULES, effort_facts, effort_prompt_block, extract_scope_decisions, enforce_effort_totals, ledger_prompt_block, risk_ledger,
 )
 from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
@@ -61,7 +61,7 @@ def build_strategy_prompt(
     must be reused verbatim in the Resources section.
     ledger: optional parsed Risk Matrix rows; ratings must be reused, not re-rated.
     """
-    effort_block = effort_prompt_block(effort) + ledger_prompt_block(ledger or [])
+    effort_block = effort_prompt_block(effort) + ledger_prompt_block(ledger or []) + SCOPE_RULES
     return f"""
 Based on the following project context and QA knowledge base, generate a complete and professional Test Strategy document.
 
@@ -227,7 +227,13 @@ class StrategyGenerator:
 
         logger.info("Step 4/4 — Generating Test Plan...")
         try:
-            test_plan, test_plan_sources = test_plan_generator.generate(context, risk_register, chunks=test_plan_chunks)
+            plan_kwargs: dict = {}
+            scope = extract_scope_decisions(strategy)
+            if scope:
+                plan_kwargs["strategy_scope"] = scope
+            test_plan, test_plan_sources = test_plan_generator.generate(
+                context, risk_register, chunks=test_plan_chunks, **plan_kwargs,
+            )
             test_plan_path = test_plan_generator.save(test_plan, context)
             logger.info(f"Test Plan saved: {test_plan_path.name}")
         except Exception as exc:

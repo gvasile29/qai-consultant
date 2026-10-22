@@ -122,3 +122,28 @@ level VERBATIM. You may add detail and mitigations, but do NOT re-rate a risk or
 systems as "assumed reliable" when the ledger rates their failure as a risk). Any extra risk you
 add that is not in the ledger must be labelled "additional (not in Risk Register)" with no R-number.
 """
+
+
+# ── Scope consistency (Finding 3c) ─────────────────────────────────────────────
+
+SCOPE_RULES = """SCOPE CONSISTENCY RULES:
+- Scope statements must be internally consistent: anything listed as out of scope or "not feasible"
+  must not reappear later as a test type, activity, test item or feature to be tested.
+- Do not assert or deny that the system has a user interface (UI, dashboard, web front end) unless the
+  project context says so. If the intake does not say, write "UI not specified in the intake" and do not
+  add UI test items or "No UI testing (backend-only)" exclusions.
+"""
+
+_SCOPE_HEADING_RE = re.compile(r"^##\s+\d+\.\s*Scope\b.*$", re.IGNORECASE | re.MULTILINE)
+_SCOPE_MAX_CHARS = 1500
+
+
+def extract_scope_decisions(strategy: str) -> str:
+    """Short extract of the Strategy's in/out-of-scope sections ('' if none)."""
+    if not strategy:
+        return ""
+    parts = []
+    for m in _SCOPE_HEADING_RE.finditer(strategy):
+        nxt = _NEXT_H2_RE.search(strategy, m.end())
+        parts.append(strategy[m.start():nxt.start() if nxt else len(strategy)].strip())
+    return "\n\n".join(parts)[:_SCOPE_MAX_CHARS]
