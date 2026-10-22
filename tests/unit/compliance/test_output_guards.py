@@ -465,3 +465,233 @@ def test_readout_builder_formats_range_and_capacity_without_dashes():
 
     src = inspect.getsource(executive_readout.build_readout)
     assert "—" not in src and "–" not in src
+
+
+# -- 2026-10 BESS run: absence claims the context supports must stay untouched --
+
+_BESS_PROMPT = (
+    "PROJECT CONTEXT:\n"
+    "Project Name: BESS trading\n"
+    "Team: 2 QA, 6 developers\n"
+    "Existing Automation:   No automation yet\n"
+    "Compliance: French and EU energy market regulations, GDPR\n\n"
+    "RELEVANT QA KNOWLEDGE BASE:\nx"
+)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "No existing automation framework",
+        "No existing framework",
+        "**No existing automation** today",
+        "- No documented regression suite",
+    ],
+)
+def test_absence_supported_by_context_is_left_untouched(sentence):
+    out = g.sanitize_llm_markdown(sentence, _BESS_PROMPT)
+    assert out == sentence
+    assert "Limited" not in out and "not stated" not in out
+    assert g.lint_output(out, project_context_of_prompt()) == []
+
+
+def project_context_of_prompt():
+    return g.project_context_of(_BESS_PROMPT)
+
+
+def test_absence_unrelated_to_context_is_still_qualified_not_rewritten():
+    out = g.sanitize_llm_markdown("No dedicated QA lead", _BESS_PROMPT)
+    assert out == "No dedicated QA lead (not stated in the project context)"
+    assert "Limited" not in out
+
+
+def test_absence_with_listed_suite_still_contradicted_next_to_negated_line():
+    prompt = (
+        "PROJECT CONTEXT:\nExisting Automation: Playwright E2E test suite\n"
+        "Notes: no manual testers\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    )
+    out = g.sanitize_llm_markdown("No dedicated regression suite here", prompt)
+    assert "Limited" in out and "related coverage" in out
+
+
+# -- 2026-10 BESS run: invented figures with units ---------------------------
+
+ILLUSTRATIVE = "(illustrative, not from the project context)"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- Gateway handles 100+ requests/sec",
+        "- Fines of €100K+ per breach",
+        "- A failure could cost millions in lost revenue",
+        "- Dev fix SLA: 24-hour SLA for Critical, 48h for High",
+        "- Allocate 20% extra effort for regression",
+        "- Automation break-even after ~4 regression cycles",
+        "- Never exceed 90% SoC during tests",
+    ],
+)
+def test_invented_figures_with_units_are_flagged_once_and_idempotently(line):
+    out = g.sanitize_llm_markdown(line, _BESS_PROMPT)
+    assert out.count(ILLUSTRATIVE) >= 1, out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+    assert g.lint_output(out, g.project_context_of(_BESS_PROMPT)) == []
+
+
+def test_figures_present_in_source_or_structural_are_not_flagged():
+    prompt = (
+        "PROJECT CONTEXT:\nSLA: 99 requests/sec peak, 24-hour SLA for Critical\n\n"
+        "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 — Standard: a.md]\nkeep 90% SoC within the window\n"
+    )
+    same = (
+        "- Handle 99 requests/sec\n- 24-hour SLA for Critical\n- Keep 90% SoC\n"
+        "- Sprint 3 delivers R01 in a 9 month timeline\n- Section 4 covers 2 QA and 6 devs"
+    )
+    assert g.sanitize_llm_markdown(same, prompt) == same
+
+
+def test_already_flagged_figures_untouched():
+    line = "- 100+ requests/sec (suggested target, to be agreed)"
+    assert g.sanitize_llm_markdown(line, _BESS_PROMPT) == line
+
+
+def test_grounding_rules_forbid_invented_slas_and_figures():
+    low = g.GROUNDING_RULES.lower()
+    assert "sla" in low and "latenc" in low and "fine" in low and "throughput" in low
+
+
+# -- 2026-10 BESS run: invented process/tooling/seniority facts ---------------
+
+
+@pytest.mark.parametrize("claim", ["No CI/CD pipeline", "no peer review", "No version control", "No continuous integration setup"])
+def test_process_absences_get_not_stated_qualifier(claim):
+    out = g.sanitize_llm_markdown(f"- {claim}.", _BESS_PROMPT)
+    assert "(not stated in the project context)" in out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+    assert g.lint_output(f"- {claim}.", g.project_context_of(_BESS_PROMPT)) != []
+    assert g.lint_output(out, g.project_context_of(_BESS_PROMPT)) == []
+
+
+def test_process_absence_respects_context_statements():
+    stated_absent = "PROJECT CONTEXT:\nCI/CD: none\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    assert g.sanitize_llm_markdown("No CI/CD pipeline", stated_absent) == "No CI/CD pipeline"
+    present = "PROJECT CONTEXT:\nTooling: GitHub Actions CI/CD pipeline\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    out = g.sanitize_llm_markdown("No CI/CD pipeline", present)
+    assert out.startswith("Limited CI/CD pipeline") and "related coverage" in out
+
+
+def test_assumed_seniority_parenthetical_is_requalified():
+    text = "Team is small but experienced (assumed, since they're senior)."
+    out = g.sanitize_llm_markdown(text, _BESS_PROMPT)
+    assert "senior" not in out
+    assert "(assumption, not stated in the project context)" in out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+
+
+def test_seniority_stated_in_context_or_unrelated_assumption_untouched():
+    prompt = "PROJECT CONTEXT:\nTeam: 2 senior QA engineers\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    text = "Team is experienced (assumed from senior titles)."
+    assert g.sanitize_llm_markdown(text, prompt) == text
+    other = "Staging is shared (assumed, to be confirmed)."
+    assert g.sanitize_llm_markdown(other, _BESS_PROMPT) == other
+
+
+def test_grounding_rules_forbid_unstated_seniority_and_process_facts():
+    low = g.GROUNDING_RULES.lower()
+    assert "seniority" in low and "experience" in low and "mark" in low
+
+
+# -- 2026-10 BESS run: regulators/statutes named from memory ------------------
+
+UNVERIFIED = "(unverified, confirm with a domain expert)"
+
+
+def test_regulatory_rules_exported_and_embedded_in_grounding_rules():
+    import re
+
+    assert g.REGULATORY_RULES.strip() in g.GROUNDING_RULES
+    low = g.REGULATORY_RULES.lower()
+    assert "regulator" in low and "penalt" in low and "retention" in low and "domain" in low
+    assert not re.search(r"\d+\.\d+", g.REGULATORY_RULES)
+    for token in ("ACPR", "ENTSO-E", "MiFID", "REMIT", "TTF"):
+        assert token not in g.GROUNDING_RULES  # rule text must not whitelist tokens by naming them
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Risk: French RTE or EU ENTSO-E penalties for outages.",
+        "Escalate to ACPR, ENTSO-E warnings if breached.",
+        "Validate NAP, TTF compliance reporting formats.",
+        "Retain records for 7+ years for EU MiFID II.",
+        "Fines up to 4% of annual global revenue apply.",
+        "REMIT reporting must be tested.",
+    ],
+)
+def test_unverified_regulatory_tokens_get_one_marker_per_sentence(sentence):
+    out = g.sanitize_llm_markdown(sentence, _BESS_PROMPT)
+    assert out.count(UNVERIFIED) == 1, out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+    assert g.lint_output(out, g.project_context_of(_BESS_PROMPT)) == []
+
+
+def test_regulatory_tokens_present_in_source_are_not_flagged():
+    prompt = (
+        "PROJECT CONTEXT:\nCompliance: MiFID II and REMIT, ACPR reporting, retain 7+ years\n\n"
+        "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 — Standard: a.md]\nENTSO-E network codes, TTF hub\n"
+    )
+    text = "ACPR and MiFID II, REMIT, ENTSO-E, TTF apply; keep 7+ years."
+    assert g.sanitize_llm_markdown(text, prompt) == text
+
+
+def test_regulatory_marker_sits_after_token_in_table_cell_and_skips_code_and_headings():
+    text = "| Reg | Check |\n| **ACPR** | verify |\n```\nACPR\n```\n## ACPR notes"
+    out = g.sanitize_llm_markdown(text, _BESS_PROMPT)
+    assert out.count(UNVERIFIED) == 1
+    assert out.splitlines()[1].count("|") == 3
+    assert out.splitlines()[3] == "ACPR" and out.splitlines()[-1] == "## ACPR notes"
+
+
+def test_generic_regulatory_wording_is_untouched():
+    text = "Applicable regulations (to be confirmed with a domain/legal expert) govern reporting; the credit rating agency is out of scope."
+    assert g.sanitize_llm_markdown(text, _BESS_PROMPT) == text
+    assert g.sanitize_llm_markdown("ACPR") == "ACPR"  # no source text, no judgement
+
+
+# -- 2026-10 live re-run: gaps the first fix missed ---------------------------
+
+_LIVE_BESS_PROMPT = (
+    "PROJECT CONTEXT:\nPROJECT CONTEXT SUMMARY\n==========\nProject Name:  BESS\n"
+    "Description:   Control and trading software for a 100 MW battery. It automatically "
+    "trades the battery on the electricity markets.\nQA Team Size:  2\n"
+    "Existing Automation:   No automation yet\nCompliance:    GDPR\n\n"
+    "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 - Methodology: e.md]\nKeep logs for 24 hours.\n"
+)
+
+
+def test_automatically_in_description_does_not_assert_an_automation_suite():
+    text = "- No existing automation means manual regression is slow.\n- No existing framework."
+    assert g.sanitize_llm_markdown(text, _LIVE_BESS_PROMPT) == text
+
+
+def test_number_elsewhere_in_kb_does_not_exempt_an_unrelated_figure():
+    out = g.sanitize_llm_markdown("- Fix Critical defects within 24-hour SLA.", _LIVE_BESS_PROMPT)
+    assert "illustrative" in out
+
+
+def test_compliance_requirement_does_not_contradict_no_prior_compliance_testing():
+    text = "- No prior compliance testing exists."
+    out = g.sanitize_llm_markdown(text, _LIVE_BESS_PROMPT)
+    assert "Limited" not in out and "assess its adequacy" not in out
+    assert out.endswith("(not stated in the project context).") or "not stated in the project context" in out
+
+
+def test_lint_accepts_figure_quoted_verbatim_in_knowledge_text():
+    line = "- Break-even after 3-5 regression cycles."
+    assert g.lint_output(line, "x: y") != []
+    assert g.lint_output(line, "x: y", "automation pays off after 3-5 regression cycles") == []
+
+
+def test_source_cited_figure_is_not_called_invented():
+    line = "- Automation pays off after 3-5 regression cycles ([Source 1])."
+    assert g.sanitize_llm_markdown(line, _LIVE_BESS_PROMPT) == line

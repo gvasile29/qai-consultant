@@ -23,6 +23,9 @@ from qai_consultant.generation.risk_analyzer import RiskAnalyzer
 from qai_consultant.generation.test_plan_generator import TestPlanGenerator
 from qai_consultant.generation.effort_estimator import EffortEstimator
 from qai_consultant.common.logger import get_logger
+from qai_consultant.generation.consistency import (
+    REFERENCES_RULES, SCOPE_RULES, drop_padding_references, effort_facts, effort_prompt_block, extract_scope_decisions, enforce_effort_totals, ledger_prompt_block, risk_ledger,
+)
 from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
@@ -46,8 +49,19 @@ Always flag risks that are specific to the project type and context.
 """
 
 
-def build_strategy_prompt(context: ProjectContext, knowledge_context: str) -> str:
-    """Build the full prompt for Test Strategy generation."""
+def build_strategy_prompt(
+    context: ProjectContext,
+    knowledge_context: str,
+    effort: Optional[dict] = None,
+    ledger: Optional[list] = None,
+) -> str:
+    """Build the full prompt for Test Strategy generation.
+
+    effort: optional consistency.effort_facts() dict; when present its numbers
+    must be reused verbatim in the Resources section.
+    ledger: optional parsed Risk Matrix rows; ratings must be reused, not re-rated.
+    """
+    effort_block = effort_prompt_block(effort) + ledger_prompt_block(ledger or []) + SCOPE_RULES + REFERENCES_RULES
     return f"""
 Based on the following project context and QA knowledge base, generate a complete and professional Test Strategy document.
 
@@ -60,6 +74,7 @@ RELEVANT QA KNOWLEDGE BASE:
 {GROUNDING_RULES}
 {CITATION_RULES}
 {GENERATION_RULES}
+{effort_block}
 Generate a Test Strategy document using EXACTLY this structure:
 
 # Test Strategy: {context.project_name}
@@ -198,7 +213,12 @@ class StrategyGenerator:
 
         logger.info("Step 3/4 — Generating Test Strategy...")
         try:
-            strategy, sources = self.generate(context, chunks=strategy_chunks)
+            strategy_kwargs: dict = {}
+            if effort_facts(effort_data):
+                strategy_kwargs["effort_data"] = effort_data
+            if risk_ledger(risk_register):
+                strategy_kwargs["risk_register"] = risk_register
+            strategy, sources = self.generate(context, chunks=strategy_chunks, **strategy_kwargs)
             strategy_path = self.save(strategy, context)
             logger.info(f"Test Strategy saved: {strategy_path.name}")
         except Exception as exc:
@@ -207,7 +227,13 @@ class StrategyGenerator:
 
         logger.info("Step 4/4 — Generating Test Plan...")
         try:
-            test_plan, test_plan_sources = test_plan_generator.generate(context, risk_register, chunks=test_plan_chunks)
+            plan_kwargs: dict = {}
+            scope = extract_scope_decisions(strategy)
+            if scope:
+                plan_kwargs["strategy_scope"] = scope
+            test_plan, test_plan_sources = test_plan_generator.generate(
+                context, risk_register, chunks=test_plan_chunks, **plan_kwargs,
+            )
             test_plan_path = test_plan_generator.save(test_plan, context)
             logger.info(f"Test Plan saved: {test_plan_path.name}")
         except Exception as exc:
@@ -229,7 +255,13 @@ class StrategyGenerator:
             "test_plan_sources": test_plan_sources,
         }
 
-    def generate(self, context: ProjectContext, chunks: Optional[list] = None) -> tuple:
+    def generate(
+        self,
+        context: ProjectContext,
+        chunks: Optional[list] = None,
+        effort_data=None,
+        risk_register: Optional[str] = None,
+    ) -> tuple:
         """
         Generate a Test Strategy document for the given project context.
 
@@ -242,10 +274,17 @@ class StrategyGenerator:
             chunks: Optional pre-fetched knowledge chunks. If None, retrieves
                     from Pinecone. Pass pre-fetched chunks to enable parallel
                     RAG retrieval in generate_all().
+            effort_data: Optional EffortEstimator data object. Its PERT/capacity
+                    numbers are injected into the prompt and enforced on the
+                    Resources section so the Strategy cannot show a different
+                    QA total than the Effort report.
+            risk_register: Optional Risk Register markdown; its Risk Matrix is
+                    parsed and its IDs/ratings are reused verbatim in the prompt.
 
         Returns:
             Tuple of (strategy_markdown: str, sources: list[str]).
         """
+        facts = effort_facts(effort_data)
         if chunks is None:
             logger.info(f"Retrieving knowledge for '{context.project_name}'...")
             rag_query = context.to_rag_query()
@@ -253,12 +292,15 @@ class StrategyGenerator:
         knowledge_context = self.agent.format_knowledge_context(chunks)
         logger.info(f"Retrieved {len(chunks)} knowledge chunks")
 
-        prompt = build_strategy_prompt(context, knowledge_context)
+        prompt = build_strategy_prompt(
+            context, knowledge_context, effort=facts, ledger=risk_ledger(risk_register or ""),
+        )
         logger.info("Generating Test Strategy via LLM...")
         strategy = self.agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
         strategy = strategy or ""
         if not strategy.strip():
             raise ValueError(f"LLM returned empty Test Strategy for '{context.project_name}'")
+        strategy = drop_padding_references(enforce_effort_totals(strategy, facts))
         logger.info(f"Test Strategy generated ({len(strategy)} chars)")
 
         sources = build_source_labels(chunks)
