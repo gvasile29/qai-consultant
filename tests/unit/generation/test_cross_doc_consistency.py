@@ -254,3 +254,44 @@ def test_generate_all_passes_strategy_scope_to_test_plan(monkeypatch, tmp_path):
     agent.retrieve_knowledge.return_value = []
     StrategyGenerator(agent).generate_all(CTX)
     assert "UI testing (backend-only)" in captured["scope"]
+
+
+# ── Finding 7a: Test Plan risk-ID mapping ─────────────────────────────────────
+
+def test_plan_prompt_has_ledger_table_and_critical_exit_rule():
+    p = _plan_prompt()
+    assert "RISK LEDGER" in p
+    assert "R02 | Optimiser (Gurobi) wrong dispatch | Medium | High | High | P1" in p
+    low = p.lower()
+    assert "every risk with level critical" in low and "exit criteria" in low
+    assert "match" in low and "exactly" in low
+
+
+def test_plan_prompt_without_ledger_has_no_ledger_block():
+    from qai_consultant.generation.test_plan_generator import build_test_plan_prompt
+    assert "RISK LEDGER" not in build_test_plan_prompt(CTX, "no table", "kb")
+
+
+def test_remove_unknown_risk_ids_flags_only_unknown():
+    ledger = cons.risk_ledger(RISK_REGISTER)
+    text = "| Perf (R01) | R09 |\nGDPR R03, R07 and R02\nUnmapped (R10) here"
+    out = cons.remove_unknown_risk_ids(text, ledger)
+    assert "R01" in out and "R02" in out and "R03" in out
+    assert "R07" not in out and "R09" not in out and "R10" not in out
+    assert "()" not in out and ", and" not in out
+    assert cons.remove_unknown_risk_ids(out, ledger) == out  # idempotent
+
+
+def test_remove_unknown_risk_ids_noop_without_ledger():
+    assert cons.remove_unknown_risk_ids("R09 stays", []) == "R09 stays"
+
+
+def test_test_plan_generate_removes_unknown_ids():
+    from qai_consultant.generation.test_plan_generator import TestPlanGenerator
+    agent = MagicMock()
+    agent.format_knowledge_context.return_value = "kb"
+    agent.ask.return_value = "Feature X covers R01 and R99"
+    plan, _ = TestPlanGenerator(agent).generate(CTX, RISK_REGISTER, chunks=[])
+    assert "R01" in plan and "R99" not in plan
+
+

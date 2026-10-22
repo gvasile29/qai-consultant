@@ -147,3 +147,30 @@ def extract_scope_decisions(strategy: str) -> str:
         nxt = _NEXT_H2_RE.search(strategy, m.end())
         parts.append(strategy[m.start():nxt.start() if nxt else len(strategy)].strip())
     return "\n\n".join(parts)[:_SCOPE_MAX_CHARS]
+
+
+# ── Test Plan ID mapping (Finding 7a) ──────────────────────────────────────────
+
+PLAN_RISK_RULES = """RISK ID MAPPING RULES:
+- Every "R0x" reference must match the RISK LEDGER above exactly: the ID, its description and its level.
+  Never attach an R-number to a feature or test whose subject is a different risk in the ledger.
+- Exit criteria must name every risk with level Critical in the ledger (not only some of them).
+"""
+
+_RISK_ID_RE = re.compile(r"\bR\d{2}\b")
+
+
+def remove_unknown_risk_ids(text: str, ledger: list) -> str:
+    """Remove 'R\d\d' mentions that are not in the ledger. No-op without a
+    ledger. Idempotent. Deliberately does not judge whether a *known* ID suits
+    the adjacent text."""
+    ids = {r["risk_id"] for r in ledger or []}
+    if not text or not ids or not all(_RISK_ID_RE.fullmatch(i) for i in ids):
+        return text
+    for unknown in sorted({m for m in _RISK_ID_RE.findall(text)} - ids):
+        u = re.escape(unknown)
+        text = re.sub(rf"\s*\(\s*{u}\s*\)", "", text)
+        text = re.sub(rf"\b{u}\b\s*[,/&]\s*", "", text)
+        text = re.sub(rf"\s*[,/&]\s*\b{u}\b", "", text)
+        text = re.sub(rf"\s*\b{u}\b", "", text)
+    return text
