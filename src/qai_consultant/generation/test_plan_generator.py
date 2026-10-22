@@ -15,6 +15,7 @@ from qai_consultant.compliance.ai_disclosure import build_front_matter, with_ai_
 from qai_consultant.core.dialogue import ProjectContext
 from qai_consultant.compliance.source_labels import build_source_labels
 from qai_consultant.common.logger import get_logger
+from qai_consultant.generation.consistency import PLAN_RISK_RULES, drop_padding_references, SCOPE_RULES, ledger_prompt_block, remove_unknown_risk_ids, risk_ledger
 from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
@@ -37,8 +38,19 @@ Your Test Plans are:
 
 # ── Test Plan Prompt Builder ───────────────────────────────────────────────────
 
-def build_test_plan_prompt(context: ProjectContext, risk_register: str, knowledge_context: str) -> str:
+def build_test_plan_prompt(
+    context: ProjectContext,
+    risk_register: str,
+    knowledge_context: str,
+    strategy_scope: str = "",
+) -> str:
     risk_summary = risk_register[:2000] + "..." if len(risk_register) > 2000 else risk_register
+    ledger = risk_ledger(risk_register)
+    ledger_block = (ledger_prompt_block(ledger) + PLAN_RISK_RULES) if ledger else ""
+    scope_block = (
+        f"STRATEGY SCOPE DECISIONS (already agreed in the Test Strategy; stay consistent with them):\n{strategy_scope}\n"
+        if strategy_scope else ""
+    )
     return f"""
 Based on the following project context, Risk Register, and QA knowledge base, generate a complete Test Plan aligned with IEEE 829.
 
@@ -54,6 +66,9 @@ RELEVANT QA KNOWLEDGE BASE:
 {GROUNDING_RULES}
 {CITATION_RULES}
 {GENERATION_RULES}
+{SCOPE_RULES}
+{ledger_block}
+{scope_block}
 Generate a Test Plan using EXACTLY this structure:
 
 # Test Plan: {context.project_name}
@@ -159,7 +174,13 @@ class TestPlanGenerator:
         """
         self.agent = agent
 
-    def generate(self, context: ProjectContext, risk_register: str, chunks: Optional[list] = None) -> tuple:
+    def generate(
+        self,
+        context: ProjectContext,
+        risk_register: str,
+        chunks: Optional[list] = None,
+        strategy_scope: Optional[str] = None,
+    ) -> tuple:
         """
         Generate a Test Plan using RAG + LLM.
 
@@ -167,6 +188,8 @@ class TestPlanGenerator:
             context: Collected ProjectContext from DialogueManager.
             risk_register: Generated Risk Register markdown (informs test priorities).
             chunks: Optional pre-fetched knowledge chunks.
+            strategy_scope: Optional short extract of the Strategy's in/out-of-scope
+                    sections so the plan does not contradict them.
 
         Returns:
             Tuple of (test_plan_markdown: str, sources: list[str]).
@@ -178,9 +201,11 @@ class TestPlanGenerator:
         knowledge_context = self.agent.format_knowledge_context(chunks)
         logger.info(f"Retrieved {len(chunks)} test plan chunks")
 
-        prompt = build_test_plan_prompt(context, risk_register, knowledge_context)
+        prompt = build_test_plan_prompt(context, risk_register, knowledge_context, strategy_scope or "")
         test_plan = self.agent.ask(prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
         logger.info(f"Test Plan generated ({len(test_plan)} chars)")
+
+        test_plan = drop_padding_references(remove_unknown_risk_ids(test_plan, risk_ledger(risk_register)))
 
         sources = build_source_labels(chunks)
         return test_plan, sources
