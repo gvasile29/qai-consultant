@@ -3,6 +3,17 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.9.1] - 2026-10-22
+
+### Fixed
+- Generated documents: "no existing automation" is no longer rewritten into "limited existing automation" when the project description merely says something runs "automatically".
+- Effort report: the narrative names only the multipliers that were actually applied and no longer blames regulations that had no effect; the second range is labelled a statistical approximation, distinct from the planning band.
+- Test Strategy now uses the Effort report's person-day totals, and the Test Plan only references risk IDs that exist in the Risk Register, so the four documents no longer contradict each other.
+- Regulators, penalties and retention periods that are not in the project context or the knowledge base are flagged "unverified, confirm with a domain expert"; invented figures and assumed team traits are marked.
+
+### Changed
+- MCP server dependency lock refreshed: `mcp` 1.28.1 to 1.30.0, `urllib3` 2.7.0 to 2.8.0, `pyjwt` 2.13.0 to 2.15.0. No tool or behaviour change.
+
 ## [3.9.0] - 2026-10-20
 
 ### Changed
