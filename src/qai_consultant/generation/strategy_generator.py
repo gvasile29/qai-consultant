@@ -23,7 +23,9 @@ from qai_consultant.generation.risk_analyzer import RiskAnalyzer
 from qai_consultant.generation.test_plan_generator import TestPlanGenerator
 from qai_consultant.generation.effort_estimator import EffortEstimator
 from qai_consultant.common.logger import get_logger
-from qai_consultant.generation.consistency import effort_facts, effort_prompt_block, enforce_effort_totals
+from qai_consultant.generation.consistency import (
+    effort_facts, effort_prompt_block, enforce_effort_totals, ledger_prompt_block, risk_ledger,
+)
 from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
@@ -51,13 +53,15 @@ def build_strategy_prompt(
     context: ProjectContext,
     knowledge_context: str,
     effort: Optional[dict] = None,
+    ledger: Optional[list] = None,
 ) -> str:
     """Build the full prompt for Test Strategy generation.
 
     effort: optional consistency.effort_facts() dict; when present its numbers
     must be reused verbatim in the Resources section.
+    ledger: optional parsed Risk Matrix rows; ratings must be reused, not re-rated.
     """
-    effort_block = effort_prompt_block(effort)
+    effort_block = effort_prompt_block(effort) + ledger_prompt_block(ledger or [])
     return f"""
 Based on the following project context and QA knowledge base, generate a complete and professional Test Strategy document.
 
@@ -212,6 +216,8 @@ class StrategyGenerator:
             strategy_kwargs: dict = {}
             if effort_facts(effort_data):
                 strategy_kwargs["effort_data"] = effort_data
+            if risk_ledger(risk_register):
+                strategy_kwargs["risk_register"] = risk_register
             strategy, sources = self.generate(context, chunks=strategy_chunks, **strategy_kwargs)
             strategy_path = self.save(strategy, context)
             logger.info(f"Test Strategy saved: {strategy_path.name}")
@@ -248,6 +254,7 @@ class StrategyGenerator:
         context: ProjectContext,
         chunks: Optional[list] = None,
         effort_data=None,
+        risk_register: Optional[str] = None,
     ) -> tuple:
         """
         Generate a Test Strategy document for the given project context.
@@ -265,6 +272,8 @@ class StrategyGenerator:
                     numbers are injected into the prompt and enforced on the
                     Resources section so the Strategy cannot show a different
                     QA total than the Effort report.
+            risk_register: Optional Risk Register markdown; its Risk Matrix is
+                    parsed and its IDs/ratings are reused verbatim in the prompt.
 
         Returns:
             Tuple of (strategy_markdown: str, sources: list[str]).
@@ -277,7 +286,9 @@ class StrategyGenerator:
         knowledge_context = self.agent.format_knowledge_context(chunks)
         logger.info(f"Retrieved {len(chunks)} knowledge chunks")
 
-        prompt = build_strategy_prompt(context, knowledge_context, effort=facts)
+        prompt = build_strategy_prompt(
+            context, knowledge_context, effort=facts, ledger=risk_ledger(risk_register or ""),
+        )
         logger.info("Generating Test Strategy via LLM...")
         strategy = self.agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
         strategy = strategy or ""

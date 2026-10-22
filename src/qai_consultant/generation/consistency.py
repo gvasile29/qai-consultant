@@ -11,6 +11,8 @@ post-processors that keep the documents aligned. Pure stdlib, no LLM.
 import re
 from typing import Optional
 
+from qai_consultant.core.risk_ledger import parse_risk_matrix
+
 # ── Effort numbers (Finding 3a) ────────────────────────────────────────────────
 
 _EFFORT_FIELDS = (
@@ -88,3 +90,35 @@ def enforce_effort_totals(text: str, facts: Optional[dict]) -> str:
         if "total" in line.lower():
             lines[i] = _NUM_DAYS_RE.sub(fix, line)
     return text[:start.start()] + "\n".join(lines) + text[end:]
+
+
+# ── Risk ledger (Findings 3b, 7a) ──────────────────────────────────────────────
+
+def risk_ledger(risk_register: str) -> list:
+    """Parsed Risk Matrix rows ([] when absent or malformed; never raises)."""
+    try:
+        return parse_risk_matrix(risk_register or "")
+    except Exception:  # defensive: the ledger is an enhancement, never a blocker
+        return []
+
+
+def ledger_rows_text(ledger: list) -> str:
+    return "\n".join(
+        f"{r['risk_id']} | {r['description']} | {r['likelihood']} | {r['impact']} | "
+        f"{r['risk_level']} | {r['priority']}"
+        for r in ledger
+    )
+
+
+def ledger_prompt_block(ledger: list) -> str:
+    """Prompt block carrying the Risk Register's ratings; empty ledger -> ''."""
+    if not ledger:
+        return ""
+    return f"""RISK LEDGER (authoritative, parsed from the Risk Register: ID | description | likelihood | impact | level | priority):
+{ledger_rows_text(ledger)}
+When the document discusses a risk from this ledger, reuse its ID and its likelihood, impact and
+level VERBATIM. You may add detail and mitigations, but do NOT re-rate a risk or downgrade it
+(for example, do not call a High/Critical integration risk Medium, and do not treat third-party
+systems as "assumed reliable" when the ledger rates their failure as a risk). Any extra risk you
+add that is not in the ledger must be labelled "additional (not in Risk Register)" with no R-number.
+"""

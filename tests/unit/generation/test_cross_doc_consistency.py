@@ -108,7 +108,7 @@ def test_generate_applies_effort_and_prompt(monkeypatch):
 def test_generate_all_wires_effort_data(monkeypatch, tmp_path):
     captured = {}
 
-    def fake_generate(self, ctx, chunks=None, effort_data=None):
+    def fake_generate(self, ctx, chunks=None, effort_data=None, risk_register=None):
         captured["effort"] = effort_data
         return "strategy", []
 
@@ -124,3 +124,55 @@ def test_generate_all_wires_effort_data(monkeypatch, tmp_path):
     agent.retrieve_knowledge.return_value = []
     StrategyGenerator(agent).generate_all(CTX)
     assert captured["effort"] is EFFORT
+
+
+# ── Finding 3b: risk ledger in the Strategy ───────────────────────────────────
+
+def test_ledger_prompt_block_lists_ids_and_levels_verbatim():
+    ledger = cons.risk_ledger(RISK_REGISTER)
+    block = cons.ledger_prompt_block(ledger)
+    assert "R01 | Market Data & Gateway Integration Failures | High | High | Critical | P1" in block
+    assert "R03" in block
+    assert "verbatim" in block.lower() and "re-rate" in block.lower()
+
+
+def test_ledger_empty_degrades_gracefully():
+    assert cons.risk_ledger("") == []
+    assert cons.risk_ledger("no table here") == []
+    assert cons.ledger_prompt_block([]) == ""
+
+
+def test_strategy_prompt_includes_ledger_and_omits_when_empty():
+    ledger = cons.risk_ledger(RISK_REGISTER)
+    assert "RISK LEDGER" in build_strategy_prompt(CTX, "kb", ledger=ledger)
+    assert "RISK LEDGER" not in build_strategy_prompt(CTX, "kb", ledger=[])
+
+
+def test_generate_parses_risk_register_into_prompt():
+    agent = MagicMock()
+    agent.format_knowledge_context.return_value = "kb"
+    agent.ask.return_value = "# Strategy"
+    StrategyGenerator(agent).generate(CTX, chunks=[], risk_register=RISK_REGISTER)
+    prompt = agent.ask.call_args[0][0]
+    assert "R01 | Market Data & Gateway Integration Failures | High | High | Critical" in prompt
+
+
+def test_generate_all_wires_risk_register(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_generate(self, ctx, chunks=None, effort_data=None, risk_register=None):
+        captured["risk"] = risk_register
+        return "strategy", []
+
+    monkeypatch.setattr(sg_module.RiskAnalyzer, "analyze", lambda self, c, chunks=None, results_summary=None: (RISK_REGISTER, []))
+    monkeypatch.setattr(sg_module.RiskAnalyzer, "save", lambda self, t, c: tmp_path / "r.md")
+    monkeypatch.setattr(sg_module.EffortEstimator, "estimate", lambda self, c, r: ("effort", {}))
+    monkeypatch.setattr(sg_module.EffortEstimator, "save", lambda self, t, c: tmp_path / "e.md")
+    monkeypatch.setattr(sg_module.StrategyGenerator, "generate", fake_generate)
+    monkeypatch.setattr(sg_module.StrategyGenerator, "save", lambda self, t, c: tmp_path / "s.md")
+    monkeypatch.setattr(sg_module.TestPlanGenerator, "generate", lambda self, c, r, chunks=None, **kw: ("plan", []))
+    monkeypatch.setattr(sg_module.TestPlanGenerator, "save", lambda self, t, c: tmp_path / "p.md")
+    agent = MagicMock()
+    agent.retrieve_knowledge.return_value = []
+    StrategyGenerator(agent).generate_all(CTX)
+    assert captured["risk"] == RISK_REGISTER
