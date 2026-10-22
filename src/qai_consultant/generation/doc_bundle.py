@@ -15,5 +15,10 @@ def build_zip(files: Mapping[str, bytes]) -> bytes:
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in files.items():
             if data:
-                zf.writestr(name, data)
+                # Fixed timestamp: the bytes must be identical on every Streamlit
+                # rerun, or the download button's media URL changes mid-click and
+                # the browser cancels the download.
+                info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                zf.writestr(info, data)
     return buf.getvalue()

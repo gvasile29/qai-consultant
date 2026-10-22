@@ -23,6 +23,9 @@ from rich import print as rprint
 from qai_consultant.rag.agent import QAIAgent, QAIConnectionError, QAIModelError, QAIKnowledgeBaseError, clean_markdown_html
 from qai_consultant.core.dialogue import DialogueManager
 from qai_consultant.compliance.source_labels import build_source_labels
+from qai_consultant.generation.consistency import (
+    extract_scope_decisions, finalize_strategy, finalize_test_plan, strategy_prompt_kwargs,
+)
 from qai_consultant.generation.strategy_generator import StrategyGenerator
 from qai_consultant.common.logger import setup_logging, get_logger
 from qai_consultant.common.version import __version__
@@ -199,25 +202,33 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summar
 
     # === Step 3/4: Test Strategy (streaming) ===
     console.print(Panel("[bold cyan]📋 Generating Test Strategy...[/bold cyan]", border_style="cyan"))
-    strategy_prompt = build_strategy_prompt(context, strategy_knowledge)
+    strategy_prompt = build_strategy_prompt(
+        context, strategy_knowledge, **strategy_prompt_kwargs(effort_data, risk_register),
+    )
     strategy_buffer = []
     with Live(console=console, refresh_per_second=8) as live:
         for chunk in agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT):
             strategy_buffer.append(chunk)
             live.update(Text("".join(strategy_buffer)))
-    strategy = clean_markdown_html("".join(strategy_buffer), source_text=strategy_prompt)
+    strategy = finalize_strategy(
+        clean_markdown_html("".join(strategy_buffer), source_text=strategy_prompt), effort_data,
+    )
     strategy_path = generator.save(strategy, context)
     console.print(f"\n[bold green]✅ Test Strategy generated[/bold green] ({len(strategy)} chars)\n")
 
     # === Step 4/4: Test Plan (streaming) ===
     console.print(Panel("[bold blue]📝 Generating Test Plan...[/bold blue]", border_style="blue"))
-    test_plan_prompt = build_test_plan_prompt(context, risk_register, test_plan_knowledge)
+    test_plan_prompt = build_test_plan_prompt(
+        context, risk_register, test_plan_knowledge, extract_scope_decisions(strategy),
+    )
     test_plan_buffer = []
     with Live(console=console, refresh_per_second=8) as live:
         for chunk in agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT):
             test_plan_buffer.append(chunk)
             live.update(Text("".join(test_plan_buffer)))
-    test_plan = clean_markdown_html("".join(test_plan_buffer), source_text=test_plan_prompt)
+    test_plan = finalize_test_plan(
+        clean_markdown_html("".join(test_plan_buffer), source_text=test_plan_prompt), risk_register,
+    )
     test_plan_path = test_plan_generator.save(test_plan, context)
     console.print(f"\n[bold green]✅ Test Plan generated[/bold green] ({len(test_plan)} chars)\n")
 

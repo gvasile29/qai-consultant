@@ -208,3 +208,27 @@ def drop_padding_references(text: str) -> str:
             continue
         kept.append(line)
     return text[:m.end()] + "\n".join(kept) + text[end:]
+
+
+def strategy_prompt_kwargs(effort_data, risk_register: str) -> dict:
+    """``build_strategy_prompt`` kwargs that tie the Strategy to the Effort
+    report and Risk Register; empty when either is unusable, so callers
+    degrade to the old behaviour."""
+    kwargs: dict = {}
+    facts = effort_facts(effort_data)
+    if facts:
+        kwargs["effort"] = facts
+    ledger = risk_ledger(risk_register or "")
+    if ledger:
+        kwargs["ledger"] = ledger
+    return kwargs
+
+
+def finalize_strategy(strategy: str, effort_data) -> str:
+    """Post-processing every Strategy path applies after sanitizing."""
+    return drop_padding_references(enforce_effort_totals(strategy, effort_facts(effort_data)))
+
+
+def finalize_test_plan(test_plan: str, risk_register: str) -> str:
+    """Post-processing every Test Plan path applies after sanitizing."""
+    return drop_padding_references(remove_unknown_risk_ids(test_plan, risk_ledger(risk_register or "")))
