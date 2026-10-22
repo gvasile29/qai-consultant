@@ -174,3 +174,37 @@ def remove_unknown_risk_ids(text: str, ledger: list) -> str:
         text = re.sub(rf"\s*[,/&]\s*\b{u}\b", "", text)
         text = re.sub(rf"\s*\b{u}\b", "", text)
     return text
+
+
+# ── Padding references (Finding 7b) ────────────────────────────────────────────
+
+REFERENCES_RULES = """REFERENCES RULES:
+- In the References section list only sources actually cited in the text as [Source N]. Do not add
+  "(Implicit)" or "background" standards that the document does not cite.
+"""
+
+_REFS_HEADING_RE = re.compile(r"^#{2,3}\s+(?:\d+\.\s*)?References?\b.*$", re.IGNORECASE | re.MULTILINE)
+_CITE_RE = re.compile(r"\[Source\s+(\d+)\]", re.IGNORECASE)
+
+
+def drop_padding_references(text: str) -> str:
+    """Drop References lines marked '(Implicit)' and lines whose [Source N]
+    markers are all uncited in the body (only when the body cites something).
+    Idempotent; unrelated text is untouched."""
+    if not text:
+        return text
+    m = _REFS_HEADING_RE.search(text)
+    if not m:
+        return text
+    nxt = _NEXT_H2_RE.search(text, m.end())
+    end = nxt.start() if nxt else len(text)
+    cited = set(_CITE_RE.findall(text[:m.start()] + text[end:]))
+    kept = []
+    for line in text[m.end():end].split("\n"):
+        if "(implicit)" in line.lower():
+            continue
+        marks = set(_CITE_RE.findall(line))
+        if marks and cited and not (marks & cited):
+            continue
+        kept.append(line)
+    return text[:m.end()] + "\n".join(kept) + text[end:]

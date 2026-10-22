@@ -15,7 +15,7 @@ from qai_consultant.compliance.ai_disclosure import build_front_matter, with_ai_
 from qai_consultant.core.dialogue import ProjectContext
 from qai_consultant.compliance.source_labels import build_source_labels
 from qai_consultant.common.logger import get_logger
-from qai_consultant.generation.consistency import PLAN_RISK_RULES, SCOPE_RULES, ledger_prompt_block, remove_unknown_risk_ids, risk_ledger
+from qai_consultant.generation.consistency import PLAN_RISK_RULES, drop_padding_references, SCOPE_RULES, ledger_prompt_block, remove_unknown_risk_ids, risk_ledger
 from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
@@ -205,7 +205,7 @@ class TestPlanGenerator:
         test_plan = self.agent.ask(prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
         logger.info(f"Test Plan generated ({len(test_plan)} chars)")
 
-        test_plan = remove_unknown_risk_ids(test_plan, risk_ledger(risk_register))
+        test_plan = drop_padding_references(remove_unknown_risk_ids(test_plan, risk_ledger(risk_register)))
 
         sources = build_source_labels(chunks)
         return test_plan, sources

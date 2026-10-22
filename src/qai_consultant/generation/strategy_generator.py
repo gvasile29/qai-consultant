@@ -24,7 +24,7 @@ from qai_consultant.generation.test_plan_generator import TestPlanGenerator
 from qai_consultant.generation.effort_estimator import EffortEstimator
 from qai_consultant.common.logger import get_logger
 from qai_consultant.generation.consistency import (
-    SCOPE_RULES, effort_facts, effort_prompt_block, extract_scope_decisions, enforce_effort_totals, ledger_prompt_block, risk_ledger,
+    REFERENCES_RULES, SCOPE_RULES, drop_padding_references, effort_facts, effort_prompt_block, extract_scope_decisions, enforce_effort_totals, ledger_prompt_block, risk_ledger,
 )
 from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
@@ -61,7 +61,7 @@ def build_strategy_prompt(
     must be reused verbatim in the Resources section.
     ledger: optional parsed Risk Matrix rows; ratings must be reused, not re-rated.
     """
-    effort_block = effort_prompt_block(effort) + ledger_prompt_block(ledger or []) + SCOPE_RULES
+    effort_block = effort_prompt_block(effort) + ledger_prompt_block(ledger or []) + SCOPE_RULES + REFERENCES_RULES
     return f"""
 Based on the following project context and QA knowledge base, generate a complete and professional Test Strategy document.
 
@@ -300,7 +300,7 @@ class StrategyGenerator:
         strategy = strategy or ""
         if not strategy.strip():
             raise ValueError(f"LLM returned empty Test Strategy for '{context.project_name}'")
-        strategy = enforce_effort_totals(strategy, facts)
+        strategy = drop_padding_references(enforce_effort_totals(strategy, facts))
         logger.info(f"Test Strategy generated ({len(strategy)} chars)")
 
         sources = build_source_labels(chunks)

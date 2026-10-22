@@ -295,3 +295,48 @@ def test_test_plan_generate_removes_unknown_ids():
     assert "R01" in plan and "R99" not in plan
 
 
+# ── Finding 7b: padding references ────────────────────────────────────────────
+
+REFS = """## 10. Key Risks
+Use boundary analysis [Source 1] and OWASP checks [Source 3].
+
+## 11. References
+- ISTQB Foundation Syllabus [Source 1]
+- OWASP Testing Guide (Implicit)
+- IEEE 829 Standard (Implicit)
+- OWASP ASVS [Source 3]
+- ISO 25010 [Source 7]
+"""
+
+
+def test_drop_padding_references_exact_lines():
+    out = cons.drop_padding_references(REFS)
+    assert "(Implicit)" not in out
+    assert "OWASP Testing Guide" not in out and "IEEE 829 Standard" not in out
+    assert "ISTQB Foundation Syllabus [Source 1]" in out
+    assert "OWASP ASVS [Source 3]" in out
+    assert "ISO 25010 [Source 7]" not in out  # [Source 7] never cited in the body
+    assert "Use boundary analysis [Source 1]" in out
+
+
+def test_drop_padding_references_idempotent_and_conservative():
+    once = cons.drop_padding_references(REFS)
+    assert cons.drop_padding_references(once) == once
+    no_cites = "## 1. Intro\ntext\n\n## 2. References\n- ISO 25010 [Source 7]\n- Foo (Implicit)\n"
+    out = cons.drop_padding_references(no_cites)
+    assert "ISO 25010 [Source 7]" in out and "Foo" not in out  # no body citations -> keep sourced lines
+    assert cons.drop_padding_references("") == ""
+    assert cons.drop_padding_references("no references here") == "no references here"
+
+
+def test_strategy_prompt_restricts_references_to_cited_sources():
+    p = build_strategy_prompt(CTX, "kb").lower()
+    assert "references" in p and "actually cited" in p
+
+
+def test_strategy_generate_drops_implicit_references():
+    agent = MagicMock()
+    agent.format_knowledge_context.return_value = "kb"
+    agent.ask.return_value = REFS
+    strategy, _ = StrategyGenerator(agent).generate(CTX, chunks=[])
+    assert "(Implicit)" not in strategy
