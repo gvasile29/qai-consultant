@@ -42,6 +42,93 @@ from qai_consultant.core.effort_core import (
     explain_effort_range,
 )
 
+# ── Narrative honesty post-check ───────────────────────────────────────────────
+
+_PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_UNRECOGNISED = re.compile(
+    r"not recognised and therefore had NO effect on the estimate:\s*(.*?)\.\s*Recognised:", re.DOTALL
+)
+_DRIVER_WORDS = re.compile(
+    r"\b(?:uplift|due to|driven|driver|drivers|because|adds?|increase[sd]?|adjustment|multiplier|"
+    r"complexity|contribut\w*|inflat\w*|raises?|accounts? for)\b", re.IGNORECASE
+)
+_NEGATION = re.compile(
+    r"\b(?:no effect|had no|has no|have no|not recogni[sz]ed|unrecogni[sz]ed|not (?:been )?(?:applied|included|"
+    r"counted|reflected)|did not|does not|do not|without)\b", re.IGNORECASE
+)
+_STOPWORDS = {"and", "the", "market", "rules", "regulations", "regulation", "requirements", "standard"}
+NEUTRAL_NARRATIVE = "See the deterministic tables in this report for the figures behind this estimate."
+
+
+def _allowed_percentages(data: EstimationData) -> set:
+    values = [p for _, p in data.multipliers] + [
+        data.total_multiplier, data.baseline_qa_percent_min, data.baseline_qa_percent_max,
+        data.confidence_score, round(data.utilization_rate * 100), 95, 100,
+    ]
+    util = capacity_utilization_pct(data)
+    if util is not None:
+        values.append(util)
+    allowed = {round(float(v), 1) for v in values}
+    # Percentages already stated in the deterministic warnings are data too.
+    for w in data.warnings:
+        allowed.update(round(float(m.group(1)), 1) for m in _PERCENT.finditer(w))
+    return allowed
+
+
+def _unrecognised_compliance_items(data: EstimationData) -> list:
+    items = []
+    for w in data.warnings:
+        m = _UNRECOGNISED.search(w)
+        if m:
+            items += [i.strip() for i in m.group(1).split(",") if i.strip()]
+    return items
+
+
+def _mentions_item(sentence: str, item: str) -> bool:
+    low = sentence.lower()
+    if item.lower() in low:
+        return True
+    tokens = [t for t in re.findall(r"[a-z0-9]{3,}", item.lower()) if t not in _STOPWORDS]
+    if not tokens:
+        return False
+    hits = [t for t in tokens if re.search(rf"\b{re.escape(t)}\b", low)]
+    # a single-token item needs that token; longer items need at least two distinctive ones
+    return len(hits) >= min(2, len(tokens))
+
+
+def sanitize_narrative_claims(text: str, data: EstimationData) -> str:
+    """Drop narrative sentences that contradict the deterministic data.
+
+    Mirrors drop_unverified_person_day_figures: (a) sentences quoting a percentage
+    absent from the data, or a numeric velocity figure; (b) sentences attributing the
+    uplift to compliance items the pipeline reported as unrecognised. Idempotent;
+    an emptied section falls back to a neutral phrase.
+    """
+    allowed = _allowed_percentages(data)
+    unknown = _unrecognised_compliance_items(data)
+
+    def _bad(sentence: str) -> bool:
+        if any(round(float(m.group(1)), 1) not in allowed for m in _PERCENT.finditer(sentence)):
+            return True
+        if re.search(r"velocity", sentence, re.IGNORECASE) and re.search(r"\d", sentence):
+            return True
+        if unknown and _DRIVER_WORDS.search(sentence) and not _NEGATION.search(sentence):
+            return any(_mentions_item(sentence, item) for item in unknown)
+        return False
+
+    out_lines = []
+    for line in text.split("\n"):
+        parts = _SENTENCE_SPLIT.split(line)
+        kept = [p for p in parts if not _bad(p)]
+        if len(kept) == len(parts):
+            out_lines.append(line)
+        elif kept:
+            out_lines.append(" ".join(kept))
+    result = "\n".join(out_lines)
+    return result if result.strip() else NEUTRAL_NARRATIVE
+
+
 # ── Effort Estimator ───────────────────────────────────────────────────────────
 
 class EffortEstimator:
@@ -78,6 +165,11 @@ class EffortEstimator:
         utilization_line = (
             f" (expected effort = {util_pct}% of capacity)" if util_pct is not None else ""
         )
+        multiplier_lines = (
+            "\n".join(f"- {reason}: +{pct}%" for reason, pct in data.multipliers)
+            or "- (none: standard baseline used)"
+        )
+        warning_lines = "\n".join(f"- {w}" for w in data.warnings) or "- (none)"
         narrative_prompt = f"""
 You are QAI Consultant, a senior QA Architect. Based on the following effort estimation data,
 write concise professional narrative for these sections:
@@ -94,7 +186,16 @@ PERT EXPECTED EFFORT: {data.pert_total_expected} person-days
 AVAILABLE CAPACITY: {data.available_person_days} person-days{utilization_line}
 CAPACITY GAP: {"SURPLUS of " + str(data.capacity_gap) + " days" if data.capacity_gap >= 0 else "DEFICIT of " + str(abs(data.capacity_gap)) + " days"}
 
-Use only the figures given above; do not compute or restate any other totals or percentages.
+MULTIPLIERS APPLIED (the complete and exact list of uplift drivers):
+{multiplier_lines}
+WARNINGS FROM THE DETERMINISTIC PIPELINE:
+{warning_lines}
+
+STRICT RULES:
+- Name uplift drivers ONLY from the MULTIPLIERS list above, with their exact percentages.
+- Anything listed as "not recognised" in the warnings had NO effect on the estimate; never present it as a driver of the uplift.
+- Do not introduce any new percentages, velocity or focus-factor figures, or effort uplifts that are not listed above.
+- Use only the figures given above; do not compute or restate any other totals or percentages.
 
 Write the following sections (keep each concise — 3-5 sentences max):
 1. EXECUTIVE_SUMMARY: Overall effort profile and key drivers
@@ -106,7 +207,7 @@ Write the following sections (keep each concise — 3-5 sentences max):
         # Parsing strips section headers and can leave a lone ** behind after ask()
         # already sanitized the whole narrative, so clean each parsed piece again.
         exec_summary, assumptions, recommendations = (
-            drop_unverified_person_day_figures(fix_stray_emphasis(s), data)
+            sanitize_narrative_claims(drop_unverified_person_day_figures(fix_stray_emphasis(s), data), data)
             for s in (exec_summary, assumptions, recommendations)
         )
 
@@ -155,7 +256,7 @@ Write the following sections (keep each concise — 3-5 sentences max):
 
 {pert_table}
 
-**95% confidence range: {round(data.pert_total_expected - 2*data.pert_total_sd, 1)} – {round(data.pert_total_expected + 2*data.pert_total_sd, 1)} person-days**
+**Statistical approximation of the PERT total (mean ± 2 SD, assuming independent activities and normality): {round(data.pert_total_expected - 2*data.pert_total_sd, 1)} – {round(data.pert_total_expected + 2*data.pert_total_sd, 1)} person-days.** This is a different measure from the planning band (Final Effort Range) in the Executive Summary and Risk Buffer; it is not a guaranteed 95% interval.
 
 ---
 
