@@ -29,6 +29,28 @@ blockquote { border-left: 3px solid #00b4d8; margin-left: 0; padding-left: 10pt;
 """
 
 
+def _blank_line_before_tables(md_text: str) -> str:
+    """Python-Markdown only starts a table after a blank line; LLM output often
+    puts the header row straight under a label line, which then prints as raw
+    pipes. Fences are left alone."""
+    out: list[str] = []
+    in_fence = False
+    prev = ""
+    for line in md_text.split(chr(10)):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        if (
+            not in_fence
+            and line.lstrip().startswith("|")
+            and prev.strip()
+            and not prev.lstrip().startswith("|")
+        ):
+            out.append("")
+        out.append(line)
+        prev = line
+    return chr(10).join(out)
+
+
 def markdown_to_pdf(
     md_text: str,
     title: str = "QAI Consultant Report",
@@ -73,7 +95,7 @@ def markdown_to_pdf(
             return None
 
         body_html = markdown.markdown(
-            md_text,
+            _blank_line_before_tables(md_text),
             extensions=["tables", "fenced_code", "nl2br"],
         )
 

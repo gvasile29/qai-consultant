@@ -18,6 +18,9 @@ from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, pdf_i
 from qai_consultant.core.dialogue import DialogueManager, InputValidator, QUESTIONS
 from qai_consultant.generation.strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from qai_consultant.generation.risk_analyzer import RiskAnalyzer, append_execution_data_appendix
+from qai_consultant.generation.consistency import (
+    extract_scope_decisions, finalize_strategy, finalize_test_plan, strategy_prompt_kwargs,
+)
 from qai_consultant.generation.effort_estimator import EffortEstimator
 from qai_consultant.rag.agent import QAIConnectionError, QAIKnowledgeBaseError
 from qai_consultant.common.logger import setup_logging, get_logger
@@ -1151,17 +1154,21 @@ def render_strategy():
             st.session_state.effort_data = effort_data
         else:
             effort_report = st.session_state.effort_report
+            effort_data = st.session_state.get("effort_data")
         _render_stages()
 
         # Test Strategy (streaming)
         _render_stages(active_key="strategy")
         if st.session_state.get("strategy") is None:
             st.markdown("#### 📋 Generating Test Strategy...")
-            strategy_prompt = build_strategy_prompt(context, agent.format_knowledge_context(strategy_chunks))
+            strategy_prompt = build_strategy_prompt(
+                context, agent.format_knowledge_context(strategy_chunks),
+                **strategy_prompt_kwargs(effort_data, risk_register),
+            )
             try:
-                strategy = clean_markdown_html(st.write_stream(
+                strategy = finalize_strategy(clean_markdown_html(st.write_stream(
                     agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
-                ), source_text=strategy_prompt)
+                ), source_text=strategy_prompt), effort_data)
                 output_path = generator.save(strategy, context)
             except (StopException, RerunException):
                 raise
@@ -1182,11 +1189,14 @@ def render_strategy():
         _render_stages(active_key="test_plan")
         if st.session_state.get("test_plan") is None:
             st.markdown("#### 📝 Generating Test Plan...")
-            test_plan_prompt = build_test_plan_prompt(context, risk_register, agent.format_knowledge_context(test_plan_chunks))
+            test_plan_prompt = build_test_plan_prompt(
+                context, risk_register, agent.format_knowledge_context(test_plan_chunks),
+                extract_scope_decisions(strategy),
+            )
             try:
-                test_plan = clean_markdown_html(st.write_stream(
+                test_plan = finalize_test_plan(clean_markdown_html(st.write_stream(
                     agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
-                ), source_text=test_plan_prompt)
+                ), source_text=test_plan_prompt), risk_register)
                 test_plan_path = test_plan_generator.save(test_plan, context)
             except (StopException, RerunException):
                 raise

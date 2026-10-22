@@ -153,3 +153,21 @@ if __name__ == "__main__":
             print(f"  ERROR {name}: {type(e).__name__}: {e}")
             failed += 1
     print(f"\n{passed} passed, {failed} failed")
+
+
+def test_table_directly_under_label_line_still_becomes_a_table():
+    from qai_consultant.compliance.pdf_export import _blank_line_before_tables
+    import markdown
+
+    md = "**Risks:**\n| A | B |\n|---|---|\n| 1 | 2 |\n"
+    html = markdown.markdown(_blank_line_before_tables(md), extensions=["tables"])
+    assert "<table>" in html and "|---" not in html
+
+
+def test_blank_line_insertion_leaves_fences_and_existing_blanks_alone():
+    from qai_consultant.compliance.pdf_export import _blank_line_before_tables
+
+    fenced = "```\ntext\n| not | a table |\n```\n"
+    assert _blank_line_before_tables(fenced) == fenced
+    ok = "Intro\n\n| A |\n|---|\n| 1 |\n"
+    assert _blank_line_before_tables(ok) == ok

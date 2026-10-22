@@ -340,3 +340,31 @@ def test_strategy_generate_drops_implicit_references():
     agent.ask.return_value = REFS
     strategy, _ = StrategyGenerator(agent).generate(CTX, chunks=[])
     assert "(Implicit)" not in strategy
+
+
+# ── Shared by app.py / cli.py: the Streamlit and CLI paths build their own prompts ──
+
+def test_strategy_prompt_kwargs_degrade_when_inputs_unusable():
+    from qai_consultant.generation.consistency import strategy_prompt_kwargs
+
+    assert strategy_prompt_kwargs(None, "") == {}
+    assert strategy_prompt_kwargs({}, "no table here") == {}
+
+
+def test_finalize_helpers_are_idempotent_on_plain_text():
+    from qai_consultant.generation.consistency import finalize_strategy, finalize_test_plan
+
+    assert finalize_strategy("# S\n\ntext", None) == "# S\n\ntext"
+    assert finalize_test_plan("# P\n\ntext", "") == "# P\n\ntext"
+
+
+def test_streamlit_and_cli_paths_use_the_consistency_helpers():
+    """generate_all() was fixed first and the UI/CLI paths, which build their own
+    prompts, were missed (live BESS re-run). Keep all three wired."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3] / "src"
+    for rel in ("app.py", "qai_consultant/cli.py"):
+        src = (root / rel).read_text(encoding="utf-8")
+        for needle in ("strategy_prompt_kwargs(", "finalize_strategy(", "extract_scope_decisions(", "finalize_test_plan("):
+            assert needle in src, f"{rel} no longer calls {needle}"
