@@ -28,6 +28,10 @@ GROUNDING RULES (these override any instinct to sound specific):
 - Use markdown bold only in matched pairs; never leave a lone ** (e.g. after an arrow).
 - Risks may be conditional ("If <x> is not in place, ...") but must not assert that <x>
   is missing.
+- Never invent specific SLAs, latencies, throughputs, fines, monetary amounts, break-even
+  points, or effort uplifts and present them as facts. A figure that is not in the PROJECT
+  CONTEXT or the knowledge base must be labelled "illustrative, not from the project
+  context", or replaced by "to be defined with the team".
 """
 
 CITATION_RULES = """\
@@ -226,6 +230,8 @@ def lint_output(text: str, context_text: str = "") -> list:
     if context_text:
         for _end, m in _threshold_hits(text, context_text.lower()):
             problems.append(f"unflagged invented threshold: {m.group(0)!r}")
+        for _end, m in _figure_hits(text, context_text.lower()):
+            problems.append(f"unflagged invented figure: {m.group(0)!r}")
         for _end, name in _tool_hits(text, context_text):
             problems.append(f"unflagged tool outside the stated stack: {name!r}")
     return problems
@@ -454,6 +460,47 @@ _FLAG_WORDS = re.compile(
 THRESHOLD_FLAG = " (suggested target)"
 
 
+_FIGURE = re.compile(
+    # throughput: "100+ requests/sec", "50 tps"
+    r"\b(?P<f1>\d[\d,]*)\+?\s*(?:req(?:uest)?s?|transactions?|messages?|orders?)\s*(?:/|per\s+)\s*(?:sec(?:ond)?s?|s|min(?:ute)?s?)\b"
+    r"|\b(?P<f2>\d[\d,]*)\+?\s*tps\b"
+    # currency amounts: "€100K+", "$2M", "100 000 EUR"
+    r"|[€$£]\s?(?P<f3>\d[\d,.]*)\s?[KkMm]?\+?"
+    r"|\b(?P<f4>\d[\d,.]*)\s?[KkMm]?\+?\s?(?:EUR|USD|GBP)\b"
+    # unquantified-but-specific money claims: "could cost millions"
+    r"|\b(?:cost|costs|costing|lose|losing|lost|loss(?:es)? of)\s+(?:\w+\s+){0,2}?(?P<f5>millions|thousands)\b"
+    # fix/response SLAs: "24-hour SLA", "48h for High"
+    r"|\b(?P<f6>\d{1,3})\s*-?\s*h(?:ours?|rs?)?\s+(?:SLAs?\b|(?:for|to fix|to resolve)\s+(?:Critical|High|Medium|Low|P\d|Sev\w*))"
+    # effort uplifts: "20% extra effort"
+    r"|\b(?P<f7>\d{1,3})\s*%\s+(?:extra|additional|more|buffer|contingency)\b(?:\s+\w+){0,2}?\s*(?:effort|time|budget|capacity)?"
+    # break-even / cycles: "~4 regression cycles"
+    r"|~?\b(?P<f8>\d{1,2})\s+(?:regression|test|release|execution)\s+(?:cycles|runs|iterations)\b"
+    # state-of-charge style limits: "90% SoC", "exceed 90%"
+    r"|\b(?P<f9>\d{1,3})\s*%\s*(?:SoC|SoH|DoD|state of charge)\b"
+    r"|\bexceed(?:s|ing)?\s+(?P<f10>\d{1,3}(?:\.\d+)?)\s*%",
+    re.IGNORECASE,
+)
+_FIGURE_GROUPS = tuple(f"f{i}" for i in range(1, 11))
+FIGURE_FLAG = " (illustrative, not from the project context)"
+
+
+def _figure_hits(text: str, haystack: str):
+    """(end_offset, match) for each invented-looking figure with a unit whose
+    number is absent from ``haystack`` (the whole prompt: context + knowledge)
+    and whose line carries no flag word. Number-less claims ("cost millions")
+    are always hits."""
+    for line_start, line in _lines_with_offsets(text):
+        if line.lstrip().startswith("#") or _FLAG_WORDS.search(line):
+            continue
+        for m in _FIGURE.finditer(line):
+            num = next((m.group(g) for g in _FIGURE_GROUPS if m.group(g)), None)
+            if num and num.lower() not in ("millions", "thousands"):
+                bare = num.rstrip(".,")
+                if re.search(rf"(?<![\d.]){re.escape(bare)}(?![\d.])", haystack):
+                    continue
+            yield line_start + m.end(), m
+
+
 def _lines_with_offsets(text: str):
     pos = 0
     in_fence = False
@@ -481,14 +528,18 @@ def _threshold_hits(text: str, context_text: str):
 def flag_invented_thresholds(text: str, source_text: Optional[str]) -> str:
     """Latency/percentage thresholds ("under 2 s (p95)", ">= 90% coverage") whose
     number is not in the PROJECT CONTEXT get an explicit "(suggested target)"
-    marker unless the line already says suggested/proposed/to be agreed. Only
-    runs when the prompt carries a PROJECT CONTEXT block. Idempotent (the
-    marker is itself a flag word)."""
+    marker, and unit-bearing figures (throughput, money, SLA hours, effort
+    uplifts, cycles, SoC limits) absent from the whole prompt get an
+    "(illustrative, ...)" marker, unless the line already says
+    suggested/proposed/illustrative. Only runs when the prompt carries a
+    PROJECT CONTEXT block. Idempotent (the markers are flag words)."""
     context = project_context_of(source_text)
     if not context:
         return text
-    for end in sorted({e for e, _ in _threshold_hits(text, context)}, reverse=True):
-        text = text[:end] + THRESHOLD_FLAG + text[end:]
+    inserts = {e: FIGURE_FLAG for e, _ in _figure_hits(text, (source_text or "").lower())}
+    inserts.update({e: THRESHOLD_FLAG for e, _ in _threshold_hits(text, context)})
+    for end in sorted(inserts, reverse=True):
+        text = text[:end] + inserts[end] + text[end:]
     return text
 
 _VENDOR_TOOLS = re.compile(

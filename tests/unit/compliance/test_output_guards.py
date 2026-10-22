@@ -512,3 +512,49 @@ def test_absence_with_listed_suite_still_contradicted_next_to_negated_line():
     )
     out = g.sanitize_llm_markdown("No dedicated regression suite here", prompt)
     assert "Limited" in out and "related coverage" in out
+
+
+# -- 2026-10 BESS run: invented figures with units ---------------------------
+
+ILLUSTRATIVE = "(illustrative, not from the project context)"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- Gateway handles 100+ requests/sec",
+        "- Fines of €100K+ per breach",
+        "- A failure could cost millions in lost revenue",
+        "- Dev fix SLA: 24-hour SLA for Critical, 48h for High",
+        "- Allocate 20% extra effort for regression",
+        "- Automation break-even after ~4 regression cycles",
+        "- Never exceed 90% SoC during tests",
+    ],
+)
+def test_invented_figures_with_units_are_flagged_once_and_idempotently(line):
+    out = g.sanitize_llm_markdown(line, _BESS_PROMPT)
+    assert out.count(ILLUSTRATIVE) >= 1, out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+    assert g.lint_output(out, g.project_context_of(_BESS_PROMPT)) == []
+
+
+def test_figures_present_in_source_or_structural_are_not_flagged():
+    prompt = (
+        "PROJECT CONTEXT:\nSLA: 99 requests/sec peak, 24-hour SLA for Critical\n\n"
+        "RELEVANT QA KNOWLEDGE BASE:\n[Source 1 — Standard: a.md]\nkeep SoC within 90% window\n"
+    )
+    same = (
+        "- Handle 99 requests/sec\n- 24-hour SLA for Critical\n- Keep 90% SoC\n"
+        "- Sprint 3 delivers R01 in a 9 month timeline\n- Section 4 covers 2 QA and 6 devs"
+    )
+    assert g.sanitize_llm_markdown(same, prompt) == same
+
+
+def test_already_flagged_figures_untouched():
+    line = "- 100+ requests/sec (suggested target, to be agreed)"
+    assert g.sanitize_llm_markdown(line, _BESS_PROMPT) == line
+
+
+def test_grounding_rules_forbid_invented_slas_and_figures():
+    low = g.GROUNDING_RULES.lower()
+    assert "sla" in low and "latenc" in low and "fine" in low and "throughput" in low
