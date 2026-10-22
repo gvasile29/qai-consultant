@@ -23,6 +23,7 @@ from qai_consultant.generation.risk_analyzer import RiskAnalyzer
 from qai_consultant.generation.test_plan_generator import TestPlanGenerator
 from qai_consultant.generation.effort_estimator import EffortEstimator
 from qai_consultant.common.logger import get_logger
+from qai_consultant.generation.consistency import effort_facts, effort_prompt_block, enforce_effort_totals
 from qai_consultant.compliance.output_guards import CITATION_RULES, GENERATION_RULES, GROUNDING_RULES
 
 logger = get_logger(__name__)
@@ -46,8 +47,17 @@ Always flag risks that are specific to the project type and context.
 """
 
 
-def build_strategy_prompt(context: ProjectContext, knowledge_context: str) -> str:
-    """Build the full prompt for Test Strategy generation."""
+def build_strategy_prompt(
+    context: ProjectContext,
+    knowledge_context: str,
+    effort: Optional[dict] = None,
+) -> str:
+    """Build the full prompt for Test Strategy generation.
+
+    effort: optional consistency.effort_facts() dict; when present its numbers
+    must be reused verbatim in the Resources section.
+    """
+    effort_block = effort_prompt_block(effort)
     return f"""
 Based on the following project context and QA knowledge base, generate a complete and professional Test Strategy document.
 
@@ -60,6 +70,7 @@ RELEVANT QA KNOWLEDGE BASE:
 {GROUNDING_RULES}
 {CITATION_RULES}
 {GENERATION_RULES}
+{effort_block}
 Generate a Test Strategy document using EXACTLY this structure:
 
 # Test Strategy: {context.project_name}
@@ -198,7 +209,10 @@ class StrategyGenerator:
 
         logger.info("Step 3/4 — Generating Test Strategy...")
         try:
-            strategy, sources = self.generate(context, chunks=strategy_chunks)
+            strategy_kwargs: dict = {}
+            if effort_facts(effort_data):
+                strategy_kwargs["effort_data"] = effort_data
+            strategy, sources = self.generate(context, chunks=strategy_chunks, **strategy_kwargs)
             strategy_path = self.save(strategy, context)
             logger.info(f"Test Strategy saved: {strategy_path.name}")
         except Exception as exc:
@@ -229,7 +243,12 @@ class StrategyGenerator:
             "test_plan_sources": test_plan_sources,
         }
 
-    def generate(self, context: ProjectContext, chunks: Optional[list] = None) -> tuple:
+    def generate(
+        self,
+        context: ProjectContext,
+        chunks: Optional[list] = None,
+        effort_data=None,
+    ) -> tuple:
         """
         Generate a Test Strategy document for the given project context.
 
@@ -242,10 +261,15 @@ class StrategyGenerator:
             chunks: Optional pre-fetched knowledge chunks. If None, retrieves
                     from Pinecone. Pass pre-fetched chunks to enable parallel
                     RAG retrieval in generate_all().
+            effort_data: Optional EffortEstimator data object. Its PERT/capacity
+                    numbers are injected into the prompt and enforced on the
+                    Resources section so the Strategy cannot show a different
+                    QA total than the Effort report.
 
         Returns:
             Tuple of (strategy_markdown: str, sources: list[str]).
         """
+        facts = effort_facts(effort_data)
         if chunks is None:
             logger.info(f"Retrieving knowledge for '{context.project_name}'...")
             rag_query = context.to_rag_query()
@@ -253,12 +277,13 @@ class StrategyGenerator:
         knowledge_context = self.agent.format_knowledge_context(chunks)
         logger.info(f"Retrieved {len(chunks)} knowledge chunks")
 
-        prompt = build_strategy_prompt(context, knowledge_context)
+        prompt = build_strategy_prompt(context, knowledge_context, effort=facts)
         logger.info("Generating Test Strategy via LLM...")
         strategy = self.agent.ask(prompt, system_prompt=SYSTEM_PROMPT)
         strategy = strategy or ""
         if not strategy.strip():
             raise ValueError(f"LLM returned empty Test Strategy for '{context.project_name}'")
+        strategy = enforce_effort_totals(strategy, facts)
         logger.info(f"Test Strategy generated ({len(strategy)} chars)")
 
         sources = build_source_labels(chunks)
