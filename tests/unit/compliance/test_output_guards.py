@@ -558,3 +558,44 @@ def test_already_flagged_figures_untouched():
 def test_grounding_rules_forbid_invented_slas_and_figures():
     low = g.GROUNDING_RULES.lower()
     assert "sla" in low and "latenc" in low and "fine" in low and "throughput" in low
+
+
+# -- 2026-10 BESS run: invented process/tooling/seniority facts ---------------
+
+
+@pytest.mark.parametrize("claim", ["No CI/CD pipeline", "no peer review", "No version control", "No continuous integration setup"])
+def test_process_absences_get_not_stated_qualifier(claim):
+    out = g.sanitize_llm_markdown(f"- {claim}.", _BESS_PROMPT)
+    assert "(not stated in the project context)" in out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+    assert g.lint_output(f"- {claim}.", g.project_context_of(_BESS_PROMPT)) != []
+    assert g.lint_output(out, g.project_context_of(_BESS_PROMPT)) == []
+
+
+def test_process_absence_respects_context_statements():
+    stated_absent = "PROJECT CONTEXT:\nCI/CD: none\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    assert g.sanitize_llm_markdown("No CI/CD pipeline", stated_absent) == "No CI/CD pipeline"
+    present = "PROJECT CONTEXT:\nTooling: GitHub Actions CI/CD pipeline\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    out = g.sanitize_llm_markdown("No CI/CD pipeline", present)
+    assert out.startswith("Limited CI/CD pipeline") and "related coverage" in out
+
+
+def test_assumed_seniority_parenthetical_is_requalified():
+    text = "Team is small but experienced (assumed, since they're senior)."
+    out = g.sanitize_llm_markdown(text, _BESS_PROMPT)
+    assert "senior" not in out
+    assert "(assumption, not stated in the project context)" in out
+    assert g.sanitize_llm_markdown(out, _BESS_PROMPT) == out
+
+
+def test_seniority_stated_in_context_or_unrelated_assumption_untouched():
+    prompt = "PROJECT CONTEXT:\nTeam: 2 senior QA engineers\n\nRELEVANT QA KNOWLEDGE BASE:\nx"
+    text = "Team is experienced (assumed from senior titles)."
+    assert g.sanitize_llm_markdown(text, prompt) == text
+    other = "Staging is shared (assumed, to be confirmed)."
+    assert g.sanitize_llm_markdown(other, _BESS_PROMPT) == other
+
+
+def test_grounding_rules_forbid_unstated_seniority_and_process_facts():
+    low = g.GROUNDING_RULES.lower()
+    assert "seniority" in low and "experience" in low and "mark" in low

@@ -28,6 +28,9 @@ GROUNDING RULES (these override any instinct to sound specific):
 - Use markdown bold only in matched pairs; never leave a lone ** (e.g. after an arrow).
 - Risks may be conditional ("If <x> is not in place, ...") but must not assert that <x>
   is missing.
+- Never assert the seniority, experience level, or skills of the team, or tooling and
+  process facts (CI/CD, peer review, version control, environments) that the intake does
+  not state. Mark any such assumption explicitly as an assumption.
 - Never invent specific SLAs, latencies, throughputs, fines, monetary amounts, break-even
   points, or effort uplifts and present them as facts. A figure that is not in the PROJECT
   CONTEXT or the knowledge base must be labelled "illustrative, not from the project
@@ -118,7 +121,10 @@ def fix_stray_emphasis(text: str) -> str:
 
 
 _ABSENCE_CLAIM = re.compile(
-    r"\bno (?:dedicated|prior|existing|formal|documented) [^.\n;:*()|]{2,60}?(?=\s*[.\n;:*(),|]|$)",
+    r"\bno (?:(?:dedicated|prior|existing|formal|documented) [^.\n;:*()|]{2,60}?"
+    r"|(?:CI/CD|CI|continuous integration|peer review|code review|version control|issue tracker"
+    r"|test management|test environments?|staging environments?)\b[^.\n;:*()|]{0,40}?)"
+    r"(?=\s*[.\n;:*(),|]|$)",
     re.IGNORECASE,
 )
 _ABSENCE_QUALIFIER = " (not stated in the project context)"
@@ -205,6 +211,30 @@ def qualify_absence_claims(text: str, context_text: str = "") -> str:
     return _ABSENCE_CLAIM.sub(_repl, text)
 
 
+_PEOPLE_TRAIT = r"(?:senior|junior|experienc\w*|skilled|expert\w*|seasoned|mid-level|proficien\w*)"
+_ASSUMED_PEOPLE = re.compile(
+    rf"\s*\((?=[^()\n]*\bassum)(?=[^()\n]*\b(?P<trait>{_PEOPLE_TRAIT})\b)[^()\n]*\)",
+    re.IGNORECASE,
+)
+ASSUMED_PEOPLE_NOTE = " (assumption, not stated in the project context)"
+
+
+def qualify_assumed_people_traits(text: str, context_text: str = "") -> str:
+    """"Team is small but experienced (assumed, since they're senior)": the
+    seniority is an invention. Replace the parenthetical with an explicit
+    "assumption, not stated" note unless the intake itself mentions that trait.
+    Idempotent (the note carries no trait word)."""
+
+    def _repl(m: "re.Match") -> str:
+        trait = m.group("trait").lower()
+        stem = trait[:6] if trait.startswith(("experienc", "expert", "proficien")) else trait
+        if stem in context_text:
+            return m.group(0)
+        return ASSUMED_PEOPLE_NOTE
+
+    return _ASSUMED_PEOPLE.sub(_repl, text)
+
+
 def lint_output(text: str, context_text: str = "") -> list:
     """Problems that must never survive sanitizing (used by the live smoke
     script and tests as the "won't happen again" gate)."""
@@ -221,6 +251,8 @@ def lint_output(text: str, context_text: str = "") -> list:
             and _absence_verdict(m.group(0), context_text.lower()) != "supported"
         ):
             problems.append(f"unqualified absence claim: {m.group(0)!r}")
+    if qualify_assumed_people_traits(text, context_text.lower()) != text:
+        problems.append("assumed seniority/experience not stated in the project context")
     if replace_dashes(text) != text:
         problems.append("em/en dash used as punctuation")
     if clean_separator_debris(text) != text:
@@ -587,6 +619,7 @@ def sanitize_llm_markdown(text: str, source_text: Optional[str] = None) -> str:
     text = fix_stray_emphasis(text)
     text = soften_standards_claims(text)
     text = qualify_absence_claims(text, project_context_of(source_text))
+    text = qualify_assumed_people_traits(text, project_context_of(source_text))
     text = strip_unverifiable_section_refs(text, source_text)
     text = drop_invalid_source_citations(text, source_text)
     text = unquote_unverified_quotes(text, source_text)
