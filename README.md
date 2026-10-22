@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.9.0-green.svg)
+![Version](https://img.shields.io/badge/version-3.9.1-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -341,6 +341,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.8.0** ✅ MCP end-to-end QA fixes: `estimate_qa_effort` unit/range parsing + warnings, `review_qa_document` not-a-QA-document/test-case/language handling, `retrieve_qa_knowledge` min_score/low_relevance, `analyze_test_results` tolerant parsing; plus Streamlit effort/sources/download/copy fixes.
 - **v3.8.1** ✅ Out-of-stack tool and invented-quantity markers in generated documents, Download-all .zip, `match` strength labels on `retrieve_qa_knowledge` chunks, effort narrative can no longer contradict the tables.
 - **v3.9.0** ✅ `src/` restructured into the `qai_consultant` package (wheel tiers `common`/`core`/`mcp`; same tools and behaviour), tests grouped by level and feature, Executive Readout headlines expected effort and labels the range a planning band.
+- **v3.9.1** ✅ Generated documents no longer contradict each other or the deterministic tables (absence guard, Effort narrative, cross-document consistency, unverified regulators flagged); MCP dependency lock refreshed (`mcp` 1.30.0, `urllib3` 2.8.0, `pyjwt` 2.15.0).
 - **v4.0** Remote MCP — a hosted server connectable from claude.ai, plus server-side usage metrics
 
 ---
