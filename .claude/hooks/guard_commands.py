@@ -1,0 +1,275 @@
+"""PreToolUse hook (Bash/PowerShell): guard commands that are hard to undo.
+
+- DENY   running the Pinecone ingest entry point. `src/ingest.py` has no argparse, so ANY
+         invocation (even `--help`) deletes and re-uploads the production `knowledge-base`
+         namespace. Verify it by import or mocks, never by running it.
+- ASK    publishing steps that leave the machine: `twine upload`, `mcp-publisher publish`,
+         `gh release create`, and `git push` to master/main, a force/delete push, or a bare
+         `git push` while master/main is checked out.
+
+Commands are split into segments (`;`, `&&`, `||`, `|`, `&`, newline, `(`; not inside quotes) and only the segment's
+own program and arguments are inspected, so a commit message or `echo` that merely mentions
+`python src/ingest.py` is not blocked. Shell wrappers (`bash -c`, `powershell -Command`) are
+unwrapped one level at a time.
+
+Known limits (deliberate obfuscation is out of scope): variable indirection, `eval`, base64 payloads
+other than PowerShell `-EncodedCommand` (which asks), and scripts that themselves call ingest.
+
+Deny = exit 2 (reason on stderr). Ask = exit 0 with a permissionDecision JSON on stdout, so the
+user is prompted even under auto mode. An unreadable payload is allowed through (this guards
+accidents, it is not a security boundary; protect_files.py covers the file-edit tools).
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+_TOKEN = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
+_PY = re.compile(r"^(?:python[\d.]*|py)$")
+_SHELLS = {"bash", "sh", "zsh", "dash", "ksh", "cmd", "powershell", "pwsh"}
+_SHELL_COMMAND_FLAG = re.compile(r"^(?:-[a-z]*c|-command|-c:?|/[ck])$", re.IGNORECASE)
+_SHELL_ENCODED_FLAG = re.compile(r"^-e(?:c|nc\w*)?$", re.IGNORECASE)
+_DATA_SINKS = {"cat", "tee", "git", "gh", "echo", "printf", "cp", "mv", "sed", "awk", "grep", "head", "tail", "wc"}
+_WRAPPERS = {"env", "time", "nohup", "sudo", "command", "exec", "nice", "xargs", "call", "start", "uvx", "npx"}
+_RUNNER_PREFIXES = {"poetry", "pipx", "pdm", "hatch", "pipenv"}  # `<runner> run <program> ...`
+_INGEST_MODULES = {"qai_consultant.rag.ingest", "src.ingest", "ingest"}
+_INGEST_CODE = re.compile(r"ingest\.py|ingest\.main\s*\(|import\s+main\b[^;]*;\s*main\s*\(", re.IGNORECASE)
+_PROTECTED = {"main", "master"}
+_PY_VALUE_OPTS = {"-X", "-W", "-Q"}
+_UV_VALUE_OPTS = {"--with", "--python", "-p", "--project", "--directory", "--extra", "--group", "-w", "--env-file"}
+
+DENY_REASON = (
+    "Blocked: running ingest wipes and re-uploads the PRODUCTION Pinecone knowledge-base "
+    "namespace (no --help or dry-run exists). Verify by import or mocks; ask the user to run it."
+)
+
+
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.DOTALL | re.MULTILINE)
+
+
+def _strip_heredocs(command: str) -> str:
+    """Drop here-document bodies (e.g. a PR description) so their text is not parsed as commands.
+
+    A body fed to an interpreter (`bash <<EOF`, `python - <<EOF`, `xargs ...`) is code, so it is kept
+    and scanned: only heredocs whose command line starts with a plain data sink are stripped.
+    """
+    def repl(m: re.Match) -> str:
+        opener = m.group(0).split("\n", 1)[0]
+        progs = _heredoc_programs(command, m)
+        return opener if progs and all(p in _DATA_SINKS for p in progs) else m.group(0)
+
+    return _HEREDOC.sub(repl, command)
+
+
+def _heredoc_programs(command: str, m: re.Match) -> list[str]:
+    """Programs of every stage on the command line that opens the heredoc matched by `m`.
+
+    The whole line counts, so `cat <<EOF | bash` is an interpreter, not a data sink.
+    """
+    start = command.rfind("\n", 0, m.start()) + 1
+    end = command.find("\n", m.start())
+    line = command[start:end if end != -1 else len(command)]
+    stages = (_tokens(s) for s in re.split(r"&&|\|\||[;|&]", line))
+    return [_program(t[0]) for t in stages if t]
+
+
+def _python_heredoc_runs_ingest(command: str) -> bool:
+    """`python - <<EOF ... EOF` or `cat <<EOF | python`: the body is Python source, scanned like `python -c`."""
+    return any(
+        any(_PY.match(p) for p in _heredoc_programs(command, m)) and _INGEST_CODE.search(m.group(0).split("\n", 1)[1])
+        for m in _HEREDOC.finditer(command)
+    )
+
+
+def _split_segments(command: str) -> list[str]:
+    """Split on ; && || | & newline ( outside quotes, so `python -c "a; b"` stays one segment."""
+    segments, buf, quote = [], [], ""
+    for ch in command:
+        if quote:
+            buf.append(ch)
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+            buf.append(ch)
+        elif ch in ";&|\n()`":
+            segments.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    segments.append("".join(buf))
+    return segments
+
+
+def _unquote(tok: str) -> str:
+    # Also drops stray quotes left when a `bash -c "a && b"` string was split on the `&&` inside it.
+    return tok[1:-1] if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in "\"'" else tok.strip("\"'{}")
+
+
+def _program(tok: str) -> str:
+    name = re.split(r"[\\/]", _unquote(tok))[-1].casefold()
+    return name[:-4] if name.endswith(".exe") else name
+
+
+def _tokens(segment: str) -> list[str]:
+    toks = [t for t in (_unquote(t) for t in _TOKEN.findall(segment)) if t]
+    while toks:
+        if toks[0] == "&" or re.match(r"^[A-Za-z_]\w*=", toks[0]):
+            toks.pop(0)  # PowerShell call operator, VAR=value prefixes
+        elif _program(toks[0]) in _WRAPPERS:
+            toks.pop(0)  # `env`, `sudo`, `time`, ...: judge the program they launch
+            while toks and (toks[0].startswith("-") or "=" in toks[0]):
+                toks.pop(0)
+        elif _program(toks[0]) in _RUNNER_PREFIXES and toks[1:2] == ["run"]:
+            del toks[:2]
+        else:
+            break
+    return toks
+
+
+def _is_ingest_python(args: list[str]) -> bool:
+    """args = tokens after the interpreter. True if they run the ingest entry point."""
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in _PY_VALUE_OPTS:
+            i += 2
+            continue
+        # `-m mod`, `-mmod`, `-Im mod`; `-c code`, `-ccode`: the value is attached or the next token
+        flag = re.match(r"^-([A-Za-z]*?)([mc])(.*)$", a)
+        if flag and not a.startswith("--"):
+            value = flag.group(3) or (args[i + 1] if i + 1 < len(args) else "")
+            if flag.group(2) == "m":
+                return value in _INGEST_MODULES
+            return bool(_INGEST_CODE.search(value))
+        if a.startswith("-"):
+            i += 1
+            continue
+        return _program(a) == "ingest.py" or re.split(r"[\\/]", a)[-1].casefold() == "ingest.py"
+    return False
+
+
+def _is_ingest(toks: list[str]) -> bool:
+    prog = _program(toks[0])
+    if _PY.match(prog):
+        return _is_ingest_python(toks[1:])
+    if prog == "uv" and len(toks) > 1 and toks[1] == "run":
+        i = 2
+        while i < len(toks) and toks[i].startswith("-"):
+            i += 2 if toks[i] in _UV_VALUE_OPTS else 1
+        rest = toks[i:]
+        if not rest:
+            return False
+        if _PY.match(_program(rest[0])):
+            return _is_ingest_python(rest[1:])
+        return re.split(r"[\\/]", rest[0])[-1].casefold() == "ingest.py"
+    return False
+
+
+def _current_branch() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True, timeout=3,
+            cwd=os.environ.get("CLAUDE_PROJECT_DIR") or None,
+        )
+        return out.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _push_decision(args: list[str], branch_fn) -> str | None:
+    """args = tokens after `git`. Return an ask-reason for a risky push, else None."""
+    i = 0
+    while i < len(args) and args[i].startswith("-"):  # git global options, e.g. -C path, -c k=v
+        i += 2 if args[i] in {"-C", "-c"} else 1
+    if i >= len(args) or args[i] != "push":
+        return None
+    rest = args[i + 1:]
+    positional = [a for a in rest if not a.startswith("-")]
+    for a in rest:
+        if a in {"--force", "--delete", "--mirror"} or a.startswith("--force-with-lease") or a.startswith("--force-if-includes"):
+            return "git push with a force/delete/mirror flag"
+        if re.fullmatch(r"-[A-Za-z]*[fd][A-Za-z]*", a):
+            return "git push with a force/delete flag"
+    for a in positional:
+        if a.startswith("+"):
+            return "git push with a +refspec (forced update)"
+        parts = a.lstrip("+").replace("refs/heads/", "").split(":")
+        if any(p in _PROTECTED for p in parts):
+            return "git push to master/main"
+    if len(positional) <= 1 and branch_fn() in _PROTECTED:
+        return "bare git push while master/main is checked out"
+    return None
+
+
+def _segment_decision(segment: str, branch_fn, depth: int = 0):
+    toks = _tokens(segment)
+    if not toks:
+        return None, ""
+    prog = _program(toks[0])
+    if prog in _SHELLS and depth < 3:
+        for j, t in enumerate(toks[1:], start=1):
+            # PowerShell's -enc/-ec also match the generic command-flag pattern, so test them first there;
+            # for sh-like shells `-e` is errexit and must never be read as "encoded".
+            if prog in {"powershell", "pwsh"} and _SHELL_ENCODED_FLAG.match(t):
+                return "ask", "Cannot inspect an encoded shell command. Confirm before running."
+            if _SHELL_COMMAND_FLAG.match(t):
+                return evaluate(" ".join(toks[j + 1:]), branch_fn, depth + 1)
+        return None, ""
+    if _is_ingest(toks):
+        return "deny", DENY_REASON
+    if prog == "twine" and "upload" in toks[1:2]:
+        return "ask", "Hard to undo: twine upload publishes to PyPI. Confirm before running."
+    if prog == "mcp-publisher" and "publish" in toks[1:2]:
+        return "ask", "Hard to undo: mcp-publisher publish updates the MCP registry. Confirm before running."
+    if prog == "gh" and toks[1:3] == ["release", "create"]:
+        return "ask", "Hard to undo: gh release create publishes a GitHub release. Confirm before running."
+    if prog == "git":
+        why = _push_decision(toks[1:], branch_fn)
+        if why:
+            return "ask", f"Hard to undo: {why}. Confirm before running."
+    return None, ""
+
+
+def evaluate(command: str, branch_fn=_current_branch, depth: int = 0):
+    """Return ("deny"|"ask"|None, reason). A deny anywhere in the command wins over an ask."""
+    result = (None, "")
+    if _python_heredoc_runs_ingest(command):
+        return "deny", DENY_REASON
+    if depth < 3:  # command substitutions inside quotes, e.g. echo "$(python src/ingest.py)"
+        for inner in re.findall(r"\$\(([^()]*)\)|`([^`]*)`", command):
+            decision = evaluate(inner[0] or inner[1], branch_fn, depth + 1)
+            if decision[0] == "deny":
+                return decision
+    for segment in _split_segments(_strip_heredocs(command)):
+        decision = _segment_decision(segment, branch_fn, depth)
+        if decision[0] == "deny":
+            return decision
+        if decision[0] == "ask" and result[0] is None:
+            result = decision
+    return result
+
+
+def main() -> int:
+    try:
+        payload = json.load(sys.stdin)
+        command = (payload.get("tool_input") or {}).get("command") or ""
+    except (json.JSONDecodeError, AttributeError):
+        return 0
+    decision, reason = evaluate(command)
+    if decision == "deny":
+        print(reason, file=sys.stderr)
+        return 2
+    if decision == "ask":
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": reason,
+        }}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

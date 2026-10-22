@@ -12,7 +12,7 @@ description: The exact files to update together whenever a version bump ships in
 - `CHANGELOG.md` — new `## [X.Y.Z] - YYYY-MM-DD` entry at the top, in end-user terms (Keep a Changelog format, see existing entries for tone)
 - `README.md` (root) — version badge, intro paragraph if the feature set changed, MCP tools table if the tool surface changed, Roadmap section
 - `README_MCP.md` — description line + tools table if the MCP tool surface changed
-- `CLAUDE.md` — architecture table rows for new/changed modules, new Gotchas discovered during the work, Roadmap section (keep new entries terse — see the last step below)
+- `CLAUDE.md` — architecture table rows for new/changed modules with non-obvious constraints, new Gotchas discovered during the work, Roadmap section (keep new entries terse — see the last step below)
 
 **Merge gate: never merge a release PR to `master` before `CHANGELOG.md` has the new version's entry in the same PR.** The version bump and the changelog entry must land together, not as a follow-up commit — a merged release with a stale top-of-file changelog is exactly what this checklist exists to prevent.
 

@@ -187,7 +187,7 @@ def test_render_strategy_isolates_each_generation_step():
 
 
 # ── render_strategy() resumability gating (architecture-review Minor finding #4) ──
-# CLAUDE.md's "render_strategy() resumability" gotcha explains why this must be
+# The streamlit-gotchas skill's "render_strategy() resumability" entry explains why this must be
 # gated on an explicit completion flag rather than any single stage's output —
 # these tests give that invariant real regression protection via static source
 # checks, the same technique test_render_strategy_isolates_each_generation_step()

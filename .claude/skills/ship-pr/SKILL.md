@@ -28,7 +28,7 @@ Then the repo rules those tools cannot see:
 
 - A version bump follows the `release-checklist` skill (all files in the same PR).
 - An MCP tool-surface change (anything under `src/qai_consultant/{common,core,mcp}/`) also runs `python scripts/mcp_release_check.py --preflight`.
-- A new feature adds tests; a new module gets a row in CLAUDE.md's architecture table.
+- A new feature adds tests; a new wheel-tier module, or one with constraints the code doesn't show, gets a row in CLAUDE.md's architecture table.
 - A change to `CLAUDE.md` runs `bash .claude/skills/claude-md-hygiene/check.sh`.
 
 ## 2. Verify on the real surface
