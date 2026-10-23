@@ -410,7 +410,7 @@ def run_maturity_mode(agent: QAIAgent, path: str) -> None:
     optional narrative assessment streamed and saved via
     maturity_generator.py's conventions — the same save path the interactive
     flow uses."""
-    from qai_consultant.core.maturity_core import assess_maturity, MIN_CONTENT_CHARS
+    from qai_consultant.core.maturity_core import assess_maturity, MIN_CONTENT_CHARS, STATUS_NOT_QA
     from qai_consultant.generation.maturity_generator import (
         MATURITY_SYSTEM_PROMPT, build_maturity_prompt,
         build_maturity_report_markdown, save_maturity_report,
@@ -429,6 +429,13 @@ def run_maturity_mode(agent: QAIAgent, path: str) -> None:
             f"[yellow]⚠️  Description is too short to assess "
             f"({result.stats.get('char_count', 0)} characters after cleanup — "
             f"need at least {MIN_CONTENT_CHARS}).[/yellow]"
+        )
+        return
+
+    if result.status == STATUS_NOT_QA:
+        console.print(
+            "[yellow]⚠️  This text does not describe a software testing or QA process, so no "
+            "maturity level was produced.[/yellow]"
         )
         return
 

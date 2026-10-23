@@ -122,3 +122,30 @@ def test_hard_wrapped_prose_not_flagged_as_keyword_list():
         "plan every week to the whole department and management."
     )
     assert assess_maturity(wrapped).keyword_list_warning == ""
+
+
+def test_mcp_tool_not_a_qa_description_shape():
+    from qai_consultant.mcp import server
+    out = server.assess_qa_maturity(
+        "Mix 500 g flour with 350 g water and 100 g active starter. Let the sourdough "
+        "rest for twelve hours, fold it twice, do the poke test, then bake at 230 C "
+        "for forty minutes until golden. High quality flour matters."
+    )
+    assert out["status"] == "not_a_qa_description"
+    assert out["indicative_tmmi_level"] is None
+    assert out["findings"] == []
+    assert out["message"]
+    assert len(str(out)) < 3000
+
+
+def test_mcp_tool_ok_status_and_negated_ai():
+    from qai_consultant.mcp import server
+    out = server.assess_qa_maturity(
+        "We build a trading backend with Python and test manually before each release, "
+        "with no documentation of the process and no regression suite at all today, "
+        "and nobody is responsible for quality across the whole team here. "
+        "No machine learning is used in the product."
+    )
+    assert out["status"] == "ok"
+    assert out["ai_act_relevant"] is False
+    assert out["ai_act_dimension_scores"] == {}

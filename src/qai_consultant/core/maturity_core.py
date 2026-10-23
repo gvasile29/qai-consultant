@@ -37,6 +37,7 @@ from qai_consultant.common.text_checks import detect_language, is_sentence_like
 MIN_CONTENT_CHARS = 200
 MAX_INPUT_CHARS = 500_000
 TMMI_LEVEL_THRESHOLD = 60
+STATUS_NOT_QA = "not_a_qa_description"
 
 _DISCLAIMER = (
     "This is an informal indicative signal derived from a text description, "
@@ -81,7 +82,9 @@ class MaturityFinding:
 
 @dataclass
 class MaturityResult:
-    status: str                        # "ok" | "insufficient_content"
+    # "ok" | "insufficient_content" | "not_a_qa_description"
+    # (the last has indicative_tmmi_level 0 here; the MCP tool reports null)
+    status: str
     indicative_tmmi_level: int         # 1-3, 0 if insufficient_content
     tmmi_dimension_scores: dict = field(default_factory=dict)
     ai_act_relevant: bool = False
@@ -303,10 +306,33 @@ def _indicative_level(tmmi_scores: dict) -> int:
 # ── EU AI Act Articles 9-15 Readiness Checks ──────────────────────────────
 
 _AI_RELEVANCE_RE = re.compile(
-    r"\b(ai|artificial intelligence|machine learning|neural network|"
-    r"llm|large language model|deep learning|generative ai|ml model)\b",
+    r"\b(ai|artificial intelligence|machine learning|neural networks?|"
+    r"llms?|large language models?|deep learning|generative ai|ml models?|ml)\b",
     re.IGNORECASE,
 )
+
+# Filler words allowed between a negator and an AI term ("do not currently use
+# any ML"). A closed list on purpose: "Without human oversight our AI ..." must
+# NOT count as a negated AI mention.
+_NEG_FILLER = (
+    r"use|uses|used|using|include|includes|included|contain|contains|rely|relies|on|"
+    r"any|the|a|an|currently|yet|at|all|have|has|having|involve|involves|incorporate|"
+    r"employ|employs|do|does|is|are|be|being|such|of|and|or|and/or|other|kind|kinds|"
+    r"form|forms|type|types|component|components|technique|techniques|technology|"
+    r"technologies|really|actually|even|ai|ml|llm|llms|machine|learning|"
+    r"deep|neural|network|networks|artificial|intelligence|large|language|model|models|"
+    r"generative|in|within|inside|our|this|that|product|system|solution|platform"
+)
+_NEGATED_BEFORE_RE = re.compile(
+    r"(?:\bno|\bnot|\bnever|\bwithout|\bneither|\bnor|n't|\bzero|\bnone of|\bfree of|"
+    r"\bavoid(?:s|ing)?)(?![a-z])"
+    r"(?:[\s/,]+(?:" + _NEG_FILLER + r"))*[\s/,:\-]*$"
+)
+_NEGATED_AFTER_RE = re.compile(
+    r"^[\s\-]?(?:free\b|[\s,]*(?:is|are|was|were)?\s*(?:not|never)\s+"
+    r"(?:used|involved|included|part|applied|present|employed))"
+)
+_SENTENCE_START_RE = re.compile(r"[.!?;\n]")
 
 # article -> (dimension_key, severity, keywords, citation_query)
 _AI_ACT_CHECKS = [
@@ -335,7 +361,70 @@ _AI_ACT_CHECKS = [
 
 
 def _is_ai_act_relevant(lower_text: str) -> bool:
-    return bool(_AI_RELEVANCE_RE.search(lower_text))
+    """True when at least one AI/ML mention is NOT negated. A description that
+    only denies AI ("no machine learning is used", "AI-free", "does not use
+    LLMs") must not switch the EU AI Act dimension on."""
+    for match in _AI_RELEVANCE_RE.finditer(lower_text):
+        prefix = lower_text[:match.start()]
+        boundaries = list(_SENTENCE_START_RE.finditer(prefix))
+        clause = prefix[boundaries[-1].end():] if boundaries else prefix
+        clause = clause[-80:]
+        if _NEGATED_BEFORE_RE.search(clause):
+            continue
+        suffix = lower_text[match.end():match.end() + 40]
+        suffix = _SENTENCE_START_RE.split(suffix)[0]
+        if _NEGATED_AFTER_RE.match(suffix):
+            continue
+        return True
+    return False
+
+
+# ── Non-QA gate ───────────────────────────────────────────────────────────
+# Mirrors review_core's not_a_qa_document: a recipe or meeting note must not
+# receive "Level 1 + 24 findings". Deliberately permissive - an immature but
+# genuinely QA-related description ("we test manually, no documentation")
+# must still be assessed.
+_NOT_QA_PREFIX = r"(?<!poke )(?<!taste )(?<!float )(?<!toothpick )(?<!dough )"
+_QA_SPECIFIC_RE = re.compile(
+    r"\bqa\b|\bquality assurance\b|\bqc\b|\bdefects?\b|\bbugs?\b|\btesters?\b|"
+    r"\btest[- ](?:plans?|cases?|strateg(?:y|ies)|suites?|automation|coverage|"
+    r"environments?|execution|design|data|results?)\b|"
+    r"\b(?:unit|integration|regression|smoke|sanity|acceptance|system|e2e|"
+    r"end-to-end|exploratory|performance|security|manual|automated) tests?\b|"
+    r"\btesting (?:strategy|process|effort|team|phase)\b|"
+    r"\bregression\b|\btmmi\b|\bistqb\b|\buat\b|\bflaky\b|\bci/cd\b|"
+    r"\bselenium\b|\bpytest\b|\bjunit\b|\bcode reviews?\b|\bpeer reviews?\b|"
+    r"\b(?:verification|validation)\b",
+    re.IGNORECASE,
+)
+_QA_PLAIN_TEST_RE = re.compile(_NOT_QA_PREFIX + r"\btest(?:s|ed|ing)?\b", re.IGNORECASE)
+_QA_WEAK_RE = {
+    k: re.compile(v, re.IGNORECASE) for k, v in {
+        "release": r"\breleases?\b|\bdeploy(?:s|ed|ing|ment|ments)?\b",
+        "software": r"\bsoftware\b|\bcode\b|\bcodebase\b|\bapps?\b|\bapplications?\b|\bbackend\b|\bfrontend\b",
+        "dev": r"\bdevelopers?\b|\bengineers?\b|\bsprints?\b|\bagile\b|\bscrum\b",
+        "requirements": r"\brequirements?\b|\buser stor(?:y|ies)\b|\btickets?\b|\bjira\b",
+        "quality": r"\bquality\b|\bacceptance\b|\bcoverage\b",
+        "pipeline": r"\bpipelines?\b|\bstaging\b|\bproduction\b|\bci\b|\bcd\b",
+        "manual": r"\bmanual(?:ly)?\b|\bautomat(?:ed|ion|ically)\b|\bby hand\b",
+        "compliance": r"\brisk management\b|\bgovernance\b|\bcompliance\b|\baudits?\b|\boversight\b|\blogging\b|\btechnical documentation\b|\btraining data\b",
+        "check": r"\bchecks?\b|\bchecking\b|\bverif(?:y|ies|ied)\b|\bclick(?:s|ing)? around\b|\bsee if it works\b",
+        "docs": r"\bdocumentation\b|\bprocess(?:es)?\b|\bchecklists?\b",
+    }.items()
+}
+
+
+def _looks_like_qa_description(text: str) -> bool:
+    if _QA_SPECIFIC_RE.search(text):
+        return True
+    hit = {k for k, rx in _QA_WEAK_RE.items() if rx.search(text)}
+    if _QA_PLAIN_TEST_RE.search(text):
+        return len(hit) >= 1
+    if "software" in hit and len(hit) >= 2:
+        return True
+    if _is_ai_act_relevant(text.lower()):
+        return True  # a (non-negated) AI/ML system description is in scope for the AI Act dimension
+    return len(hit) >= 3
 
 
 def _score_ai_act(lower_text: str) -> tuple:
@@ -402,6 +491,17 @@ def assess_maturity(text: str) -> MaturityResult:
         )
 
     lang = detect_language(cleaned)
+    if lang["reliable"] and not _looks_like_qa_description(cleaned):
+        return MaturityResult(
+            status=STATUS_NOT_QA,
+            indicative_tmmi_level=0,
+            disclaimer=_DISCLAIMER,
+            stats={"char_count": len(cleaned), "raw_char_count": raw_len,
+                   "reason": "the input has no software-testing/QA vocabulary; "
+                             "no level or findings were produced"},
+            language=lang["language"],
+            language_warning=lang["warning"],
+        )
     if lang["reliable"]:
         evidence_text, keyword_list = _keyword_list_filter(cleaned)
     else:

@@ -34,7 +34,7 @@ from fastembed import TextEmbedding
 from qai_consultant.common.kb_config import CHUNK_OVERLAP, CHUNK_SIZE, EMBEDDING_MODEL, get_source_category
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_CACHE_FORMAT_VERSION = 2  # bumped for the fastembed backend switch (was 1: sentence-transformers)
+_CACHE_FORMAT_VERSION = 3  # 3: single-pass chunk overlap + header-only chunks dropped (2: fastembed backend)
 _MAX_QCACHE_ENTRIES = 256  # LRU cap on _query_vector()'s per-instance cache
 
 
@@ -76,10 +76,47 @@ WEAK_MATCH_NOTE = (
 )
 
 
-def match_strength(score: float) -> str:
-    """Label a cosine score so callers need not guess what 0.456 means."""
+STRONG_MIN_TERM_COVERAGE = 0.6  # share of the query's content terms a "strong" chunk must contain
+
+_STOPWORDS = frozenset(
+    "a an the of for to in on and or is are was were what how why when which who with by from as at "
+    "be it its this that do does can i me my we our you your about use using vs".split()
+)
+
+
+def _stem(word: str) -> str:
+    for suffix in ("ing", "es", "ed", "s"):
+        if len(word) > len(suffix) + 3 and word.endswith(suffix):
+            return word[: -len(suffix)]
+    return word
+
+
+def _query_terms(query: str) -> list[str]:
+    return [_stem(w) for w in re.findall(r"[a-z0-9]+", query.lower()) if w not in _STOPWORDS]
+
+
+def term_coverage(query_terms: list[str], text: str, source: str = "") -> float:
+    """Share of the query's content terms (stopwords removed, crude stemming) that
+    appear in the chunk text or its source path. 1.0 when the query has no terms."""
+    if not query_terms:
+        return 1.0
+    present = {_stem(w) for w in re.findall(r"[a-z0-9]+", f"{text} {source}".lower())}
+    return sum(t in present for t in query_terms) / len(query_terms)
+
+
+def match_strength(score: float, coverage: Optional[float] = None) -> str:
+    """Label a cosine score so callers need not guess what 0.456 means.
+
+    Cosine similarity from a small embedding model compresses into 0.4-0.6 for
+    anything that shares vocabulary, so the score alone over-states relevance
+    (an automation-statistics article scored 0.55+ for "AI/ML system testing").
+    When ``coverage`` (see ``term_coverage``) is given, "strong" additionally
+    requires the chunk to contain at least STRONG_MIN_TERM_COVERAGE of the
+    query's content terms; otherwise it is capped at "moderate"."""
     if score >= STRONG_MATCH:
-        return "strong"
+        if coverage is None or coverage >= STRONG_MIN_TERM_COVERAGE:
+            return "strong"
+        return "moderate"
     return "moderate" if score >= MODERATE_MATCH else "weak"
 
 
@@ -90,6 +127,18 @@ LOW_RELEVANCE_NOTE = (
     "(e.g. test design techniques, test levels) are often absent. Answer from your own "
     "knowledge and say the knowledge base had no match."
 )
+
+# Sources people ask for by name that this KB deliberately does NOT ship (their
+# PDFs are excluded by the wheel's licensing gate, see tests/system/release/
+# test_packaging.py). name -> lowercase query aliases. A note is added when a
+# query names one of them and no indexed document's path or title does.
+EXCLUDED_SOURCES = {
+    "ISTQB syllabi (CTFL/CTAL)": ("istqb", "ctfl", "ctal"),
+    "OWASP Web Security Testing Guide (WSTG)": ("wstg",),
+    "OWASP Mobile Application Security Testing Guide (MASTG)": ("mastg",),
+}
+
+CLAMP_WARNING = "k={given} is outside [1, 20]; it was clamped to {used}."
 
 _DEDUPE_OVERLAP = 0.5  # overlap coefficient above which two same-source chunks are near-duplicates
 
@@ -132,65 +181,88 @@ class _FastEmbedEmbeddings:
         return next(iter(self._model.embed([text]))).tolist()
 
 
+def _atoms(piece: str, chunk_size: int, seps: list[str]) -> list[str]:
+    """Break ``piece`` into contiguous atoms of at most ``chunk_size`` characters
+    along the highest-priority separator that applies. Atoms concatenate back to
+    ``piece`` exactly (separators stay as a prefix of the following part), and no
+    overlap is added here - overlap is applied exactly once, in the caller."""
+    if len(piece) <= chunk_size:
+        return [piece] if piece.strip() else []
+    if not seps:
+        return [c for c in (piece[i:i + chunk_size] for i in range(0, len(piece), chunk_size))
+                if c.strip()]
+    sep, rest = seps[0], seps[1:]
+    parts = piece.split(sep)
+    if len(parts) == 1:
+        return _atoms(piece, chunk_size, rest)
+    out: list[str] = []
+    for part in [parts[0]] + [sep + p for p in parts[1:]]:
+        out.extend(_atoms(part, chunk_size, rest))
+    return out
+
+
+def _overlap_tail(text: str, size: int) -> str:
+    """Last ~``size`` characters of ``text``, trimmed forward to a word boundary
+    so an overlap never starts mid-word."""
+    if size <= 0:
+        return ""
+    tail = text[-size:]
+    if len(text) > size and not text[-size - 1].isspace():
+        cut = re.search(r"\s", tail)
+        tail = tail[cut.end():] if cut else ""
+    return tail
+
+
 def _simple_chunk_splits(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
-    """Chunk on the same separator priority ingest.py's RecursiveCharacterTextSplitter
-    uses (## headings first, then paragraph/line/word boundaries), without requiring
-    langchain at import time — keeps this module's dependency surface minimal for the
-    MCP server path. Not byte-identical to langchain's splitter, but the same
-    size/overlap/separator *policy*, which is what determines retrieval granularity."""
+    """Chunk on the same separator priority the production ingest splitter
+    (RecursiveCharacterTextSplitter) uses (## headings first, then paragraph/line/word
+    boundaries), without requiring langchain at import time - keeps this module's
+    dependency surface minimal for the MCP server path. Not byte-identical to
+    langchain's splitter, but the same size/overlap/separator *policy*, which is what
+    determines retrieval granularity.
+
+    Pipeline: split into atoms (<= chunk_size) -> greedily merge atoms into chunks
+    (<= chunk_size) -> prepend each chunk with the tail of the PREVIOUS RAW chunk,
+    once. (An earlier version applied overlap at every recursion level and so
+    stacked the same heading/paragraph two or three times inside one chunk.)"""
     if len(text) <= chunk_size:
         return [text] if text.strip() else []
 
     separators = ["\n## ", "\n### ", "\n---", "\n\n", "\n", " "]
+    merged: list[str] = []
+    current = ""
+    for atom in _atoms(text, chunk_size, separators):
+        if len(current) + len(atom) <= chunk_size:
+            current += atom
+        else:
+            if current.strip():
+                merged.append(current)
+            current = atom
+    if current.strip():
+        merged.append(current)
+    # A tiny trailing chunk would be mostly its own overlap prefix (a near-duplicate
+    # of its neighbour); fold it into the previous chunk instead.
+    if len(merged) > 1 and len(merged[-1]) < chunk_overlap and len(merged[-2]) + len(merged[-1]) <= chunk_size + chunk_overlap:
+        tail_chunk = merged.pop()
+        merged[-1] += tail_chunk
 
-    def split(piece: str, seps: list[str]) -> list[str]:
-        if len(piece) <= chunk_size:
-            return [piece] if piece.strip() else []
-        if not seps:
-            # No more separators — hard-cut at chunk_size with overlap.
-            out = []
-            start = 0
-            while start < len(piece):
-                out.append(piece[start:start + chunk_size])
-                start += max(chunk_size - chunk_overlap, 1)
-            return [c for c in out if c.strip()]
+    if chunk_overlap > 0 and len(merged) > 1:
+        return [merged[0]] + [
+            _overlap_tail(prev, chunk_overlap) + cur for prev, cur in zip(merged, merged[1:])
+        ]
+    return merged
 
-        sep, rest_seps = seps[0], seps[1:]
-        parts = piece.split(sep)
-        if len(parts) == 1:
-            return split(piece, rest_seps)
 
-        # Reassemble parts into chunks close to chunk_size, preserving the
-        # separator between parts (except the very first part).
-        rejoined = [parts[0]] + [sep + p for p in parts[1:]]
-        chunks: list[str] = []
-        current = ""
-        for part in rejoined:
-            if len(part) > chunk_size:
-                if current.strip():
-                    chunks.append(current)
-                chunks.extend(split(part, rest_seps))
-                current = ""
-                continue
-            if len(current) + len(part) <= chunk_size:
-                current += part
-            else:
-                if current.strip():
-                    chunks.append(current)
-                current = part
-        if current.strip():
-            chunks.append(current)
+_NON_BODY_LINE_RE = re.compile(r"^\s*(?:#{1,6}\s.*|-{3,}|\*{3,}|_{3,}|\|?[\s:|-]+\|?)\s*$")
 
-        # Apply overlap between consecutive chunks.
-        if chunk_overlap > 0 and len(chunks) > 1:
-            overlapped = [chunks[0]]
-            for c in chunks[1:]:
-                prev_tail = overlapped[-1][-chunk_overlap:]
-                overlapped.append(prev_tail + c)
-            return overlapped
-        return chunks
 
-    return [c for c in split(text, separators) if c.strip()]
+def _body_chars(text: str) -> int:
+    """Characters of real content in a chunk: everything except headings,
+    horizontal rules, table-separator rows and blank lines."""
+    return sum(len(line.strip()) for line in text.splitlines() if not _NON_BODY_LINE_RE.match(line))
+
+
+MIN_BODY_CHARS = 80  # chunks with less real content than this are never indexed
 
 
 def _first_heading_or_filename(text: str, path: Path) -> str:
@@ -291,7 +363,10 @@ class LocalIndex:
             rel_source = str(path.relative_to(self.kb_dir)).replace("\\", "/")
             category = get_source_category(path)
             title = _first_heading_or_filename(text, path)
-            for piece in _simple_chunk_splits(text, CHUNK_SIZE, CHUNK_OVERLAP):
+            pieces = _simple_chunk_splits(text, CHUNK_SIZE, CHUNK_OVERLAP)
+            for piece in pieces:
+                if len(pieces) > 1 and _body_chars(piece) < MIN_BODY_CHARS:
+                    continue  # header-only / near-empty chunk: nothing to retrieve
                 chunks.append(Chunk(text=piece, source=rel_source, category=category, title=title))
 
         self._chunks = chunks
@@ -395,12 +470,25 @@ class LocalIndex:
                 "valid_categories": list(VALID_CATEGORIES),
             }
 
+        if isinstance(k, bool) or not isinstance(k, int):
+            return {
+                "error": "invalid_argument",
+                "message": "k must be an integer between 1 and 20.",
+            }
+
         self._ensure_built()
-        k = max(1, min(k, 20))
+        warnings: list[str] = []
+        used_k = max(1, min(k, 20))
+        if used_k != k:
+            warnings.append(CLAMP_WARNING.format(given=k, used=used_k))
+        k = used_k
 
         if not self._chunks:
-            return {"chunks": [], "kb_version": self.kb_version, "best_score": None,
-                    "low_relevance": False}
+            empty: dict = {"chunks": [], "kb_version": self.kb_version, "best_score": None,
+                           "low_relevance": False}
+            if warnings:
+                empty["warnings"] = warnings
+            return empty
 
         qvec = self._query_vector(query)
         qnorm = math.sqrt(sum(x * x for x in qvec)) or 1.0
@@ -430,11 +518,16 @@ class LocalIndex:
             top.append((score, chunk))
             top_shingles.append(shingles)
 
+        terms = _query_terms(query)
+        labelled = [
+            (score, c, match_strength(score, term_coverage(terms, c.text, c.source) if len(terms) >= 2 else None))
+            for score, c in top
+        ]
         result: dict = {
             "chunks": [
                 {"source": c.source, "category": c.category, "text": c.text, "score": round(score, 4),
-                 "match": match_strength(score)}
-                for score, c in top
+                 "match": label}
+                for score, c, label in labelled
             ],
             "kb_version": self.kb_version,
             "best_score": best_score,
@@ -443,9 +536,33 @@ class LocalIndex:
         if not top and min_score > 0.0:
             result["low_relevance"] = True
             result["note"] = LOW_RELEVANCE_NOTE
-        elif top and top[0][0] < STRONG_MATCH:
+        elif top and not any(label == "strong" for _, _, label in labelled):
             result["note"] = WEAK_MATCH_NOTE
+        excluded_note = self._excluded_source_note(query)
+        if excluded_note:
+            result["note"] = f"{result['note']} {excluded_note}" if "note" in result else excluded_note
+        if warnings:
+            result["warnings"] = warnings
         return result
+
+    def _excluded_source_note(self, query: str) -> str:
+        """Honest note when the query names a known source this KB does not ship."""
+        words = set(re.findall(r"[a-z0-9]+", query.lower()))
+        names = []
+        for name, aliases in EXCLUDED_SOURCES.items():
+            if not words.intersection(aliases):
+                continue
+            indexed = any(
+                a in f"{c.source} {c.title}".lower() for c in self._chunks for a in aliases
+            )
+            if not indexed:
+                names.append(name)
+        if not names:
+            return ""
+        return (
+            f"Not in the knowledge base: {', '.join(names)} (not bundled for licensing reasons). "
+            "The chunks returned are from other documents and must not be cited as that source."
+        )
 
     # ── Background build ─────────────────────────────────────────────────────
 

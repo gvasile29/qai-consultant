@@ -18,7 +18,7 @@ An open-source AI agent that acts as a senior QA Architect — automatically gen
 ![CI](https://github.com/gvasile29/qai-consultant/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Version](https://img.shields.io/badge/version-3.9.2-green.svg)
+![Version](https://img.shields.io/badge/version-3.9.3-green.svg)
 ![PyPI](https://img.shields.io/pypi/v/qai-consultant-mcp?label=qai-consultant-mcp&color=blue)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-orange?logo=anthropic)
 
@@ -343,6 +343,7 @@ This creates a **feedback loop** where QAI learns from validated real-world outp
 - **v3.9.0** ✅ `src/` restructured into the `qai_consultant` package (wheel tiers `common`/`core`/`mcp`; same tools and behaviour), tests grouped by level and feature, Executive Readout headlines expected effort and labels the range a planning band.
 - **v3.9.1** ✅ Generated documents no longer contradict each other or the deterministic tables (absence guard, Effort narrative, cross-document consistency, unverified regulators flagged); MCP dependency lock refreshed (`mcp` 1.30.0, `urllib3` 2.8.0, `pyjwt` 2.15.0).
 - **v3.9.2** ✅ Hosted-app fixes: the zip download works again (Starlette pinned), the Streamlit/CLI paths share the cross-document consistency, PDF tables render, and generation shows a stage progress bar instead of streaming every line.
+- **v3.9.3** ✅ MCP end-user QA fixes: input validation in `estimate_qa_effort`, honest `assess_qa_maturity`/`review_qa_document` gating, cleaner retrieval, clearer `analyze_test_results` warnings.
 - **v4.0** Remote MCP — a hosted server connectable from claude.ai, plus server-side usage metrics
 
 ---

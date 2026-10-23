@@ -249,12 +249,11 @@ def test_cache_with_wrong_embedding_model_falls_back_to_rebuild(tmp_path):
     assert idx2.kb_version == idx1.kb_version
 
 
-def test_cache_format_version_is_2():
+def test_cache_format_version_is_current():
     from qai_consultant.mcp.local_index import _CACHE_FORMAT_VERSION
-    assert _CACHE_FORMAT_VERSION == 2, (
-        "Bumped for the fastembed backend switch — an old format-1 cache (built "
-        "with sentence-transformers vectors) must never be read as if it were "
-        "fastembed output; see docs/superpowers/specs/"
+    assert _CACHE_FORMAT_VERSION == 3, (
+        "Bump this whenever the chunking or embedding output changes (3: chunker without stacked overlap, "
+        "2: fastembed backend) so an older cache is rebuilt instead of served; see docs/superpowers/specs/"
         "2026-09-17-mcp-embedding-backend-simplification-design.md"
     )
 

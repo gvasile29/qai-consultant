@@ -43,6 +43,7 @@ from qai_consultant.core import results_core
 from qai_consultant.core import review_core
 from qai_consultant.common import telemetry
 from qai_consultant.core.dialogue import InputValidator, ProjectContext
+from qai_consultant.core import effort_core
 from qai_consultant.core.effort_core import compute_estimation
 from qai_consultant.mcp.local_index import LocalIndex
 from qai_consultant.mcp.prompts import (
@@ -147,10 +148,13 @@ def retrieve_qa_knowledge(
     or test levels are often absent; the first call after server start may take
     ~30s while the index builds (usually done in the background by then).
     Returns {"chunks": [{"source", "category", "text", "score", "match"}],
-    "kb_version", "best_score", "low_relevance"[, "note"]}; "match" is
-    strong (>=0.55), moderate (>=0.40) or weak, and when even the best chunk is
+    "kb_version", "best_score", "low_relevance"[, "note"][, "warnings"]}; "match" is
+    strong (score >=0.55 AND the chunk contains most of the query's content terms),
+    moderate (>=0.40) or weak, and when even the best chunk is
     not strong a note says to use only chunks that really answer the question
-    (a 0.45 hit on an unrelated case study is vocabulary overlap). Chunks scoring below min_score
+    (a 0.45 hit on an unrelated case study is vocabulary overlap). A query that
+    names a source the KB does not ship (e.g. ISTQB) gets a note saying so;
+    an out-of-range k is clamped and reported in "warnings". Chunks scoring below min_score
     (cosine similarity, default 0.40, 0 disables) are dropped; if nothing
     reaches it, chunks is empty, low_relevance is true and note says so - then
     answer from your own knowledge and tell the user the KB had no match
@@ -223,7 +227,14 @@ def estimate_qa_effort(
     {"error": "validation", "fields": {field: message}}, never a crash.
     Success returns the full EstimationData as JSON (baseline, multipliers,
     pert_activities, capacity, risk_buffer_days, final_effort_min/max,
-    confidence_level/confidence_score)."""
+    confidence_level/confidence_score, confidence_note, data_quality_score out
+    of data_quality_max=20). Negative team sizes and negative or zero timelines
+    are rejected with a validation error; decimal team sizes ("2.5") are
+    rounded half up to a whole headcount with a warning. capacity_gap =
+    available_person_days - pert_total_expected, so POSITIVE is a surplus and
+    NEGATIVE a deficit; capacity_status ("surplus"/"deficit"/"balanced") and
+    capacity_note state this unambiguously. methodology_note is set only when
+    the methodology does not change the numbers (it is then a label only)."""
     start = time.monotonic()
     raw = {
         "project_name": project_name,
@@ -252,6 +263,12 @@ def estimate_qa_effort(
     additional_result = validator.validate_additional_context(additional_context)
     if not additional_result.valid:
         field_errors["additional_context"] = additional_result.error
+
+    # Negative team sizes / negative or zero durations are rejected, not guessed.
+    for numeric_field, message in effort_core.validate_numeric_inputs(
+        raw["team_qa_size"], raw["team_dev_size"], raw["timeline"],
+    ).items():
+        field_errors.setdefault(numeric_field, message)
 
     if field_errors:
         duration_ms = (time.monotonic() - start) * 1000
@@ -305,7 +322,12 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
     returns a structured {"error": "invalid_argument", ...} rather than
     raising. Documents under ~200 characters (after stripping this app's own
     AI-disclosure front matter/footer) return doc_type="insufficient_content"
-    with overall_score=0 rather than an error. Each finding carries
+    with overall_score=0 rather than an error, unless they carry an explicit QA
+    signal (test plan/strategy/case wording, "Test N:" lines) and enough words
+    to score — those get a (low) score with findings. In "auto" mode a weak
+    but genuine QA document (a QA signal plus a core testing term) is scored as
+    its most likely type instead of being rejected. Rejections carry a `hint`
+    telling you to retry with an explicit doc_type. Each finding carries
     kb_citations resolved from the knowledge base for its citation queries —
     a finding with no resolvable source is returned with an empty
     kb_citations list rather than a fabricated one. Non-QA input returns status="not_a_qa_document" (doc_type equals the
@@ -314,7 +336,7 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
     explains the rubric is English-keyword based. detection_confidence says how
     sure the "auto" type guess was. Returns {doc_type, overall_score,
     dimension_scores, findings, stats, status, language, language_warning,
-    score_reliable, detection_confidence, detection_note, kb_version}."""
+    score_reliable, detection_confidence, detection_note, hint, kb_version}."""
     start = time.monotonic()
 
     if doc_type not in _REVIEW_DOC_TYPES:
@@ -372,6 +394,7 @@ def review_qa_document(document_text: str, doc_type: str = "auto") -> dict:
         "score_reliable": result.score_reliable,
         "detection_confidence": result.detection_confidence,
         "detection_note": result.detection_note,
+        "hint": result.hint,
         "kb_version": index.kb_version,
     }
 
@@ -393,7 +416,13 @@ def assess_qa_maturity(project_description: str) -> dict:
     dimension is omitted entirely (ai_act_relevant=false, empty dict) rather
     than scored as a false gap. Descriptions under ~200 characters (after
     stripping this app's own AI-disclosure front matter/footer) return
-    indicative_tmmi_level=0 with empty findings rather than an error. Each
+    indicative_tmmi_level=0 with empty findings rather than an error
+    (status="insufficient_content"). Input with essentially no software-
+    testing/QA vocabulary (a recipe, meeting notes) returns
+    status="not_a_qa_description" with indicative_tmmi_level=null, a message
+    and no findings; a successful assessment has status="ok". Mentions of AI
+    that are negated ("no machine learning is used", "AI-free") do not switch
+    the EU AI Act dimension on. Each
     finding carries kb_citations resolved from the knowledge base for its
     citation queries — a finding with no resolvable source is returned with
     an empty kb_citations list rather than a fabricated one. When
@@ -401,7 +430,7 @@ def assess_qa_maturity(project_description: str) -> dict:
     classification (whether the system is legally "high-risk") is a
     determination this tool does not make — the user/team must confirm
     that independently; ai_act_note is empty when ai_act_relevant=false.
-    Returns {indicative_tmmi_level, tmmi_dimension_scores, ai_act_relevant,
+    Returns {status, indicative_tmmi_level, tmmi_dimension_scores, ai_act_relevant,
     ai_act_dimension_scores, ai_act_note, findings, disclaimer,
     detection_caveat, language, language_warning, score_reliable,
     keyword_list_warning, stats, kb_version}. Detection is keyword-based and
@@ -416,6 +445,33 @@ def assess_qa_maturity(project_description: str) -> dict:
 
     result = maturity_core.assess_maturity(project_description)
     index = _get_index()
+
+    if result.status == maturity_core.STATUS_NOT_QA:
+        telemetry.track_tool_called(
+            "assess_qa_maturity", success=True,
+            duration_ms=(time.monotonic() - start) * 1000,
+            extra={"status": result.status},
+        )
+        return {
+            "status": result.status,
+            "indicative_tmmi_level": None,
+            "message": (
+                "The input does not look like a description of software testing or "
+                "QA practice (too few testing/QA/process terms), so no TMMi level "
+                "or findings were produced. Describe how the team plans, designs, "
+                "executes and tracks tests, then call this tool again."
+            ),
+            "findings": [],
+            "tmmi_dimension_scores": {},
+            "ai_act_relevant": False,
+            "ai_act_dimension_scores": {},
+            "ai_act_note": "",
+            "disclaimer": result.disclaimer,
+            "language": result.language,
+            "language_warning": result.language_warning,
+            "stats": result.stats,
+            "kb_version": index.kb_version,
+        }
 
     findings = []
     for finding in result.findings:
@@ -444,6 +500,7 @@ def assess_qa_maturity(project_description: str) -> dict:
     )
 
     return {
+        "status": result.status,
         "indicative_tmmi_level": result.indicative_tmmi_level,
         "tmmi_dimension_scores": result.tmmi_dimension_scores,
         "ai_act_relevant": result.ai_act_relevant,
@@ -469,20 +526,47 @@ _MAX_RUN_ENTRIES = 1_000
 _MAX_REFERENCE_TESTS = 50_000
 
 
+def _entry_xml_bytes(entry) -> int:
+    raw = entry if isinstance(entry, str) else (entry.get("xml", "") if isinstance(entry, dict) else "")
+    return len(str(raw).encode("utf-8", errors="ignore"))
+
+
 def _records_from_run_entries(entries) -> tuple:
-    """Parse a list of {"run_id", "xml"} dicts into (TestRecords, warnings),
-    skipping (with a warning, never raising) any malformed entry."""
+    """Parse a list of {"run_id", "xml"} dicts (or plain XML strings, which get
+    run ids run-1, run-2, ... by position) into (TestRecords, warnings),
+    skipping (with a warning, never raising) any malformed entry. A repeated
+    run_id is made unique with a "#2", "#3" suffix (never silently merged into
+    one run) and reported in a warning."""
     records = []
     warnings = []
-    for entry in entries:
-        if not isinstance(entry, dict) or "run_id" not in entry or "xml" not in entry:
-            warnings.append("Skipped a malformed run entry (missing run_id/xml).")
+    seen: dict = {}
+    duplicated: list = []
+    for index, entry in enumerate(entries, start=1):
+        if isinstance(entry, str):
+            run_id, xml = f"run-{index}", entry
+        elif isinstance(entry, dict) and "run_id" in entry and "xml" in entry:
+            run_id, xml = str(entry["run_id"]), str(entry["xml"])
+        else:
+            warnings.append(
+                "Skipped a malformed run entry (expected an XML string or an object with run_id and xml)."
+            )
             continue
-        run_records, run_warnings = results_core.parse_junit_xml_detailed(
-            str(entry["xml"]), str(entry["run_id"]),
-        )
+        if run_id in seen:
+            seen[run_id] += 1
+            if run_id not in duplicated:
+                duplicated.append(run_id)
+            run_id = f"{run_id}#{seen[run_id]}"
+        else:
+            seen[run_id] = 1
+        run_records, run_warnings = results_core.parse_junit_xml_detailed(xml, run_id)
         records.extend(run_records)
         warnings.extend(run_warnings)
+    if duplicated:
+        warnings.append(
+            "Duplicate run_id(s) " + ", ".join(repr(d) for d in duplicated[:10])
+            + ": each repeat was kept as a separate run with a '#2', '#3' ... suffix instead of being "
+            "merged into one run. Use distinct run_ids if these are different executions."
+        )
     return records, warnings
 
 
@@ -506,7 +590,9 @@ def analyze_test_results(
     run (accepts both a <testsuites> and a bare <testsuite> root); to
     analyze flakiness across MULTIPLE runs in one call, pass a JSON array
     of {"run_id": "...", "xml": "<testsuites>...</testsuites>"} objects
-    instead — either as a genuine JSON array/list argument, or as a string
+    (or simply a JSON array of XML strings, auto-named run-1, run-2, ...;
+    repeated run_ids are kept as separate runs with a #2/#3 suffix and a
+    warning) instead — either as a genuine JSON array/list argument, or as a string
     starting with "[" (some MCP clients stringify array arguments; both
     forms are accepted). csv_text needs a test-name column (name | test_name
     | test | testcase | title) and a status column (status | result |
@@ -521,20 +607,24 @@ def analyze_test_results(
     {"error": "no_tests_found", "message", "warnings"} instead of an empty
     0% result. reference_tests, if given, is a list of test identities
     ("classname::name", or just "name" when there is no classname) expected
-    to have run — any absent from the results are reported under never_run.
+    to have run — any absent from the results are reported under never_run. A
+    bare "name" also matches when exactly one executed test has that name
+    (ambiguous bare names are not guessed; a warning explains).
     Skipped tests are NOT failures: they are excluded from pass rates and from
     the flaky/ever-failing verdicts and are reported separately (skipped,
     skipped_executions). Flaky = pass_rate (over non-skipped executions)
     strictly between flaky_min and flaky_max with at least 3 such executions;
     ever-failing = zero passes across at least 3 non-skipped executions.
     flaky_min/flaky_max must satisfy 0 <= flaky_min < flaky_max <= 1. Tests
-    with fewer executions are left out of both lists without a warning, so an
-    empty flaky list on 1-2 runs means not enough data, not a stable suite -
-    check runs/per_run. Malformed/oversized input never raises — it returns
+    with fewer executions are left out of both lists; with fewer than 3 runs a
+    warning says so, and tests that both passed and failed are listed under
+    mixed_outcome (needs more runs). An empty flaky list on 1-2 runs means not
+    enough data, not a stable suite. Malformed/oversized input never raises — it returns
     a structured {"error": "invalid_argument" | "no_tests_found", ...}.
     Returns the full ResultsAnalysis as JSON (runs, total_tests, executions,
     overall_pass_rate, flaky, ever_failing, never_run, slowest,
-    failure_clusters, per_run, warnings, skipped_executions, skipped)."""
+    failure_clusters, per_run, warnings, skipped_executions, skipped,
+    mixed_outcome)."""
     start = time.monotonic()
 
     def _fail(message: str, error: str = "invalid_argument", **extra) -> dict:
@@ -561,8 +651,7 @@ def analyze_test_results(
     if isinstance(junit_xml, list):
         if len(junit_xml) > _MAX_RUN_ENTRIES:
             return _fail(f"junit_xml has more than {_MAX_RUN_ENTRIES} run entries.")
-        total_bytes = sum(len(str(e.get("xml", "")).encode("utf-8", errors="ignore"))
-                          for e in junit_xml if isinstance(e, dict))
+        total_bytes = sum(_entry_xml_bytes(e) for e in junit_xml)
         if total_bytes > _MAX_RESULTS_INPUT_BYTES:
             return _fail(f"Input exceeds the {_MAX_RESULTS_INPUT_BYTES}-byte limit.")
         records, parse_warnings = _records_from_run_entries(junit_xml)
@@ -578,7 +667,7 @@ def analyze_test_results(
             if not isinstance(parsed, list):
                 return _fail(
                     'junit_xml starting with "[" must be a JSON array of '
-                    '{"run_id", "xml"} objects.'
+                    '{"run_id", "xml"} objects or of XML strings.'
                 )
             if len(parsed) > _MAX_RUN_ENTRIES:
                 return _fail(f"junit_xml has more than {_MAX_RUN_ENTRIES} run entries.")
@@ -633,21 +722,21 @@ def qa_project_interview() -> str:
 
 
 @mcp.prompt()
-def risk_register_structure() -> str:
-    """The Risk Register document structure and grounding instructions."""
-    return _risk_register_structure()
+def risk_register_structure(project_name: str = "") -> str:
+    """The Risk Register document structure and grounding instructions (optional project_name fills the title)."""
+    return _risk_register_structure(project_name)
 
 
 @mcp.prompt()
-def test_strategy_structure() -> str:
-    """The Test Strategy document structure and grounding instructions."""
-    return _test_strategy_structure()
+def test_strategy_structure(project_name: str = "") -> str:
+    """The Test Strategy document structure and grounding instructions (optional project_name fills the title)."""
+    return _test_strategy_structure(project_name)
 
 
 @mcp.prompt()
-def test_plan_structure() -> str:
-    """The IEEE-829-aligned Test Plan document structure and grounding instructions."""
-    return _test_plan_structure()
+def test_plan_structure(project_name: str = "") -> str:
+    """The IEEE-829-aligned Test Plan document structure and grounding instructions (optional project_name fills the title)."""
+    return _test_plan_structure(project_name)
 
 
 def main() -> None:
