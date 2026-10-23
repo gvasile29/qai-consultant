@@ -145,9 +145,15 @@ def test_missing_required_arguments_return_a_named_validation_error_not_a_raw_py
     assert "project_name" not in partial["fields"] and "timeline" in partial["fields"]
 
 
-def test_app_feedback_samples_are_not_indexed():
-    kb = li.Path(li.__file__).resolve().parents[3] / "knowledge_base"
-    indexed = li._indexed_md_files(kb)
-    assert indexed, "the reference KB must still be indexed"
-    assert not [p for p in indexed if p.relative_to(kb).parts[0] in li.NON_INDEXED_DIRS]
-    assert any((kb / "generated_strategies").glob("*.md")), "fixture precondition: samples exist in a repo checkout"
+def test_app_feedback_samples_are_not_indexed(tmp_path):
+    (tmp_path / "standards").mkdir()
+    (tmp_path / "generated_strategies").mkdir()
+    (tmp_path / "standards" / "ref.md").write_text("# Reference
+" + "Real reference content. " * 20, encoding="utf-8")
+    (tmp_path / "generated_strategies" / "test_strategy_Acme.md").write_text("# Acme
+" + "Sample. " * 40, encoding="utf-8")
+    indexed = [p.relative_to(tmp_path).as_posix() for p in li._indexed_md_files(tmp_path)]
+    assert indexed == ["standards/ref.md"]
+    with_samples = li._kb_content_hash(tmp_path)
+    (tmp_path / "generated_strategies" / "test_strategy_Acme.md").write_text("# Acme changed", encoding="utf-8")
+    assert li._kb_content_hash(tmp_path) == with_samples, "samples must not affect kb_version or the cache key"
