@@ -120,3 +120,10 @@ def test_small_but_technique_rich_suite_is_capped_below_100():
     ) + "Boundary value: exactly 8 characters accepted. State transition: locked to unlocked.\n"
     r = review_document(text, doc_type="test_cases")
     assert r.dimension_scores["test_design_coverage"] <= 85
+
+
+def test_explicit_title_decides_the_type_of_a_very_short_document():
+    from qai_consultant.core.review_core import _detect_doc_type
+    assert _detect_doc_type("# test plan\nwe will test the app.\ntesting will be done before release.") == "test_plan"
+    assert _detect_doc_type("# test strategy\nwe will test the app.\ntesting will be done before release.") == "test_strategy"
+    assert _detect_doc_type("test plan: checkout\nwe test it.") == "test_plan"

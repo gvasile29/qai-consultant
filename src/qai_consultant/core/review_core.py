@@ -195,6 +195,15 @@ def _detection_signals(lower_text: str) -> dict:
             if any(syn in lower_text for syn in synonyms):
                 count += 1
         votes[doc_type] = count
+    # An explicit title ("# Test Plan", "Test Strategy: ...") is the strongest evidence of intent,
+    # and the only evidence a very short document has.
+    lines = [ln.strip() for ln in lower_text.splitlines() if ln.strip()][:5]
+    title_lines = [ln for ln in lines if ln.startswith("#")] or lines[:1]
+    title = " ".join(title_lines)
+    if "test plan" in title:
+        votes["test_plan"] += 3
+    elif "test strategy" in title:
+        votes["test_strategy"] += 3
     # test_cases has fewer sections total, so bias slightly toward it only
     # when it clearly dominates (its own distinguishing keywords present).
     if any(k in lower_text for k in ["test case id", "tc id", "precondition"]):
