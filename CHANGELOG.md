@@ -3,6 +3,18 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.9.2] - 2026-10-23
+
+### Fixed
+- The "Download all 4 documents (.zip)" button failed on the hosted app with "Unknown server error". A newer web-server library broke Streamlit's handling of already-compressed downloads; the library is now pinned to a working version and a test guards it.
+- The Test Strategy and Test Plan in the app and CLI now use the same cross-document consistency as the generator: the Strategy quotes the Effort report's person-day totals (no more "12.0 person-months" next to them) and the Test Plan only references risk IDs that exist.
+- PDF export: tables whose header row sat directly under a label line printed as raw `|---|` text; they now render as tables.
+- The zip's bytes are now identical on every rerun, so an in-flight download is no longer cancelled by a page refresh.
+
+### Changed
+- Generating the Risk Register, Test Strategy and Test Plan no longer prints each document line by line. A progress bar advances by finished stage, one line shows the characters written and elapsed time, and the live text sits in a collapsed "Show live output" panel. The results still appear in the four tabs.
+- No change to the `qai-consultant-mcp` tools or behaviour.
+
 ## [3.9.1] - 2026-10-22
 
 ### Fixed
