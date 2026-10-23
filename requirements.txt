@@ -14,6 +14,9 @@ xhtml2pdf>=0.2.11
 nltk==3.10.3
 rich==13.7.1
 streamlit==1.59.1
+# Streamlit only requires starlette>=0.40; starlette>=1.8 breaks its gzip middleware for
+# already-compressed downloads (HTTP 500 on the .zip). See tests/integration/ui/test_zip_media_gzip.py.
+starlette==1.7.0
 mistralai>=1.2.0
 openai>=2.44.0
 pinecone>=3.0.0
