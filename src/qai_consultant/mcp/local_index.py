@@ -34,7 +34,7 @@ from fastembed import TextEmbedding
 from qai_consultant.common.kb_config import CHUNK_OVERLAP, CHUNK_SIZE, EMBEDDING_MODEL, get_source_category
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_CACHE_FORMAT_VERSION = 3  # 3: single-pass chunk overlap + header-only chunks dropped (2: fastembed backend)
+_CACHE_FORMAT_VERSION = 4  # 4: chunks capped at chunk_size incl. overlap, header-only judged pre-overlap (3: single-pass overlap, 2: fastembed backend)
 _MAX_QCACHE_ENTRIES = 256  # LRU cap on _query_vector()'s per-instance cache
 
 
@@ -228,11 +228,14 @@ def _simple_chunk_splits(text: str, chunk_size: int, chunk_overlap: int) -> list
     if len(text) <= chunk_size:
         return [text] if text.strip() else []
 
+    # A finished chunk is its raw text plus the overlap tail, so raw text is capped at chunk_size -
+    # chunk_overlap to keep every returned chunk within chunk_size, like the production splitter.
+    limit = chunk_size - chunk_overlap if 0 < chunk_overlap < chunk_size else chunk_size
     separators = ["\n## ", "\n### ", "\n---", "\n\n", "\n", " "]
     merged: list[str] = []
     current = ""
-    for atom in _atoms(text, chunk_size, separators):
-        if len(current) + len(atom) <= chunk_size:
+    for atom in _atoms(text, limit, separators):
+        if len(current) + len(atom) <= limit:
             current += atom
         else:
             if current.strip():
@@ -242,24 +245,41 @@ def _simple_chunk_splits(text: str, chunk_size: int, chunk_overlap: int) -> list
         merged.append(current)
     # A tiny trailing chunk would be mostly its own overlap prefix (a near-duplicate
     # of its neighbour); fold it into the previous chunk instead.
-    if len(merged) > 1 and len(merged[-1]) < chunk_overlap and len(merged[-2]) + len(merged[-1]) <= chunk_size + chunk_overlap:
+    if len(merged) > 1 and len(merged[-1]) < chunk_overlap and len(merged[-2]) + len(merged[-1]) <= limit:
         tail_chunk = merged.pop()
         merged[-1] += tail_chunk
 
-    if chunk_overlap > 0 and len(merged) > 1:
-        return [merged[0]] + [
-            _overlap_tail(prev, chunk_overlap) + cur for prev, cur in zip(merged, merged[1:])
-        ]
-    return merged
+    out: list[str] = []
+    for i, raw in enumerate(merged):
+        # Header-only / near-empty RAW chunks are not indexed (judged before the overlap prefix is added,
+        # which would otherwise count as body). Their tail still prefixes the next chunk, so the heading
+        # stays attached to the content it introduces.
+        if len(merged) > 1 and _body_chars(raw) < MIN_BODY_CHARS:
+            continue
+        prefix = _overlap_tail(merged[i - 1], chunk_overlap) if (i > 0 and chunk_overlap > 0) else ""
+        out.append(prefix + raw)
+    return out
 
 
-_NON_BODY_LINE_RE = re.compile(r"^\s*(?:#{1,6}\s.*|-{3,}|\*{3,}|_{3,}|\|?[\s:|-]+\|?)\s*$")
+_HEADING_RE = re.compile(r"#{1,6}\s")
+_SEPARATOR_CHARS = frozenset("|:- \t")
+
+
+def _is_non_body_line(line: str) -> bool:
+    """Blank lines, headings, horizontal rules and table-separator rows. Plain string checks (no
+    backtracking regex) so a pathological line cannot stall index construction."""
+    s = line.strip()
+    if not s or _HEADING_RE.match(s):
+        return True
+    if set(s) <= _SEPARATOR_CHARS:
+        return True
+    return len(s) >= 3 and len(set(s)) == 1 and s[0] in "*_"
 
 
 def _body_chars(text: str) -> int:
     """Characters of real content in a chunk: everything except headings,
     horizontal rules, table-separator rows and blank lines."""
-    return sum(len(line.strip()) for line in text.splitlines() if not _NON_BODY_LINE_RE.match(line))
+    return sum(len(line.strip()) for line in text.splitlines() if not _is_non_body_line(line))
 
 
 MIN_BODY_CHARS = 80  # chunks with less real content than this are never indexed
@@ -365,8 +385,6 @@ class LocalIndex:
             title = _first_heading_or_filename(text, path)
             pieces = _simple_chunk_splits(text, CHUNK_SIZE, CHUNK_OVERLAP)
             for piece in pieces:
-                if len(pieces) > 1 and _body_chars(piece) < MIN_BODY_CHARS:
-                    continue  # header-only / near-empty chunk: nothing to retrieve
                 chunks.append(Chunk(text=piece, source=rel_source, category=category, title=title))
 
         self._chunks = chunks

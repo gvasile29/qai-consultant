@@ -95,7 +95,7 @@ _VAGUE_EXPECTED_RESULT_PHRASES = [
 _METRIC_KEYWORDS = ["defect density", "coverage %", "% coverage", "pass rate", "kpi"]
 _REQ_ID_RE = re.compile(r"\b(?:REQ|US|STORY|JIRA)-?\d+\b|\b[A-Z]{2,10}-\d+\b")
 _RISK_ID_RE = re.compile(r"\bR\d{1,3}\b")
-_MEASURABLE_EXIT_RE = re.compile(r"\d+\s*%|\ball\b[^.\n]{0,40}\bpass\b|coverage\s+(?:of\s+)?\d", re.IGNORECASE)
+_MEASURABLE_EXIT_RE = re.compile(r"(?<!\d)\d+[ \t]{0,8}%|\ball\b[^.\n]{0,40}\bpass\b|coverage\s+(?:of\s+)?\d", re.IGNORECASE)
 
 
 @dataclass
@@ -391,12 +391,14 @@ _EXPECTED_STATEMENT_RE = _ExpectedStatements()
 
 
 _NUMERIC_CRITERION_RES = (
-    re.compile(r"\d+(?:\.\d+)?\s*%"),                                            # 95% pass rate
+    # Digit runs are bounded and anchored (no match may start mid-run) so a document that is one very long
+    # run of digits cannot make these quadratic.
+    re.compile(r"(?<![\d.])\d{1,9}(?:\.\d{1,6})?[ \t]{0,8}%"),                   # 95% pass rate
     re.compile(r"(?:<|>|<=|>=|≤|≥|under|below|within|less than|at most|at least|"
-               r"more than|above)\s*\d+(?:\.\d+)?\s*(?:ms|milliseconds?|s|sec|seconds?|"
+               r"more than|above)[ \t]{0,8}\d{1,9}(?:\.\d{1,6})?[ \t]{0,8}(?:ms|milliseconds?|s|sec|seconds?|"
                r"minutes?|hours?|days?|mb|gb|kb|requests?|users?|errors?|defects?|bugs?)\b",
                re.IGNORECASE),                                                   # p95 < 500 ms
-    re.compile(r"\bp(?:50|90|95|99)\b|\b\d+\s*(?:ms|milliseconds|seconds|tps|rps|"
+    re.compile(r"\bp(?:50|90|95|99)\b|\b\d{1,9}[ \t]{0,8}(?:ms|milliseconds|seconds|tps|rps|"
                r"concurrent users|requests per second)\b", re.IGNORECASE),     # units / percentiles
     re.compile(r"\b(?:zero|no|0)\s+(?:open\s+)?(?:critical|high|blocker|sev(?:erity)?[- ]?1)\b",
                re.IGNORECASE),                                                   # zero critical defects

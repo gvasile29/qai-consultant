@@ -467,8 +467,12 @@ def assess_qa_maturity(project_description: str) -> dict:
             "ai_act_dimension_scores": {},
             "ai_act_note": "",
             "disclaimer": result.disclaimer,
+            "detection_caveat": result.detection_caveat,
             "language": result.language,
             "language_warning": result.language_warning,
+            # Same key set as a scored result so clients indexing these keys never fail; nothing was scored.
+            "score_reliable": False,
+            "keyword_list_warning": result.keyword_list_warning,
             "stats": result.stats,
             "kb_version": index.kb_version,
         }
@@ -552,12 +556,13 @@ def _records_from_run_entries(entries) -> tuple:
             )
             continue
         if run_id in seen:
-            seen[run_id] += 1
-            if run_id not in duplicated:
-                duplicated.append(run_id)
-            run_id = f"{run_id}#{seen[run_id]}"
-        else:
-            seen[run_id] = 1
+            original = run_id
+            if original not in duplicated:
+                duplicated.append(original)
+            while run_id in seen:  # never reuse an id the caller supplied (e.g. their own "a#2")
+                seen[original] += 1
+                run_id = f"{original}#{seen[original]}"
+        seen.setdefault(run_id, 1)
         run_records, run_warnings = results_core.parse_junit_xml_detailed(xml, run_id)
         records.extend(run_records)
         warnings.extend(run_warnings)

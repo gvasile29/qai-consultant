@@ -251,8 +251,8 @@ def test_cache_with_wrong_embedding_model_falls_back_to_rebuild(tmp_path):
 
 def test_cache_format_version_is_current():
     from qai_consultant.mcp.local_index import _CACHE_FORMAT_VERSION
-    assert _CACHE_FORMAT_VERSION == 3, (
-        "Bump this whenever the chunking or embedding output changes (3: chunker without stacked overlap, "
+    assert _CACHE_FORMAT_VERSION == 4, (
+        "Bump this whenever the chunking or embedding output changes (4: chunk size cap, 3: chunker without stacked overlap, "
         "2: fastembed backend) so an older cache is rebuilt instead of served; see docs/superpowers/specs/"
         "2026-09-17-mcp-embedding-backend-simplification-design.md"
     )

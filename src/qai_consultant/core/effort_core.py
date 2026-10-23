@@ -878,6 +878,9 @@ def parse_duration(timeline: str, warnings: Optional[list] = None) -> int:
 _NO_TEAM_RE = re.compile(r"\b(?:no\s+dedicated|none|devs?\s+test|developers?\s+test|nobody|no\s+one)\b")
 
 
+MAX_TEAM_SIZE = 100_000
+
+
 def parse_team_size(team_str: str, warnings: Optional[list] = None, label: str = "team size") -> int:
     """Parse team size string to integer.
 
@@ -897,11 +900,16 @@ def parse_team_size(team_str: str, warnings: Optional[list] = None, label: str =
     if _NO_TEAM_RE.search(ts):
         return 0
     ts = _words_to_digits(ts, warnings, label)
+    # "1,000" is a thousands separator (a comma followed by exactly three digits), not a decimal comma.
+    grouped = re.sub(r"(?<![\d,.])\d{1,3}(?:,\d{3})+(?![\d,])", lambda m: m.group(0).replace(",", ""), ts)
+    if grouped != ts:
+        _add_warning(warnings, f"{label}: '{team_str.strip()}' read with a thousands separator.")
+        ts = grouped
     first_alternative = re.split(r"\bor\b", ts)[0] if re.search(r"\d", re.split(r"\bor\b", ts)[0]) else ts
 
     total = 0.0
     found = False
-    num = r"\d+(?:[.,]\d+)?"
+    num = r"(?<!\d)\d+(?:[.,]\d+)?"  # anchored at the start of a digit run so long runs stay linear
 
     def _range(m):
         nonlocal total, found
@@ -920,6 +928,9 @@ def parse_team_size(team_str: str, warnings: Optional[list] = None, label: str =
         total += _to_float(n)
         found = True
     if found:
+        if total > MAX_TEAM_SIZE:  # also covers float overflow to inf on absurdly long digit runs
+            _add_warning(warnings, f"{label}: '{team_str.strip()[:40]}' is implausibly large; capped at {MAX_TEAM_SIZE}.")
+            total = float(MAX_TEAM_SIZE)
         whole = int(total + 0.5)  # round half up (never banker's rounding)
         if abs(total - whole) > 1e-9:
             _add_warning(warnings, f"{label}: '{team_str.strip()}' is not a whole headcount ({total:g}); "

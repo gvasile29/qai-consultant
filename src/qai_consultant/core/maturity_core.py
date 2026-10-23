@@ -365,7 +365,9 @@ def _is_ai_act_relevant(lower_text: str) -> bool:
     only denies AI ("no machine learning is used", "AI-free", "does not use
     LLMs") must not switch the EU AI Act dimension on."""
     for match in _AI_RELEVANCE_RE.finditer(lower_text):
-        prefix = lower_text[:match.start()]
+        # Only the last 80 characters of the clause are inspected, so a bounded window before the match is
+        # enough; slicing the whole prefix per match was quadratic on texts with thousands of mentions.
+        prefix = lower_text[max(0, match.start() - 120):match.start()]
         boundaries = list(_SENTENCE_START_RE.finditer(prefix))
         clause = prefix[boundaries[-1].end():] if boundaries else prefix
         clause = clause[-80:]
