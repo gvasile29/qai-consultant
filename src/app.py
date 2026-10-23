@@ -18,6 +18,7 @@ from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, pdf_i
 from qai_consultant.core.dialogue import DialogueManager, InputValidator, QUESTIONS
 from qai_consultant.generation.strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from qai_consultant.generation.risk_analyzer import RiskAnalyzer, append_execution_data_appendix
+from qai_consultant.ui.streaming import consume_stream, writing_caption
 from qai_consultant.generation.consistency import (
     extract_scope_decisions, finalize_strategy, finalize_test_plan, strategy_prompt_kwargs,
 )
@@ -1002,9 +1003,15 @@ def render_strategy():
         }
         _active_idx = next((i for i, (_l, k) in enumerate(order, start=1) if k == active_key), None)
         if _active_idx is not None:
-            progress_placeholder.info(
-                f"Step {_active_idx} of {len(order)}: generating {_full_names[active_key]}. "
-                f"The full run takes {GENERATION_TIME_ESTIMATE}; keep this tab open."
+            # Advances by finished stages only: the LLM gives no output length in advance, so a smoother
+            # percentage would be invented. Per-stage detail is the live character counter in _quiet_stream.
+            _finished = sum(1 for _l, k in order if st.session_state.get(k) is not None)
+            progress_placeholder.progress(
+                _finished / len(order),
+                text=(
+                    f"Step {_active_idx} of {len(order)}: generating {_full_names[active_key]}. "
+                    f"The full run takes {GENERATION_TIME_ESTIMATE}; keep this tab open."
+                ),
             )
         else:
             progress_placeholder.empty()
@@ -1025,6 +1032,25 @@ def render_strategy():
         stage_placeholder.markdown(build_stage_sequence_html(_strategy_tokens, stages), unsafe_allow_html=True)
 
     _render_stages()
+
+    def _quiet_stream(chunks, label, heading):
+        """Consume an LLM stream without printing it line by line: one live counter, and the text itself
+        only inside a collapsed expander. Returns the full text, like st.write_stream did. The stage's
+        heading, counter and expander live in one slot that is cleared when the stage finishes."""
+        slot = st.empty()
+        with slot.container():
+            st.markdown(heading)
+            status = st.empty()
+            with st.expander("Show live output", expanded=False):
+                live = st.empty()
+
+        def _on_update(text, elapsed):
+            status.caption(writing_caption(label, text, elapsed))
+            live.markdown(text)
+
+        text = consume_stream(chunks, _on_update)
+        slot.empty()
+        return text
 
     agent = st.session_state.get("agent")
     if agent is None:
@@ -1102,15 +1128,14 @@ def render_strategy():
         # produced it, so a resumed run doesn't redo completed work.
         _render_stages(active_key="risk_register")
         if st.session_state.get("risk_register") is None:
-            st.markdown("#### ⚠️ Generating Risk Register...")
             results_analysis = st.session_state.get("results_analysis")
             results_summary = summarize_for_prompt(results_analysis) if results_analysis else None
             risk_prompt = build_risk_prompt(
                 context, agent.format_knowledge_context(risk_chunks), results_summary=results_summary,
             )
             try:
-                risk_register = clean_markdown_html(st.write_stream(
-                    agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT)
+                risk_register = clean_markdown_html(_quiet_stream(
+                    agent.ask_streaming(risk_prompt, system_prompt=RISK_SYSTEM_PROMPT), "Risk Register", "#### ⚠️ Generating Risk Register..."
                 ), source_text=risk_prompt)
                 risk_register = append_execution_data_appendix(risk_register, results_summary)
                 risk_path = risk_analyzer.save(risk_register, context)
@@ -1160,14 +1185,13 @@ def render_strategy():
         # Test Strategy (streaming)
         _render_stages(active_key="strategy")
         if st.session_state.get("strategy") is None:
-            st.markdown("#### 📋 Generating Test Strategy...")
             strategy_prompt = build_strategy_prompt(
                 context, agent.format_knowledge_context(strategy_chunks),
                 **strategy_prompt_kwargs(effort_data, risk_register),
             )
             try:
-                strategy = finalize_strategy(clean_markdown_html(st.write_stream(
-                    agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT)
+                strategy = finalize_strategy(clean_markdown_html(_quiet_stream(
+                    agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT), "Test Strategy", "#### 📋 Generating Test Strategy..."
                 ), source_text=strategy_prompt), effort_data)
                 output_path = generator.save(strategy, context)
             except (StopException, RerunException):
@@ -1176,7 +1200,6 @@ def render_strategy():
                 logger.error("Test Strategy generation failed: %s", exc)
                 st.error(f"❌ Test Strategy generation failed: {exc}")
                 strategy, output_path = "", None
-            st.markdown("---")
             st.session_state.strategy = strategy
             st.session_state.sources = sources
             st.session_state.output_path = output_path
@@ -1188,14 +1211,13 @@ def render_strategy():
         from qai_consultant.generation.test_plan_generator import build_test_plan_prompt, TEST_PLAN_SYSTEM_PROMPT
         _render_stages(active_key="test_plan")
         if st.session_state.get("test_plan") is None:
-            st.markdown("#### 📝 Generating Test Plan...")
             test_plan_prompt = build_test_plan_prompt(
                 context, risk_register, agent.format_knowledge_context(test_plan_chunks),
                 extract_scope_decisions(strategy),
             )
             try:
-                test_plan = finalize_test_plan(clean_markdown_html(st.write_stream(
-                    agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT)
+                test_plan = finalize_test_plan(clean_markdown_html(_quiet_stream(
+                    agent.ask_streaming(test_plan_prompt, system_prompt=TEST_PLAN_SYSTEM_PROMPT), "Test Plan", "#### 📝 Generating Test Plan..."
                 ), source_text=test_plan_prompt), risk_register)
                 test_plan_path = test_plan_generator.save(test_plan, context)
             except (StopException, RerunException):
@@ -1204,7 +1226,6 @@ def render_strategy():
                 logger.error("Test Plan generation failed: %s", exc)
                 st.error(f"❌ Test Plan generation failed: {exc}")
                 test_plan, test_plan_path = "", None
-            st.markdown("---")
             st.session_state.test_plan = test_plan
             st.session_state.test_plan_path = test_plan_path
             st.session_state.test_plan_sources = test_plan_sources
