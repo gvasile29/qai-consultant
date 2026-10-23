@@ -148,12 +148,11 @@ def test_missing_required_arguments_return_a_named_validation_error_not_a_raw_py
 def test_app_feedback_samples_are_not_indexed(tmp_path):
     (tmp_path / "standards").mkdir()
     (tmp_path / "generated_strategies").mkdir()
-    (tmp_path / "standards" / "ref.md").write_text("# Reference
-" + "Real reference content. " * 20, encoding="utf-8")
-    (tmp_path / "generated_strategies" / "test_strategy_Acme.md").write_text("# Acme
-" + "Sample. " * 40, encoding="utf-8")
+    (tmp_path / "standards" / "ref.md").write_text("# Reference\n" + "Real reference content. " * 20, encoding="utf-8")
+    sample = tmp_path / "generated_strategies" / "test_strategy_Acme.md"
+    sample.write_text("# Acme\n" + "Sample. " * 40, encoding="utf-8")
     indexed = [p.relative_to(tmp_path).as_posix() for p in li._indexed_md_files(tmp_path)]
     assert indexed == ["standards/ref.md"]
     with_samples = li._kb_content_hash(tmp_path)
-    (tmp_path / "generated_strategies" / "test_strategy_Acme.md").write_text("# Acme changed", encoding="utf-8")
+    sample.write_text("# Acme changed", encoding="utf-8")
     assert li._kb_content_hash(tmp_path) == with_samples, "samples must not affect kb_version or the cache key"
