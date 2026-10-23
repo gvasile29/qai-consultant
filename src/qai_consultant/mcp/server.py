@@ -207,24 +207,25 @@ _REQUIRED_FIELDS = [
 
 @mcp.tool()
 def estimate_qa_effort(
-    project_name: str,
-    project_description: str,
-    project_type: str,
-    tech_stack: str,
-    team_qa_size: str,
-    team_dev_size: str,
-    timeline: str,
-    methodology: str,
-    known_risks: str,
-    existing_automation: str,
-    compliance_requirements: str,
+    project_name: str = "",
+    project_description: str = "",
+    project_type: str = "",
+    tech_stack: str = "",
+    team_qa_size: str = "",
+    team_dev_size: str = "",
+    timeline: str = "",
+    methodology: str = "",
+    known_risks: str = "",
+    existing_automation: str = "",
+    compliance_requirements: str = "",
     additional_context: str = "",
 ) -> dict:
     """Deterministic QA effort estimate (PERT + complexity multipliers + team
     capacity + confidence score) — no LLM narrative; write your own from these
     numbers. Fields mirror the app's project-intake dialogue and are validated
     with the same rules; a validation failure returns
-    {"error": "validation", "fields": {field: message}}, never a crash.
+    {"error": "validation", "fields": {field: message}}, never a crash; all eleven
+    fields are needed, and a missing or empty one is reported by name in that same shape
     Success returns the full EstimationData as JSON (baseline, multipliers,
     pert_activities, capacity, risk_buffer_days, final_effort_min/max,
     confidence_level/confidence_score, confidence_note, data_quality_score out
@@ -254,6 +255,9 @@ def estimate_qa_effort(
     field_errors: dict[str, str] = {}
     cleaned: dict[str, str] = {}
     for field in _REQUIRED_FIELDS:
+        if not (raw[field] or "").strip():
+            field_errors[field] = f"{field} is required (missing or empty)."
+            continue
         result = validator.validate(field, raw[field])
         if not result.valid:
             field_errors[field] = result.error

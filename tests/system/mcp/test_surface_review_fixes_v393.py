@@ -133,3 +133,21 @@ def test_duplicate_run_id_suffix_never_collides_with_a_caller_supplied_id():
     run_ids = {r.run_id for r in records}
     assert len(run_ids) == 3, run_ids
     assert any("Duplicate run_id" in w for w in warnings)
+
+
+def test_missing_required_arguments_return_a_named_validation_error_not_a_raw_pydantic_error():
+    result = _as_dict(server.estimate_qa_effort())
+    assert result["error"] == "validation"
+    assert set(result["fields"]) >= {"project_name", "team_qa_size", "timeline", "compliance_requirements"}
+    assert all("required" in message for message in result["fields"].values())
+
+    partial = _as_dict(server.estimate_qa_effort(project_name="BESS", project_description="100 MW trading platform"))
+    assert "project_name" not in partial["fields"] and "timeline" in partial["fields"]
+
+
+def test_app_feedback_samples_are_not_indexed():
+    kb = li.Path(li.__file__).resolve().parents[3] / "knowledge_base"
+    indexed = li._indexed_md_files(kb)
+    assert indexed, "the reference KB must still be indexed"
+    assert not [p for p in indexed if p.relative_to(kb).parts[0] in li.NON_INDEXED_DIRS]
+    assert any((kb / "generated_strategies").glob("*.md")), "fixture precondition: samples exist in a repo checkout"

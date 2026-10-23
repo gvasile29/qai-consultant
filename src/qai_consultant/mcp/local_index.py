@@ -292,12 +292,24 @@ def _first_heading_or_filename(text: str, path: Path) -> str:
     return path.name
 
 
+NON_INDEXED_DIRS = ("generated_strategies",)  # app feedback samples, not reference material; the wheel excludes them too
+
+
+def _indexed_md_files(kb_dir: Path) -> list[Path]:
+    """The .md files the local index serves: everything under the KB except sample documents the app saved
+    from earlier runs (they are not standards, and a repo checkout must behave like the published wheel)."""
+    return [
+        p for p in sorted(kb_dir.rglob("*.md"))
+        if p.relative_to(kb_dir).parts[0] not in NON_INDEXED_DIRS
+    ]
+
+
 def _kb_content_hash(kb_dir: Path) -> str:
-    """Hash of every .md file's relative path + content, sorted for determinism.
+    """Hash of every indexed .md file's relative path + content, sorted for determinism.
     Used both as kb_version (so MCP callers can detect drift) and the cache key
     (so an edited/added/removed KB file self-invalidates the disk cache)."""
     h = hashlib.sha256()
-    for path in sorted(kb_dir.rglob("*.md")):
+    for path in _indexed_md_files(kb_dir):
         rel = str(path.relative_to(kb_dir)).replace("\\", "/")
         h.update(rel.encode("utf-8"))
         h.update(path.read_bytes())
@@ -378,7 +390,7 @@ class LocalIndex:
 
     def _build_fresh(self) -> None:
         chunks: list[Chunk] = []
-        for path in sorted(self.kb_dir.rglob("*.md")):
+        for path in _indexed_md_files(self.kb_dir):
             text = path.read_text(encoding="utf-8")
             rel_source = str(path.relative_to(self.kb_dir)).replace("\\", "/")
             category = get_source_category(path)

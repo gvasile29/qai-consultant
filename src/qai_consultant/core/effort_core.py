@@ -1,4 +1,4 @@
-"""
+﻿"""
 QAI Consultant — Deterministic Effort Estimation Core.
 
 The PERT/multiplier/confidence calculation pipeline extracted out of
