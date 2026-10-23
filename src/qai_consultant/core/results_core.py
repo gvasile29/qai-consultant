@@ -53,6 +53,7 @@ class ResultsAnalysis:
     warnings: list = field(default_factory=list)           # parsing issues, ignored files, etc.
     skipped_executions: int = 0                              # executions with status "skipped" (never counted as failures)
     skipped: list = field(default_factory=list)            # [{"test", "skipped", "runs"}] tests with >= 1 skipped execution
+    mixed_outcome: list = field(default_factory=list)      # [{"test", "passed", "failed", "runs", "pass_rate", "note"}] passed AND failed, not (yet) classified flaky
 
 
 # ── Test identity normalization ───────────────────────────────────────────────
@@ -412,14 +413,45 @@ def analyze(
     slowest.sort(key=_slowest_sort_key, reverse=True)
     slowest = slowest[:slowest_n]
 
+    warnings: list[str] = []
+    flaky_ids = {f["test"] for f in flaky}
+
     never_run = []
     if reference_tests:
         seen = set(groups.keys())
         seen_normalized = {_normalize_identity_string(s) for s in seen}
+        by_bare: dict[str, set] = defaultdict(set)
+        for ident in seen:
+            by_bare[ident.rsplit("::", 1)[-1]].add(ident)
+        ambiguous: list[str] = []
+        unmatched: list[str] = []
         for ref in reference_tests:
             norm_ref = _normalize_identity_string(ref)
-            if ref not in seen and norm_ref not in seen_normalized:
-                never_run.append({"test": ref})
+            if ref in seen or norm_ref in seen_normalized:
+                continue
+            candidates = by_bare.get(norm_ref.rsplit("::", 1)[-1], set()) if "::" not in norm_ref else set()
+            if len(candidates) == 1:
+                continue  # bare test name, unambiguous: matches the one executed test with that name
+            if len(candidates) > 1:
+                ambiguous.append(f"{ref!r} (matches {', '.join(sorted(candidates)[:3])}"
+                                 f"{', ...' if len(candidates) > 3 else ''})")
+            else:
+                unmatched.append(ref)
+            never_run.append({"test": ref})
+        if ambiguous:
+            warnings.append(
+                "reference_tests: bare test name(s) matched more than one executed test, so they were "
+                "NOT guessed and are listed under never_run; use the full 'classname::name' form: "
+                + "; ".join(ambiguous[:10]) + ".",
+            )
+        if unmatched:
+            warnings.append(
+                f"reference_tests: {len(unmatched)} entr{'y' if len(unmatched) == 1 else 'ies'} matched no "
+                "executed test (e.g. " + ", ".join(repr(u) for u in unmatched[:3]) + "). Identities are "
+                "'classname::name' (or just 'name' when the results have no classname; a bare name is "
+                "accepted only when exactly one executed test has it). Parametrized suffixes like "
+                "'[case]' are ignored.",
+            )
 
     cluster_map: dict[str, dict] = {}
     for r in records:
@@ -446,6 +478,37 @@ def analyze(
             "duration_s": round(sum(r.duration_s for r in run_recs), 4),
         })
 
+    mixed_outcome = []
+    for identity, recs in groups.items():
+        n_pass = sum(1 for r in recs if r.status == "passed")
+        n_fail = sum(1 for r in recs if r.status in ("failed", "error"))
+        if n_pass and n_fail and identity not in flaky_ids:
+            total = n_pass + n_fail
+            mixed_outcome.append({
+                "test": identity, "passed": n_pass, "failed": n_fail, "runs": total,
+                "pass_rate": round(n_pass / total, 4),
+                "note": "mixed outcome (needs more runs)" if total < min_runs_for_verdict
+                else "mixed outcome (pass rate outside the flaky band)",
+            })
+    mixed_outcome.sort(key=lambda e: (e["pass_rate"], e["test"]))
+
+    if len(run_ids) < min_runs_for_verdict:
+        warnings.append(
+            f"Only {len(run_ids)} run(s) supplied; flaky and ever-failing verdicts need at least "
+            f"{min_runs_for_verdict} executions of a test, so fewer runs cannot establish flakiness "
+            "(a test that passed once and failed once is NOT reported as flaky). Tests with both "
+            "outcomes are listed under mixed_outcome (needs more runs).",
+        )
+    if any(r.status in ("failed", "error") for r in records) and not any(
+        r.message for r in records if r.status in ("failed", "error")
+    ):
+        warnings.append(
+            "failure_clusters is empty because no failed/error execution carries a failure message. "
+            "Clustering needs one: CSV column message (also accepted: "
+            + ", ".join(a for a in _COLUMN_ALIASES["message"] if a != "message")
+            + "), or a message attribute / text on the JUnit <failure>/<error> element.",
+        )
+
     return ResultsAnalysis(
         runs=len(run_ids),
         total_tests=len(groups),
@@ -457,9 +520,10 @@ def analyze(
         slowest=slowest,
         failure_clusters=failure_clusters,
         per_run=per_run,
-        warnings=[],
+        warnings=warnings,
         skipped_executions=skipped_total,
         skipped=skipped[:50],
+        mixed_outcome=mixed_outcome[:50],
     )
 
 

@@ -1,13 +1,13 @@
 """
 QAI Consultant — MCP prompts (v3.0 step 7).
 
-Static, parameter-free prompt templates extracted from this project's own
+Prompt templates (the three *_structure ones take one optional project_name
+argument) extracted from this project's own
 document generators (risk_analyzer.py's build_risk_prompt,
 strategy_generator.py's build_strategy_prompt, test_plan_generator.py's
 build_test_plan_prompt) — their STRUCTURAL sections only, not the LLM-call
 plumbing (RAG prefetch, streaming, output-file saving) that stays
-Streamlit/CLI-only (see MCP_PLAN.md section 1's "MCP lens": this server
-never generates text itself).
+Streamlit/CLI-only (this server never generates text itself).
 
 A client (Claude Code, Claude Desktop, claude.ai) uses qa_project_interview
 to run the same 11-question intake the app's dialogue.py does, then uses
@@ -21,9 +21,11 @@ from qai_consultant.core.dialogue import QUESTIONS
 
 _CITATION_INSTRUCTION = (
     "Ground every substantive section in retrieve_qa_knowledge results: call it with "
-    "queries relevant to each section, and cite the supporting source inline as "
-    "[Source N] the way this project's own generators do (see evals/rag.py's "
-    "source_attribution metric for the exact convention this is checked against). "
+    "queries relevant to each section and cite the supporting document inline by the "
+    "`source` value it returns, e.g. [source: methodologies/Risk_Based_Testing.md]. "
+    "Cite only chunks whose text really supports the statement (prefer \"match\": "
+    "\"strong\"), and if the tool's `note` says the knowledge base has no direct match "
+    "or does not contain a named source, say so instead of citing an unrelated chunk. "
     "Never state a specific fact (version number, date, tool name) that the user did "
     'not provide — write "not specified" instead of inventing one.'
 )
@@ -31,8 +33,24 @@ _CITATION_INSTRUCTION = (
 _AI_LABEL_INSTRUCTION = (
     "Include a visible 'AI-generated content — not yet reviewed by a qualified QA "
     "professional, review required before use' label at the end of the produced "
-    "document (EU AI Act Article 50(2) transparency; see MCP_PLAN.md section 12)."
+    "document (EU AI Act Article 50(2) transparency)."
 )
+
+_PROJECT_NAME_PLACEHOLDER = "<Project Name>"
+
+
+def _project_title(project_name: str) -> tuple[str, str]:
+    """(title text, extra instruction) for the document heading. Without a
+    project_name the heading keeps an explicit <Project Name> marker plus an
+    instruction to replace it, so the client never has to guess a substitution."""
+    name = (project_name or "").strip()
+    if name:
+        return name, ""
+    return _PROJECT_NAME_PLACEHOLDER, (
+        f"Replace {_PROJECT_NAME_PLACEHOLDER} in the title with the project name from the "
+        "user's context (the project_name answer of qa_project_interview); if it is not "
+        "known, ask the user rather than inventing one.\n\n"
+    )
 
 
 def qa_project_interview() -> str:
@@ -63,12 +81,14 @@ def qa_project_interview() -> str:
     return "\n".join(lines)
 
 
-def risk_register_structure() -> str:
+def risk_register_structure(project_name: str = "") -> str:
     """The Risk Register document structure, extracted from
-    risk_analyzer.build_risk_prompt()'s structural section."""
+    risk_analyzer.build_risk_prompt()'s structural section. ``project_name``
+    (optional) fills the document title."""
+    title, fill_in = _project_title(project_name)
     return f"""Generate a Risk Register for the project using EXACTLY this structure:
 
-# Risk Register: {{project_name}}
+{fill_in}# Risk Register: {title}
 
 ## Executive Summary
 2-3 sentences summarizing the overall risk profile. State clearly if the project is
@@ -112,12 +132,14 @@ Top 3-5 specific recommendations for this project based on the risk profile.
 """
 
 
-def test_strategy_structure() -> str:
+def test_strategy_structure(project_name: str = "") -> str:
     """The Test Strategy document structure, extracted from
-    strategy_generator.build_strategy_prompt()'s structural section."""
+    strategy_generator.build_strategy_prompt()'s structural section.
+    ``project_name`` (optional) fills the document title."""
+    title, fill_in = _project_title(project_name)
     return f"""Generate a Test Strategy document using EXACTLY this structure:
 
-# Test Strategy: {{project_name}}
+{fill_in}# Test Strategy: {title}
 
 ## 1. Project Overview
 ## 2. Scope — What Will Be Tested
@@ -148,12 +170,14 @@ Be specific, practical, and tailored to this exact project. Avoid generic statem
 """
 
 
-def test_plan_structure() -> str:
+def test_plan_structure(project_name: str = "") -> str:
     """The Test Plan document structure, extracted from
-    test_plan_generator.build_test_plan_prompt()'s structural section."""
+    test_plan_generator.build_test_plan_prompt()'s structural section.
+    ``project_name`` (optional) fills the document title."""
+    title, fill_in = _project_title(project_name)
     return f"""Generate a Test Plan aligned with IEEE 829, using EXACTLY this structure:
 
-# Test Plan: {{project_name}}
+{fill_in}# Test Plan: {title}
 
 ## 1. Introduction
 State how this Test Plan relates to the Test Strategy.

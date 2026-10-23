@@ -3,6 +3,22 @@
 All notable changes to QAI Consultant are documented in this file, in
 end-user terms. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.9.3] - 2026-10-23
+
+Fixes from an end-user test of the published MCP server. (3.9.2 was an app-only release and was not published to PyPI.)
+
+### Fixed
+- `estimate_qa_effort`: negative team sizes or durations, and a zero duration, now return a validation error instead of being silently turned into positive numbers. A decimal team size such as "2.5" was read as 7 (the digits were summed); it is now read as one number, rounded to a whole headcount, with a warning.
+- `estimate_qa_effort`: the result now says whether capacity is a `surplus` or a `deficit` (`capacity_status`, `capacity_note`; `capacity_gap` keeps its sign), explains the confidence heuristic (`confidence_note`), and notes when the methodology only changes a label.
+- `assess_qa_maturity`: a negated mention such as "no machine learning" no longer switches on the EU AI Act dimension for descriptions of 200 characters or more, and text that is not about testing (a recipe, meeting notes) returns `status: not_a_qa_description` with no level instead of a made-up TMMi level 1. The Streamlit app and CLI show a clear message for it.
+- `review_qa_document`: weak but genuine plans and test lists now get a low score with findings in auto mode instead of being rejected; a rejection carries a `hint` to retry with an explicit `doc_type`. A test plan with numeric criteria is no longer penalised for lacking "expected results", and five happy-path test cases no longer score 100 on design coverage.
+- Language detection no longer calls French (or German, Spanish, Italian, Portuguese) Romanian; an unrecognised language is reported as other.
+- `retrieve_qa_knowledge`: returned chunks no longer repeat the same paragraph two or three times, header-only chunks are dropped, a "strong" match now also needs most of the query's terms in the chunk, a request for a source that is not bundled (ISTQB, WSTG, MASTG) says so, and a `k` outside 1-20 is reported in `warnings`.
+- The `risk_register_structure`, `test_strategy_structure` and `test_plan_structure` prompts take an optional `project_name` instead of a literal `{project_name}`, cite sources as `[source: <path>]`, and no longer point to files that only exist in the repository.
+- `estimate_qa_effort`: a missing or empty required field now returns the usual `{"error": "validation", "fields": {...}}` naming each missing field, instead of the framework's raw argument error. The knowledge-base index no longer serves the sample strategy documents the app saves from earlier runs (the published package never included them), so a repo checkout answers like the wheel.
+- Robustness: a team size with hundreds of digits no longer crashes `estimate_qa_effort` (it is capped at 100,000 with a warning), "1,000" is read as one thousand, and very long digit runs or thousands of repeated mentions no longer make `review_qa_document` or `assess_qa_maturity` take minutes. Retrieved chunks now stay within the 1000-character size, header-only chunks are judged before the overlap is added, and a maturity result for non-QA text carries the same keys as a scored one.
+- `analyze_test_results`: fewer than 3 runs now says flakiness cannot be established and lists tests with mixed outcomes; a plain list of XML strings is accepted; duplicate run ids stay separate runs with a warning; a bare test name matches `reference_tests` when unambiguous; a CSV without a message column explains why there are no failure clusters.
+
 ## [3.9.2] - 2026-10-23
 
 ### Fixed

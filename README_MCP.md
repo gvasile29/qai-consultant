@@ -51,12 +51,12 @@ First run downloads the embedding model (`sentence-transformers/all-MiniLM-L6-v2
 
 | Tool | What it does |
 |---|---|
-| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (standards summaries — OWASP Top 10, IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE, EU AI Act; testing methodologies; audit/evaluation frameworks; AI SDLC case studies), filterable by category; `min_score`, `low_relevance` and a per-chunk `match` (strong/moderate/weak) tell you when the Markdown-only index has no real match |
+| `retrieve_qa_knowledge` | Grounding chunks from the knowledge base (standards summaries — OWASP Top 10, IEEE 829, ISO/IEC 25010, ISO 26262, A-SPICE, EU AI Act; testing methodologies; audit/evaluation frameworks; AI SDLC case studies), filterable by category; `min_score`, `low_relevance` and a per-chunk `match` (strong/moderate/weak) tell you when the Markdown-only index has no real match; a note says so when you ask for a source that is not bundled (e.g. ISTQB) |
 | `list_kb_sources` | Every document in the knowledge base, grouped by category |
 | `estimate_qa_effort` | Deterministic PERT-based effort estimate (baseline + complexity multipliers + team capacity + confidence score) — no LLM narrative, you write your own from the numbers; `warnings` lists any input that was assumed or ignored |
-| `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829-grounded dimensions, with findings and resolved KB citations — no LLM scoring, you write the narrative from the findings |
+| `review_qa_document` | Deterministic 0–100 quality score for an existing Test Plan/Strategy/test case list across six ISTQB/IEEE-829-grounded dimensions, with findings and resolved KB citations — weak plans still get a low score and findings in auto mode, and a rejected input comes with a `hint` to retry with an explicit `doc_type`; no LLM scoring, you write the narrative from the findings |
 | `analyze_test_results` | Deterministic health metrics from JUnit XML or CSV test execution data — flaky tests, ever-failing tests, slowest tests, and failure clustering — no LLM anywhere in this tool |
-| `assess_qa_maturity` | Deterministic indicative TMMi process-maturity level (1-3, never a certified 4-5) from a free-text description or pasted document, plus a conditional 7-check EU AI Act Articles 9-15 readiness score when the input signals an AI/ML system — no LLM anywhere in this tool |
+| `assess_qa_maturity` | Deterministic indicative TMMi process-maturity level (1-3, never a certified 4-5) from a free-text description or pasted document, plus a conditional 7-check EU AI Act Articles 9-15 readiness score when the input signals an AI/ML system (a negated mention such as "no machine learning" does not count); text that is not about testing returns `status: not_a_qa_description` with no level — no LLM anywhere in this tool |
 
 ## Try It — Example Prompts
 
@@ -78,7 +78,7 @@ The first one (`retrieve_qa_knowledge`) is the fastest way to confirm the server
 - `test_strategy_structure` — Test Strategy document structure + grounding instructions
 - `test_plan_structure` — IEEE 829-aligned Test Plan structure + grounding instructions
 
-Each `*_structure` prompt instructs the client to ground its generation in `retrieve_qa_knowledge` results with `[Source N]` citations, and to label the output as AI-generated.
+Each `*_structure` prompt instructs the client to ground its generation in `retrieve_qa_knowledge` results with `[source: <path>]` citations, and to label the output as AI-generated.
 
 ## Privacy
 

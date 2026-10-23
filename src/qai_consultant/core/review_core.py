@@ -21,9 +21,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from qai_consultant.common.text_checks import detect_language, looks_like_qa_document
+from qai_consultant.common.text_checks import detect_language, has_qa_signal, looks_like_qa_document
 
 MIN_CONTENT_CHARS = 200
+# A shorter text that carries an explicit QA signal (see has_qa_signal) is
+# still reviewed, as long as it has at least this many words to score.
+MIN_SIGNAL_WORDS = 6
 MAX_INPUT_CHARS = 500_000
 # Hard cap: above this, review_document() returns status "input_too_large"
 # instead of silently truncating and scoring a partial document.
@@ -92,7 +95,7 @@ _VAGUE_EXPECTED_RESULT_PHRASES = [
 _METRIC_KEYWORDS = ["defect density", "coverage %", "% coverage", "pass rate", "kpi"]
 _REQ_ID_RE = re.compile(r"\b(?:REQ|US|STORY|JIRA)-?\d+\b|\b[A-Z]{2,10}-\d+\b")
 _RISK_ID_RE = re.compile(r"\bR\d{1,3}\b")
-_MEASURABLE_EXIT_RE = re.compile(r"\d+\s*%|\ball\b[^.\n]{0,40}\bpass\b|coverage\s+(?:of\s+)?\d", re.IGNORECASE)
+_MEASURABLE_EXIT_RE = re.compile(r"(?<!\d)\d+[ \t]{0,8}%|\ball\b[^.\n]{0,40}\bpass\b|coverage\s+(?:of\s+)?\d", re.IGNORECASE)
 
 
 @dataclass
@@ -142,6 +145,22 @@ class ReviewResult:
     detection_confidence: str = "explicit"
     detection_signals: dict = field(default_factory=dict)
     detection_note: str = ""
+    # Non-empty on rejections (insufficient_content / not_a_qa_document): tells
+    # the caller how to retry (explicit doc_type, or more content).
+    hint: str = ""
+
+
+def _retry_hint(status: str) -> str:
+    types = ", ".join(DOC_TYPES)
+    if status == STATUS_NOT_QA:
+        return (f"If this is a genuine QA document, retry with an explicit doc_type "
+                f"({types}); an explicit type only requires a core testing term. "
+                "Otherwise the text is not a test plan, test strategy or test case list.")
+    if status == STATUS_INSUFFICIENT:
+        return (f"Add more content (at least {MIN_CONTENT_CHARS} characters), or, for a "
+                f"short document that mentions testing, retry with an explicit doc_type "
+                f"({types}).")
+    return ""
 
 
 # ── Input hygiene ──────────────────────────────────────────────────────────────
@@ -176,6 +195,15 @@ def _detection_signals(lower_text: str) -> dict:
             if any(syn in lower_text for syn in synonyms):
                 count += 1
         votes[doc_type] = count
+    # An explicit title ("# Test Plan", "Test Strategy: ...") is the strongest evidence of intent,
+    # and the only evidence a very short document has.
+    lines = [ln.strip() for ln in lower_text.splitlines() if ln.strip()][:5]
+    title_lines = [ln for ln in lines if ln.startswith("#")] or lines[:1]
+    title = " ".join(title_lines)
+    if "test plan" in title:
+        votes["test_plan"] += 3
+    elif "test strategy" in title:
+        votes["test_strategy"] += 3
     # test_cases has fewer sections total, so bias slightly toward it only
     # when it clearly dominates (its own distinguishing keywords present).
     if any(k in lower_text for k in ["test case id", "tc id", "precondition"]):
@@ -371,22 +399,45 @@ class _ExpectedStatements:
 _EXPECTED_STATEMENT_RE = _ExpectedStatements()
 
 
-def _measurability(text: str, lower_text: str) -> tuple:
+_NUMERIC_CRITERION_RES = (
+    # Digit runs are bounded and anchored (no match may start mid-run) so a document that is one very long
+    # run of digits cannot make these quadratic.
+    re.compile(r"(?<![\d.])\d{1,9}(?:\.\d{1,6})?[ \t]{0,8}%"),                   # 95% pass rate
+    re.compile(r"(?:<|>|<=|>=|≤|≥|under|below|within|less than|at most|at least|"
+               r"more than|above)[ \t]{0,8}\d{1,9}(?:\.\d{1,6})?[ \t]{0,8}(?:ms|milliseconds?|s|sec|seconds?|"
+               r"minutes?|hours?|days?|mb|gb|kb|requests?|users?|errors?|defects?|bugs?)\b",
+               re.IGNORECASE),                                                   # p95 < 500 ms
+    re.compile(r"\bp(?:50|90|95|99)\b|\b\d{1,9}[ \t]{0,8}(?:ms|milliseconds|seconds|tps|rps|"
+               r"concurrent users|requests per second)\b", re.IGNORECASE),     # units / percentiles
+    re.compile(r"\b(?:zero|no|0)\s+(?:open\s+)?(?:critical|high|blocker|sev(?:erity)?[- ]?1)\b",
+               re.IGNORECASE),                                                   # zero critical defects
+)
+
+
+def _measurability(text: str, lower_text: str, doc_type: str = "test_plan") -> tuple:
+    """Plan/strategy documents state measurable *criteria* (thresholds,
+    percentages, numeric limits); 'expected result' statements are a
+    test-case concept and are only scored when present."""
     statements = _EXPECTED_STATEMENT_RE.findall(text)
     total = len(statements)
     vague_count = sum(
         1 for s in statements if any(p in s.lower() for p in _VAGUE_EXPECTED_RESULT_PHRASES)
     )
     has_metric_signal = any(k in lower_text for k in _METRIC_KEYWORDS)
+    numeric_kinds = sum(1 for rx in _NUMERIC_CRITERION_RES if rx.search(text))
 
     findings = []
     if total == 0:
-        findings.append(ReviewFinding(
-            "measurability", "major",
-            "No 'expected result' statements found at all.", "expected results",
-            ["ISTQB measurable expected results"],
-        ))
-        base_score = 20
+        # Plan-level evidence: numeric thresholds stand in for expected results.
+        base_score = 20 if numeric_kinds == 0 else (60 if numeric_kinds == 1 else 80)
+        if numeric_kinds == 0:
+            findings.append(ReviewFinding(
+                "measurability", "major",
+                "No measurable criteria found (no thresholds, percentages or numeric "
+                "limits such as '95% pass rate' or 'p95 < 500 ms').",
+                "measurable criteria",
+                ["ISTQB measurable expected results"],
+            ))
     else:
         vague_ratio = vague_count / total
         base_score = round((1 - vague_ratio) * 80)
@@ -399,7 +450,7 @@ def _measurability(text: str, lower_text: str) -> tuple:
                 ["ISTQB measurable test objectives acceptance criteria"],
             ))
 
-    if not has_metric_signal:
+    if not has_metric_signal and numeric_kinds == 0:
         findings.append(ReviewFinding(
             "measurability", "minor",
             "No concrete quality metrics (defect density, coverage %, pass rate) found.",
@@ -456,7 +507,9 @@ _NEGATIVE_RE = re.compile(
     re.IGNORECASE,
 )
 _BOUNDARY_RE = re.compile(
-    r"boundary|\bedge[- ]case|equivalence|\bmin(?:imum)?\b|\bmax(?:imum)?\b|upper limit|lower limit|off-by-one|exactly \d+|\d+ characters",
+    r"boundary|\bedge[- ]cases?|equivalence|partition|off-by-one|just (?:below|above)|"
+    r"upper limit|lower limit|\b(?:min(?:imum)?|max(?:imum)?)\s+(?:length|value|size|allowed|number|of|\d)|"
+    r"exactly \d+|\d+ characters",
     re.IGNORECASE,
 )
 _TRACE_MENTION_RE = re.compile(r"requirement|traceab|user story|traces? to|covers", re.IGNORECASE)
@@ -560,11 +613,29 @@ def _tc_traceability(text: str, lower_text: str) -> tuple:
     )]
 
 
+_TECHNIQUE_RE = re.compile(
+    r"state[- ]transition|decision[- ]table|pairwise|combinatorial|"
+    r"error[- ]guessing|use[- ]case|concurren|race condition|permission|\brole\b|"
+    r"timeout|session expir|idempoten|\bretry\b|rollback",
+    re.IGNORECASE,
+)
+# Fewer cases than this cannot show broad design-technique coverage.
+_DESIGN_COVERAGE_CASES = 8
+_DESIGN_COVERAGE_SMALL_CAP = 85
+
+
 def _tc_design_coverage(text: str, signals: dict) -> tuple:
+    """Evidence of test-design techniques. Negative paths need >= 2 distinct
+    lines (a lone 'error' word is not a negative-testing suite), boundary /
+    equivalence needs an explicit technique term, a further technique (state,
+    decision table, ...) is its own check, and fewer than 8 cases are capped."""
+    neg_lines = {ln.strip().lower() for ln in text.split("\n") if _NEGATIVE_RE.search(ln)}
+    case_count = max(signals["tc_ids"], signals["expected_result_mentions"])
     checks = {
         "multiple_cases": signals["tc_ids"] >= 3 or signals["expected_result_mentions"] >= 3,
-        "negative_cases": bool(_NEGATIVE_RE.search(text)),
+        "negative_cases": len(neg_lines) >= 2,
         "boundary_cases": bool(_BOUNDARY_RE.search(text)),
+        "other_techniques": bool(_TECHNIQUE_RE.search(text)),
     }
     findings = []
     if not checks["multiple_cases"]:
@@ -574,21 +645,35 @@ def _tc_design_coverage(text: str, signals: dict) -> tuple:
     if not checks["negative_cases"]:
         findings.append(ReviewFinding(
             "test_design_coverage", "major",
-            "No negative / error-path test cases (invalid input, lockout, rejection) found.",
+            "Fewer than 2 negative / error-path test cases (invalid input, lockout, rejection) found.",
             "negative cases", ["ISTQB negative testing error guessing"]))
     if not checks["boundary_cases"]:
         findings.append(ReviewFinding(
             "test_design_coverage", "minor",
             "No boundary-value or equivalence-partitioning cases found.",
             "boundary cases", ["ISTQB boundary value analysis equivalence partitioning"]))
-    return round(100 * sum(checks.values()) / len(checks)), findings
+    if not checks["other_techniques"]:
+        findings.append(ReviewFinding(
+            "test_design_coverage", "minor",
+            "No further design technique evidenced (state transition, decision table, "
+            "pairwise, error guessing, role/permission or concurrency cases).",
+            "design techniques", ["ISTQB state transition decision table testing techniques"]))
+    score = round(100 * sum(checks.values()) / len(checks))
+    if 0 < case_count < _DESIGN_COVERAGE_CASES and score > _DESIGN_COVERAGE_SMALL_CAP:
+        score = _DESIGN_COVERAGE_SMALL_CAP
+        findings.append(ReviewFinding(
+            "test_design_coverage", "minor",
+            f"Only {case_count} test cases: design coverage is capped below 100 until "
+            f"there are at least {_DESIGN_COVERAGE_CASES} cases covering the techniques above.",
+            "case count", ["ISTQB test case design coverage"]))
+    return score, findings
 
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
 
 def _early_result(status: str, stats: dict) -> ReviewResult:
     return ReviewResult(doc_type=status, overall_score=0, dimension_scores={},
-                        findings=[], stats=stats, status=status)
+                        findings=[], stats=stats, status=status, hint=_retry_hint(status))
 
 
 def review_document(text: str, doc_type: str = "auto") -> ReviewResult:
@@ -606,7 +691,11 @@ def review_document(text: str, doc_type: str = "auto") -> ReviewResult:
                       "Split the document and review the parts separately."})
     cleaned = _strip_front_matter_and_footer(text or "")
 
-    if len(cleaned) < MIN_CONTENT_CHARS:
+    signal = has_qa_signal(cleaned)
+    too_short = len(cleaned) < MIN_CONTENT_CHARS
+    # A short text is only "insufficient" when it carries no QA signal or has
+    # too few words to score; a 3-line "# Test Plan" still gets feedback.
+    if too_short and not (signal and len(cleaned.split()) >= MIN_SIGNAL_WORDS):
         return _early_result(STATUS_INSUFFICIENT, {
             "char_count": len(cleaned), "raw_char_count": raw_len,
             "reason": f"content is under {MIN_CONTENT_CHARS} characters after cleanup"})
@@ -615,8 +704,12 @@ def review_document(text: str, doc_type: str = "auto") -> ReviewResult:
     explicit_type = doc_type in DOC_TYPES
     if lang["reliable"]:
         # An explicit doc_type means the caller vouches for the document: only
-        # require a core QA term. Auto-detect needs >= MIN_QA_TERMS distinct ones.
+        # require a core QA term. Auto-detect needs >= MIN_QA_TERMS distinct ones,
+        # or an explicit QA signal (heading / "test plan" / "Test N:") plus a
+        # core term, so weak-but-genuine documents get a low score, not a rejection.
         is_qa, hits = looks_like_qa_document(cleaned, min_terms=1 if explicit_type else 2)
+        if not is_qa and not explicit_type and signal:
+            is_qa, hits = looks_like_qa_document(cleaned, min_terms=1)
         if not is_qa:
             return _early_result(STATUS_NOT_QA, {
                 "char_count": len(cleaned), "raw_char_count": raw_len, "qa_terms_found": hits,
@@ -656,7 +749,7 @@ def review_document(text: str, doc_type: str = "auto") -> ReviewResult:
         scope_score, scope_findings = _objectives_scope_clarity(lower_text)
         entry_exit_score, entry_exit_findings = _entry_exit_criteria(cleaned, lower_text)
         traceability_score, traceability_findings = _traceability(cleaned, lower_text)
-        measurability_score, measurability_findings = _measurability(cleaned, lower_text)
+        measurability_score, measurability_findings = _measurability(cleaned, lower_text, resolved_doc_type)
         risk_score, risk_findings = _risk_coverage(lower_text)
         dimension_scores = {
             "structure_completeness": structure_score,

@@ -483,7 +483,9 @@ def test_risk_register_structure_content_matches_app_convention():
                     "Risk-Based Testing Priorities", "Recommendations for QA Strategy"):
         assert heading in text
     assert "retrieve_qa_knowledge" in text
-    assert "[Source N]" in text
+    # Citation convention matches what retrieve_qa_knowledge returns (a `source`
+    # path), not the repo-internal numbered "[Source N]" convention (v3.9.2).
+    assert "[source:" in text
     assert "AI-generated" in text
 
 

@@ -113,7 +113,9 @@ class EstimationData:
     qa_team_size: int = 0
     available_person_days: float = 0
     utilization_rate: float = 0.75
-    capacity_gap: float = 0  # positive = surplus, negative = deficit
+    capacity_gap: float = 0  # = available_person_days - pert_total_expected: positive = surplus, negative = deficit
+    capacity_status: str = ""  # "surplus" | "deficit" | "balanced" (unambiguous companion of capacity_gap)
+    capacity_note: str = ""    # one line explaining the sign of capacity_gap
 
     # Risk buffer
     risk_buffer_days: float = 0
@@ -124,6 +126,9 @@ class EstimationData:
     confidence_level: str = "Medium"
     data_quality_score: int = 20   # 0-20; calculated from dialogue completeness
     confidence_score: int = 0      # raw score 0-100 (for debugging/display)
+    data_quality_max: int = 20     # scale of data_quality_score (20 = every key answer specific)
+    confidence_note: str = ""      # why confidence_level is what it is (caps / weakest factors)
+    methodology_note: str = ""     # set only when the methodology does not change the numbers
 
     # Human-readable notes about inputs that were assumed, defaulted, ignored or\n    # look implausible. Surfaced as warnings in the MCP tool's JSON (asdict).
     warnings: list = field(default_factory=list)
@@ -187,6 +192,19 @@ def calculate_baseline(context: ProjectContext, data: EstimationData) -> None:
         key = ("default", "")
 
     data.baseline_qa_percent_min, data.baseline_qa_percent_max = BASELINE_QA_PERCENT[key]
+
+    meth_text = (context.methodology or "").strip()
+    if meth_text and key[1] == "":
+        if data.methodology_detected == "":
+            data.methodology_note = (
+                f"methodology '{meth_text}' was not recognised (recognised: V-model, waterfall, "
+                "agile/scrum/kanban/SAFe); the methodology-neutral baseline was used.")
+        else:
+            data.methodology_note = (
+                f"methodology '{meth_text}' ({data.methodology_detected}) does not change the numbers for "
+                f"project type '{data.project_type_detected}': the benchmark has no methodology-specific band "
+                "for it (only embedded and web projects differ by methodology). It is a label only.")
+        warn(data, "methodology: " + data.methodology_note)
 
     # Parse project duration
     data.project_duration_days = parse_duration(context.timeline, data.warnings)
@@ -401,6 +419,17 @@ def team_capacity(context: ProjectContext, data: EstimationData) -> None:
     )
     data.capacity_gap = round(
         data.available_person_days - data.pert_total_expected, 1
+    )
+    if data.capacity_gap > 0:
+        data.capacity_status = "surplus"
+    elif data.capacity_gap < 0:
+        data.capacity_status = "deficit"
+    else:
+        data.capacity_status = "balanced"
+    data.capacity_note = (
+        "capacity_gap = available_person_days - pert_total_expected: POSITIVE means capacity exceeds the "
+        f"expected effort (surplus), NEGATIVE means a shortfall (deficit). Here: {data.capacity_status}"
+        + (f" of {abs(data.capacity_gap):g} person-days." if data.capacity_gap else ".")
     )
 
 
@@ -640,7 +669,18 @@ def calculate_confidence(data: EstimationData) -> str:
         cap = min(cap, 69)
         warn(data, f"QA team ({data.qa_team_size}) is more than 3x the dev team ({dev_size}); check for swapped "
                    "or mistyped team sizes. Confidence is capped at Medium.")
+    uncapped = score
     score = min(score, cap)
+
+    # Honest framing of what limited the level (deterministic; no new numbers).
+    notes = [f"data quality {data.data_quality_score}/{data.data_quality_max} (20 = every key answer specific)"]
+    if score < uncapped:
+        notes.append(f"the factor score {uncapped} was capped to {score} by the plausibility rules in warnings")
+    if cap == 100 and data.data_quality_score < data.data_quality_max:
+        notes.append("some key answers were vague or missing, which lowers confidence")
+    data.confidence_note = (
+        "Confidence is a heuristic over input quality, PERT spread, capacity fit and complexity multipliers, "
+        "not a statistical interval: " + "; ".join(notes) + ".")
 
     # ── Map score to label ───────────────────────────────────────────────────────
     data.confidence_score = score
@@ -838,6 +878,9 @@ def parse_duration(timeline: str, warnings: Optional[list] = None) -> int:
 _NO_TEAM_RE = re.compile(r"\b(?:no\s+dedicated|none|devs?\s+test|developers?\s+test|nobody|no\s+one)\b")
 
 
+MAX_TEAM_SIZE = 100_000
+
+
 def parse_team_size(team_str: str, warnings: Optional[list] = None, label: str = "team size") -> int:
     """Parse team size string to integer.
 
@@ -857,31 +900,82 @@ def parse_team_size(team_str: str, warnings: Optional[list] = None, label: str =
     if _NO_TEAM_RE.search(ts):
         return 0
     ts = _words_to_digits(ts, warnings, label)
+    # "1,000" is a thousands separator (a comma followed by exactly three digits), not a decimal comma.
+    grouped = re.sub(r"(?<![\d,.])\d{1,3}(?:,\d{3})+(?![\d,])", lambda m: m.group(0).replace(",", ""), ts)
+    if grouped != ts:
+        _add_warning(warnings, f"{label}: '{team_str.strip()}' read with a thousands separator.")
+        ts = grouped
     first_alternative = re.split(r"\bor\b", ts)[0] if re.search(r"\d", re.split(r"\bor\b", ts)[0]) else ts
 
-    total = 0
+    total = 0.0
     found = False
+    num = r"(?<!\d)\d+(?:[.,]\d+)?"  # anchored at the start of a digit run so long runs stay linear
 
     def _range(m):
         nonlocal total, found
-        lo, hi = int(m.group(1)), int(m.group(2))
+        lo, hi = _to_float(m.group(1)), _to_float(m.group(2))
         if hi < lo:
             lo, hi = hi, lo
-        mid = -(-(lo + hi) // 2)
+        mid = _midpoint_up(lo, hi)
         total += mid
         found = True
-        _add_warning(warnings, f"{label}: range '{m.group(0).strip()}' interpreted as {mid} "
+        _add_warning(warnings, f"{label}: range '{m.group(0).strip()}' interpreted as {mid:g} "
                                "(midpoint, rounded up).")
         return " "
 
-    rest = re.sub(r"(\d+)\s*(?:-|–|to)\s*(\d+)", _range, first_alternative)
-    for n in re.findall(r"\d+", rest):
-        total += int(n)
+    rest = re.sub(rf"({num})\s*(?:-|–|to)\s*({num})", _range, first_alternative)
+    for n in re.findall(num, rest):
+        total += _to_float(n)
         found = True
     if found:
-        return total
+        if total > MAX_TEAM_SIZE:  # also covers float overflow to inf on absurdly long digit runs
+            _add_warning(warnings, f"{label}: '{team_str.strip()[:40]}' is implausibly large; capped at {MAX_TEAM_SIZE}.")
+            total = float(MAX_TEAM_SIZE)
+        whole = int(total + 0.5)  # round half up (never banker's rounding)
+        if abs(total - whole) > 1e-9:
+            _add_warning(warnings, f"{label}: '{team_str.strip()}' is not a whole headcount ({total:g}); "
+                                   f"rounded half up to {whole}.")
+        return whole
     _add_warning(warnings, f"{label}: no number found in '{team_str.strip()}'; assumed 1 person.")
     return 1
+
+
+_NEGATIVE_RE = re.compile(r"(?<![\w.])[-\u2212]\s*\d|\b(?:minus|negative)\b")
+_RANGE_STRIP_RE = re.compile(r"\d+(?:[.,]\d+)?\s*(?:-|\u2013|to)\s*\d+(?:[.,]\d+)?")
+
+
+def _has_negative_number(text: str) -> bool:
+    return bool(_NEGATIVE_RE.search(_RANGE_STRIP_RE.sub(" ", _normalise_text(text or ""))))
+
+
+def _is_zero_duration(timeline: str) -> bool:
+    """True if the timeline states a duration whose every number is zero ("0 months", "0")."""
+    tl = _words_to_digits(_normalise_text(timeline or ""), None, "timeline")
+    tl = re.sub(r"(\d)\s*(?:-|\u2013)\s*(?=\d)", r"\1-", tl)
+    matches = list(_DURATION_RE.finditer(tl))
+    if matches:
+        nums = []
+        for m in matches:
+            nums.append(_to_float(m.group("n1")))
+            if m.group("n2"):
+                nums.append(_to_float(m.group("n2")))
+        return all(n == 0 for n in nums)
+    bare = re.search(r"(?<![\w.])(\d{1,3})(?![\w])", tl)
+    return bare is not None and int(bare.group(1)) == 0
+
+
+def validate_numeric_inputs(team_qa_size: str, team_dev_size: str, timeline: str) -> dict:
+    """Return {field: message} for inputs that must be rejected rather than guessed:
+    negative team sizes / durations and zero durations. Empty dict when fine."""
+    errors: dict = {}
+    for name, value in (("team_qa_size", team_qa_size), ("team_dev_size", team_dev_size)):
+        if _has_negative_number(value):
+            errors[name] = f"{name} cannot be negative (got '{(value or '').strip()}'); give a headcount of 0 or more."
+    if _has_negative_number(timeline):
+        errors["timeline"] = f"timeline cannot be negative (got '{(timeline or '').strip()}'); give a positive duration such as '6 months'."
+    elif _is_zero_duration(timeline):
+        errors["timeline"] = f"timeline must be greater than zero (got '{(timeline or '').strip()}'); give a duration such as '6 months'."
+    return errors
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
 

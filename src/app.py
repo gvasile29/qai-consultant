@@ -44,7 +44,7 @@ from qai_consultant.core.results_core import (
     parse_results_csv,
     summarize_for_prompt,
 )
-from qai_consultant.core.maturity_core import MIN_CONTENT_CHARS as MATURITY_MIN_CONTENT_CHARS, assess_maturity
+from qai_consultant.core.maturity_core import MIN_CONTENT_CHARS as MATURITY_MIN_CONTENT_CHARS, STATUS_NOT_QA, assess_maturity
 from qai_consultant.generation.maturity_generator import (
     MATURITY_SYSTEM_PROMPT,
     build_maturity_prompt,
@@ -1870,6 +1870,17 @@ def render_maturity_assessment():
         st.warning(
             f"⚠️ Description is too short to assess ({result.stats.get('char_count', 0)} "
             f"characters after cleanup, need at least {MATURITY_MIN_CONTENT_CHARS})."
+        )
+        if st.button("← Try another description", use_container_width=True):
+            _reset_maturity_mode_state()
+            st.rerun()
+        return
+
+    if result.status == STATUS_NOT_QA:
+        st.warning(
+            "⚠️ This text does not describe a software testing or QA process, so no maturity level "
+            "was produced. Describe how you plan, run and review testing (or paste a test policy, "
+            "plan or process document) and try again."
         )
         if st.button("← Try another description", use_container_width=True):
             _reset_maturity_mode_state()
