@@ -182,7 +182,7 @@ A separate workflow, `.github/workflows/live-contract-tests.yml`, runs nightly (
 
 Full version history and rationale lives in `CHANGELOG.md` — this is a condensed index, not the source of truth.
 
-- **v0.1–v3.9.1** ✅ shipped; version history and rationale live in `CHANGELOG.md` (git log has the PRs).
+- **v0.1–v3.9.2** ✅ shipped; version history and rationale live in `CHANGELOG.md` (git log has the PRs).
 - **v4.0** Remote MCP + distribution: hosted Streamable HTTP server connectable from claude.ai, registry submissions, server-side usage metrics.
 
 > **MCP lens (governs all v3.x scope):** the client LLM is stronger than the internal one, so the server never exposes LLM generation — only what the client can't do alone (standards-grounded retrieval, deterministic estimation, validated QA process templates). `ask()`/`ask_streaming()`/document generation stay in Streamlit/CLI. Rationale: `MCP_PLAN.md`.
