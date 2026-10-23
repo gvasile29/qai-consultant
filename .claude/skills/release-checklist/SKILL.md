@@ -40,6 +40,8 @@ python scripts/mcp_release_check.py --live-version     # confirms PyPI's info.ve
 
 The live-version check exists because a version bump merged to `master` is not the same as a version published to PyPI — see the matching Gotcha in CLAUDE.md; this is what would have caught v3.5.0 sitting unpublished for days.
 
+**If a module under `src/` is moved or renamed**, update Glama's build step too (admin -> Dockerfile -> Build steps; it is not in the repo). Its warmup step imports `LocalIndex` by module path, and the #133 refactor broke it silently until the v3.9.1 auto-release build failed with `No module named 'local_index'`. Current step: `uv run python -c "from qai_consultant.mcp.local_index import LocalIndex; LocalIndex().search('warmup', k=1)"`. Test with the **Build** button, then **Build & Release**.
+
 **If a direct dependency in `pyproject.toml` needs a version bump**, regenerate the full transitive lock instead of hand-editing one line (see the "single-package Dependabot PR" Gotcha for why a partial edit corrupts the resolved set):
 
 ```bash
