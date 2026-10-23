@@ -41,22 +41,39 @@ def test_team_size_thousands_separator_is_read_as_thousands():
     assert effort_core.parse_team_size("2,5") == 3  # still a decimal comma
 
 
-def test_review_numeric_criteria_regex_is_linear_on_a_long_digit_run():
+def _seconds(fn, text):
     start = time.monotonic()
-    server.review_qa_document("test plan " + "1" * 40000)
-    assert time.monotonic() - start < TIME_BUDGET_SECONDS
+    fn(text)
+    return time.monotonic() - start
+
+
+def _assert_not_quadratic(fn, make_text, small=10_000, large=40_000):
+    """Quadratic behaviour makes 4x the input take ~16x as long. Comparing growth (not an absolute budget)
+    keeps this robust on slow or coverage-instrumented runners; the slack absorbs timer noise."""
+    fn(make_text(1000))  # warm-up
+    t_small = _seconds(fn, make_text(small))
+    t_large = _seconds(fn, make_text(large))
+    assert t_large < 6 * t_small + 0.5, (t_small, t_large)
+
+
+def test_review_numeric_criteria_regex_is_linear_on_a_long_digit_run():
+    from qai_consultant.core import review_core
+    _assert_not_quadratic(review_core.review_document, lambda n: "test plan " + "1" * n)
 
 
 def test_maturity_ai_gate_is_linear_on_thousands_of_negated_mentions():
-    start = time.monotonic()
-    server.assess_qa_maturity("We test software. " + "no ai " * 40000)
-    assert time.monotonic() - start < TIME_BUDGET_SECONDS
+    from qai_consultant.core import maturity_core
+    _assert_not_quadratic(maturity_core.assess_maturity, lambda n: "We test software. " + "no ai " * n)
+
+
+def test_team_size_parser_is_linear_on_a_long_digit_run():
+    _assert_not_quadratic(effort_core.parse_team_size, lambda n: "1" * n)
 
 
 def test_non_body_line_check_does_not_backtrack_on_whitespace():
     start = time.monotonic()
     assert li._body_chars(" " * 50000 + "x") == 1
-    assert time.monotonic() - start < 1.0
+    assert time.monotonic() - start < TIME_BUDGET_SECONDS
 
 
 def test_numeric_criteria_still_count_as_measurable_evidence():
