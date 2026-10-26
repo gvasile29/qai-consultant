@@ -226,8 +226,46 @@ def strategy_prompt_kwargs(effort_data, risk_register: str) -> dict:
     return kwargs
 
 
-def finalize_strategy(strategy: str, effort_data) -> str:
+_ADDITIONAL_RISK_PREFIX = "ADD-"
+# A standards body or regulation word earlier in the same clause ("UN R10", "ECE-R13",
+# "ISO 26262 Part 2 R20", "CVSS R10"): a regulation or clause number, not a risk. Case-sensitive
+# on purpose: lower-case "no"/"rule" are ordinary prose.
+_STANDARDS_CONTEXT_RE = re.compile(r"\b(?:UN|UNECE|ECE|ISO|IEC|SAE|CVSS|NIST|Regulation)\b[^\n.;:]{0,30}$")
+# A link target "](http://x/R10" and a code span "`R10`": renaming would change meaning.
+_LINK_TARGET_RE = re.compile(r"\]\([^)\s]*$")
+
+
+def relabel_unknown_risk_ids(text: str, ledger: list) -> str:
+    """Rename 'Rnn' risk IDs that are not in the ledger to 'ADD-nn' so an extra risk
+    the model invented cannot pass for a Risk Register entry. A pure token swap, so
+    bold markers, bullets and table cells keep their shape (deleting the token, as
+    remove_unknown_risk_ids does for the Test Plan, breaks prose). Best effort: leaves
+    regulation numbers ('UN R10'), link targets, URL paths, anchors and code spans alone;
+    a heading anchor written separately (`{#r10}`) is not kept in sync. No-op without a
+    ledger; idempotent."""
+    ids = {r["risk_id"] for r in ledger or []}
+    if not text or not ids or not all(_RISK_ID_RE.fullmatch(i) for i in ids):
+        return text
+
+    def swap(match: "re.Match") -> str:
+        if match.group(0) in ids:
+            return match.group(0)
+        prefix = text[text.rfind("\n", 0, match.start()) + 1:match.start()]
+        if (
+            prefix.endswith(("/", "#", "="))
+            or prefix.count("`") % 2
+            or _LINK_TARGET_RE.search(prefix)
+            or _STANDARDS_CONTEXT_RE.search(prefix[-60:])
+        ):
+            return match.group(0)
+        return _ADDITIONAL_RISK_PREFIX + match.group(0)[1:]
+
+    return _RISK_ID_RE.sub(swap, text)
+
+
+def finalize_strategy(strategy: str, effort_data, risk_register: str) -> str:
     """Post-processing every Strategy path applies after sanitizing."""
+    strategy = relabel_unknown_risk_ids(strategy, risk_ledger(risk_register or ""))
     return drop_padding_references(enforce_effort_totals(strategy, effort_facts(effort_data)))
 
 
