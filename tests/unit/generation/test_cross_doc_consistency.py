@@ -360,7 +360,7 @@ def test_strategy_prompt_kwargs_degrade_when_inputs_unusable():
 def test_finalize_helpers_are_idempotent_on_plain_text():
     from qai_consultant.generation.consistency import finalize_strategy, finalize_test_plan
 
-    assert finalize_strategy("# S\n\ntext", None) == "# S\n\ntext"
+    assert finalize_strategy("# S\n\ntext", None, "") == "# S\n\ntext"
     assert finalize_test_plan("# P\n\ntext", "") == "# P\n\ntext"
 
 

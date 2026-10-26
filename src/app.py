@@ -1192,7 +1192,7 @@ def render_strategy():
             try:
                 strategy = finalize_strategy(clean_markdown_html(_quiet_stream(
                     agent.ask_streaming(strategy_prompt, system_prompt=SYSTEM_PROMPT), "Test Strategy", "#### 📋 Generating Test Strategy..."
-                ), source_text=strategy_prompt), effort_data)
+                ), source_text=strategy_prompt), effort_data, risk_register)
                 output_path = generator.save(strategy, context)
             except (StopException, RerunException):
                 raise

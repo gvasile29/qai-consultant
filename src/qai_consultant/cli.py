@@ -211,7 +211,7 @@ def generate_strategy(agent: QAIAgent, dialogue: DialogueManager, results_summar
             strategy_buffer.append(chunk)
             live.update(Text("".join(strategy_buffer)))
     strategy = finalize_strategy(
-        clean_markdown_html("".join(strategy_buffer), source_text=strategy_prompt), effort_data,
+        clean_markdown_html("".join(strategy_buffer), source_text=strategy_prompt), effort_data, risk_register,
     )
     strategy_path = generator.save(strategy, context)
     console.print(f"\n[bold green]✅ Test Strategy generated[/bold green] ({len(strategy)} chars)\n")
