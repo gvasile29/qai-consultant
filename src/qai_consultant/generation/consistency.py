@@ -121,6 +121,8 @@ level VERBATIM. You may add detail and mitigations, but do NOT re-rate a risk or
 (for example, do not call a High/Critical integration risk Medium, and do not treat third-party
 systems as "assumed reliable" when the ledger rates their failure as a risk). Any extra risk you
 add that is not in the ledger must be labelled "additional (not in Risk Register)" with no R-number.
+Never write an R-number (R08, R09, ...) that is not listed in the ledger above, not for an extra risk
+and not for a requirement, regulation or clause.
 """
 
 

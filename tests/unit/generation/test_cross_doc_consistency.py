@@ -134,6 +134,12 @@ def test_ledger_prompt_block_lists_ids_and_levels_verbatim():
     assert "R01 | Market Data & Gateway Integration Failures | High | High | Critical | P1" in block
     assert "R03" in block
     assert "verbatim" in block.lower() and "re-rate" in block.lower()
+    assert "Never write an R-number" in block
+
+
+def test_strategy_prompt_carries_the_ledger_only_r_number_rule():
+    prompt = build_strategy_prompt(CTX, "kb", ledger=cons.risk_ledger(RISK_REGISTER))
+    assert "not listed in the ledger" in prompt
 
 
 def test_ledger_empty_degrades_gracefully():
