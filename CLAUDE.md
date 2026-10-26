@@ -177,6 +177,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR to `main`/`mas
 
 A separate workflow, `.github/workflows/live-contract-tests.yml`, runs nightly (`0 3 * * *`) and via `workflow_dispatch` against real Pinecone/Mistral/OpenRouter (`tests/e2e/rag/test_live_contracts.py`: `test_pinecone_roundtrip`/`test_mistral_completion`/`test_openrouter_fallback`). It never triggers on `push`/`pull_request`, so it can never block a PR. It needs the 4 API keys as GitHub Actions repository secrets (separate from Streamlit Cloud's); without them every test SKIPs. The Pinecone test writes only to the `ci-contract-tests` namespace and cleans up (fetch retries 3x for eventual consistency). The LLM tests go through the real `agent.LLMClient` path; `test_openrouter_fallback` forces the Mistral-to-OpenRouter branch against the real OpenRouter API. The `run:` block starts with `set -o pipefail` (see the `tee` gotcha below).
 
+`.github/workflows/multi-template-smoke.yml` runs `scripts/llm_e2e_smoke.py --require-mistral` once per template (weekly, serial, `workflow_dispatch` too; never on push/PR). It is weekly on purpose: OpenRouter's 50 requests/day free tier is shared with the production fallback. Generated documents are uploaded as artifacts; a failing content gate fails the job.
+
 **Removed in v3.5.3:** the weekly Dependency Drift Canary workflow (`dependency-drift-check.yml`); after the fastembed switch shrank the pinned transitive lock, re-running `uv pip compile` by hand before each MCP release is enough. Spec: `docs/superpowers/specs/2026-09-03-dependency-drift-canary-design.md`.
 
 ## Roadmap
