@@ -108,7 +108,11 @@ def main() -> int:
         hit = next((m for m in GARBAGE_MARKERS if m in text), None)
         if hit:
             problems.append(f"contains garbage marker {hit!r}")
-        problems += lint_output(text, context_text, knowledge_text)
+        # The Effort Report embeds effort_core's own warning text ("shortfall exceeds 30% of
+        # expected effort"); those thresholds are code constants, not invented figures.
+        warnings = getattr(results.get("effort_data"), "warnings", None) or []
+        extra = "\n".join(warnings) if text_key == "effort_report" else ""
+        problems += lint_output(text, context_text, knowledge_text + "\n" + extra)
         if text_key in REVIEWED_DOC_TYPES and text.strip():
             problems += review_problems(text, REVIEWED_DOC_TYPES[text_key])
         if not path or not Path(path).is_file():
