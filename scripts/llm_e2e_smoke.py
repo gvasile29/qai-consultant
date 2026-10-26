@@ -28,6 +28,9 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 MIN_DOC_CHARS = 1500
 MIN_RISK_ROWS = 3
 GARBAGE_MARKERS = ("User Safety:", "I cannot help", "I can't help", "As an AI language model")
+# Documents scored with the review rubric (core/review_core.py); the Risk Register and
+# Effort Report are not Test Plan/Strategy-shaped, so the rubric does not apply.
+REVIEWED_DOC_TYPES = {"strategy": "test_strategy", "test_plan": "test_plan"}
 DOCS = (
     ("risk_register", "risk_path", "Risk Register"),
     ("effort_report", "effort_path", "Effort Report"),
@@ -60,6 +63,7 @@ def main() -> int:
 
     from qai_consultant.rag.agent import MISTRAL_MODEL, QAIAgent
     from qai_consultant.core.dialogue import ProjectContext
+    from qai_consultant.compliance.doc_validation import consistency_problems, review_problems
     from qai_consultant.compliance.output_guards import lint_output
     from qai_consultant.core.risk_ledger import parse_risk_matrix
     from qai_consultant.generation.strategy_generator import StrategyGenerator
@@ -105,6 +109,8 @@ def main() -> int:
         if hit:
             problems.append(f"contains garbage marker {hit!r}")
         problems += lint_output(text, context_text, knowledge_text)
+        if text_key in REVIEWED_DOC_TYPES and text.strip():
+            problems += review_problems(text, REVIEWED_DOC_TYPES[text_key])
         if not path or not Path(path).is_file():
             problems.append("no saved file")
         elif len(Path(path).read_text(encoding="utf-8").strip()) < MIN_DOC_CHARS:
@@ -120,6 +126,13 @@ def main() -> int:
 
     if not results.get("effort_data"):
         failures.append("effort_data missing")
+
+    cross = consistency_problems(
+        results.get("risk_register") or "", results.get("strategy") or "",
+        results.get("test_plan") or "", results.get("effort_data"),
+    )
+    print(f"  [{'FAIL' if cross else 'ok'}] Cross-document consistency: {len(cross)} problem(s)")
+    failures += [f"Consistency: {p}" for p in cross]
 
     print(f"  Fallback/stream warnings: {len(counter.messages)}")
     for msg in counter.messages:
