@@ -38,11 +38,25 @@ def _nav(at, mode_id):
     return at.button(key=f"nav-{mode_id}")
 
 
-def test_landing_renders_all_mode_buttons_enabled(at):
+def test_landing_renders_the_component_and_enabled_mode_buttons(at):
+    # AppTest cannot click inside the landing component (an UnknownElement
+    # here); scripts/verify_landing_visual.py clicks it in a browser.
     assert not at.exception
+    names = [getattr(e.proto, "component_name", "") for e in at.main if type(e).__name__ == "UnknownElement"]
+    assert any(name.endswith("qai_mission_landing") for name in names), names
     for mode_id in ("strategy", "doc_review", "maturity"):
         assert not _nav(at, mode_id).disabled
-        assert at.button(key=f"cta-{mode_id}") is not None
+
+
+def test_landing_main_column_has_no_info_banner(at):
+    # The component carries the version, the MCP section and the short AI
+    # notice. (The sidebar's st.info is the full AI notice, which stays.)
+    assert len(at.main.info) == 0
+
+
+def test_other_screens_repeat_the_short_ai_notice_for_narrow_screens(at):
+    _nav(at, "doc_review").click().run()
+    assert any("ai-notice-narrow" in md.value for md in at.main.markdown)
 
 
 def test_active_mode_is_disabled_in_sidebar(at):

@@ -115,9 +115,26 @@ def test_doc_review_intro_animated_excluded_from_review_mode_state_keys():
     # inline cleanup lists directly, not just the shared
     # REVIEW_MODE_STATE_KEYS list -- doc_review_intro_animated is a
     # one-shot entrance-animation flag (same precedent as
-    # review_intro_animated/output_intro_animated/mcp_announcement_seen)
+    # review_intro_animated/output_intro_animated)
     # and must never be cleared by either handler.
     for fn_name in ["render_sidebar", "render_strategy"]:
         fn = extract_function(source, fn_name)
         assert '"doc_review_intro_animated"' not in fn, \
             f"{fn_name}() must NOT clear doc_review_intro_animated"
+
+
+def test_mission_clock_wiring_in_render_strategy():
+    # The ticking clock is browser-only (AppTest cannot run its script), so
+    # guard the wiring itself: the start time is set once, before the first
+    # timeline paint, only for a run still in progress, and kept on resume
+    # reruns (setdefault, not assignment); the script is enabled only when
+    # a clock is rendered.
+    fn = extract_function(read_app_source(), "render_strategy")
+    start = fn.index('st.session_state.setdefault("generation_started_at", time.time())')
+    assert fn.count('setdefault("generation_started_at"') == 1
+    assert "st.session_state.generation_started_at =" not in fn
+    assert start < fn.index("_render_stages()")
+    assert "if needs_generation:" in fn[start - 80:start]
+    assert "elapsed_s=_elapsed" in fn
+    assert "unsafe_allow_javascript=_elapsed is not None" in fn
+    assert "if needs_generation and _started_at else None" in fn

@@ -189,87 +189,157 @@ def executive_readout_html(readout) -> str:
     )
 
 
-# ── Landing: hero + "How it works" / "What you get" (Phase 1) ─────────────
-# All animations here are one-shot on page load. Relies on theme.py's
-# global prefers-reduced-motion rule (build_css()) to zero out
-# animation-duration/transition-duration, but that rule does NOT zero
-# animation-delay -- left alone, a "pom-" element with a nonzero delay
-# would sit at its pre-animation opacity:0 state for the full delay
-# before snapping in, which is the opposite of "reduced motion". Each of
-# the two functions below defines its own scoped prefers-reduced-motion
-# block to zero its own delays; do not remove either as "redundant" with
-# theme.py's rule -- they cover different CSS properties.
+def _split_value_unit(text: str) -> tuple:
+    """"114.5 person-days" -> ("114.5", "person-days"); text without a
+    leading number stays whole in the value slot."""
+    head, _, rest = (text or "").partition(" ")
+    if head.replace(".", "", 1).isdigit():
+        return head, rest
+    return text or "", ""
 
-def build_landing_hero_html(tokens: dict) -> str:
-    """Pure function: token dict -> hero + "How it works" HTML block."""
+
+def build_readout_tiles_html(tokens: dict, readout) -> str:
+    """Pure function: token dict + an executive_readout.ExecutiveReadout ->
+    the results screen's mission readout: up to four large tiles (overall
+    risk, expected effort, team capacity, confidence) and an "Address first"
+    strip with the top risks. None, or a readout with nothing to show,
+    returns "". The detailed explanations stay in executive_readout_html().
+    Every value is escaped -- risk descriptions are LLM output."""
+    if readout is None:
+        return ""
+
+    tiles = []
+    if readout.overall_risk:
+        tier = severity_tier(readout.overall_risk)
+        tiles.append(("Overall risk", readout.overall_risk, "", readout.risk_breakdown, tier))
+    if readout.expected_effort:
+        value, unit = _split_value_unit(readout.expected_effort)
+        tiles.append(("Expected QA effort", value, unit, f"Band {readout.effort_range}", "accent"))
+    if readout.capacity:
+        tiles.append((
+            "Team capacity", "Deficit" if readout.capacity_deficit else "OK", "",
+            readout.capacity, "fail" if readout.capacity_deficit else "pass",
+        ))
+    if readout.confidence:
+        level, _, score = readout.confidence.partition(" (")
+        score = score.rstrip(")")
+        tier = {"high": "pass", "medium": "hold", "low": "fail"}.get(level.strip().lower(), "accent")
+        tiles.append(("Estimate confidence", level, "", score, tier))
+
+    if not tiles and not readout.address_first:
+        return ""
+
+    tiles_html = "".join(
+        f'<div class="mr-tile {tier}"><div class="mr-label">{_html.escape(label)}</div>'
+        f'<div class="mr-value">{_html.escape(value)}'
+        + (f'<span class="mr-unit">{_html.escape(unit)}</span>' if unit else "")
+        + "</div>"
+        + (f'<div class="mr-sub">{_html.escape(sub)}</div>' if sub else "")
+        + "</div>"
+        for label, value, unit, sub, tier in tiles
+    )
+    first_html = ""
+    if readout.address_first:
+        items = "".join(
+            f'<li><span class="mr-rid">{_html.escape(rid)}</span>{_html.escape(desc)}</li>'
+            for rid, desc in readout.address_first
+        )
+        first_html = f'<div class="mr-first"><div class="mr-label">Address first</div><ol>{items}</ol></div>'
+
     return f"""
 <style>
-@keyframes pom-reveal {{ from {{ clip-path: inset(0 100% 0 0); }} to {{ clip-path: inset(0 0 0 0); }} }}
-@keyframes pom-fill-risk {{ from {{ width: 0%; }} to {{ width: 82%; }} }}
-@keyframes pom-fill-effort {{ from {{ width: 0%; }} to {{ width: 58%; }} }}
-@keyframes pom-fill-strategy {{ from {{ width: 0%; }} to {{ width: 94%; }} }}
-@keyframes pom-tick {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
-@keyframes pom-card-in {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
-
-.pom-hero {{ padding: 0.5rem 0 1.5rem; }}
-.pom-headline {{ font-family: 'Plex Sans', sans-serif; font-weight: 700; font-size: 2rem; line-height: 1.18; color: {tokens['ink']}; margin-bottom: 0.4rem; overflow: hidden; }}
-.pom-headline span {{ display: inline-block; animation: pom-reveal 0.9s steps(30) 0.1s both; }}
-.pom-readout {{ font-family: 'Plex Mono', monospace; font-size: 0.78rem; color: {tokens['ink_dim']}; margin-bottom: 1.4rem; }}
-
-.pom-gauges {{ display: flex; gap: 0.8rem; margin-bottom: 1.6rem; max-width: 480px; }}
-.pom-gauge {{ flex: 1; }}
-.pom-gauge .pom-glabel {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.25rem; }}
-.pom-gauge .pom-gtrack {{ height: 6px; background: {tokens['surface_2']}; border-radius: 3px; overflow: hidden; }}
-.pom-gauge .pom-gfill {{ height: 100%; }}
-.pom-gauge.risk .pom-gfill {{ background: {tokens['pass_']}; animation: pom-fill-risk 1.4s ease-out 0.5s both; }}
-.pom-gauge.effort .pom-gfill {{ background: {tokens['hold']}; animation: pom-fill-effort 1.4s ease-out 0.7s both; }}
-.pom-gauge.strategy .pom-gfill {{ background: {tokens['accent']}; animation: pom-fill-strategy 1.4s ease-out 0.9s both; }}
-
-.pom-standards {{ display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.8rem; }}
-.pom-standards span {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.03em; color: {tokens['accent']}; border: 1px solid {tokens['line']}; padding: 0.15rem 0.5rem; border-radius: 4px; opacity: 0; animation: pom-tick 0.3s ease-out both; }}
-.pom-standards span:nth-child(1) {{ animation-delay: 1.1s; }}
-.pom-standards span:nth-child(2) {{ animation-delay: 1.25s; }}
-.pom-standards span:nth-child(3) {{ animation-delay: 1.4s; }}
-.pom-standards span:nth-child(4) {{ animation-delay: 1.55s; }}
-
-.pom-cards {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; }}
-@media (max-width: 640px) {{ .pom-cards {{ grid-template-columns: 1fr; }} }}
-.pom-card {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-radius: 8px; padding: 1rem 1.1rem; opacity: 0; animation: pom-card-in 0.5s ease-out both; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out; }}
-.pom-card:hover {{ border-color: {tokens['accent']}; box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); }}
-.pom-card:nth-child(1) {{ animation-delay: 1.7s; }}
-.pom-card:nth-child(2) {{ animation-delay: 1.85s; }}
-.pom-card:nth-child(3) {{ animation-delay: 2.0s; }}
-.pom-card .pom-cidx {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; color: {tokens['ink_dim']}; margin-bottom: 0.35rem; }}
-.pom-card .pom-ctitle {{ font-family: 'Plex Sans', sans-serif; font-weight: 600; font-size: 0.92rem; color: {tokens['ink']}; margin-bottom: 0.2rem; }}
-.pom-card .pom-cbody {{ font-family: 'Plex Sans', sans-serif; font-size: 0.8rem; color: {tokens['ink_dim']}; }}
-
-@media (prefers-reduced-motion: reduce) {{
-  .pom-headline span, .pom-gauge .pom-gfill, .pom-standards span, .pom-card {{
-    animation-delay: 0s !important;
-  }}
-}}
+.mission-readout {{ margin-bottom: 1.4rem; }}
+.mr-tiles {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem; }}
+.mr-tile {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-top: 3px solid {tokens['accent']}; border-radius: 6px; padding: 0.9rem 1rem 1rem; }}
+.mr-tile.pass {{ border-top-color: {tokens['pass_']}; }}
+.mr-tile.hold {{ border-top-color: {tokens['hold']}; }}
+.mr-tile.fail {{ border-top-color: {tokens['fail']}; }}
+.mr-label {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.35rem; }}
+.mr-value {{ font-size: 1.9rem; font-weight: 600; line-height: 1.1; color: {tokens['ink']}; font-variant-numeric: tabular-nums; }}
+.mr-tile.pass .mr-value {{ color: {tokens['pass_']}; }}
+.mr-tile.hold .mr-value {{ color: {tokens['hold']}; }}
+.mr-tile.fail .mr-value {{ color: {tokens['fail']}; }}
+.mr-unit {{ font-size: 0.85rem; font-weight: 400; margin-left: 0.35rem; color: {tokens['ink_dim']}; }}
+.mr-sub {{ font-size: 0.8rem; color: {tokens['ink_dim']}; margin-top: 0.35rem; }}
+.mr-first {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-left: 3px solid {tokens['fail']}; border-radius: 6px; padding: 0.8rem 1rem; }}
+.mr-first ol {{ margin: 0; padding-left: 1.1rem; }}
+.mr-first li {{ margin: 0.2rem 0; color: {tokens['ink']}; }}
+.mr-rid {{ font-family: 'Plex Mono', monospace; font-size: 0.8rem; color: {tokens['accent']}; margin-right: 0.5rem; }}
 </style>
+<div class="mission-readout"><div class="mr-tiles">{tiles_html}</div>{first_html}</div>
+"""
 
-<div class="pom-hero">
-  <div class="pom-headline"><span>Your AI QA Architect, grounded in standards.</span></div>
-  <div class="pom-readout">&gt; calibration sequence: 3 instruments online</div>
-  <div class="pom-gauges">
-    <div class="pom-gauge risk"><div class="pom-glabel">Risk</div><div class="pom-gtrack"><div class="pom-gfill"></div></div></div>
-    <div class="pom-gauge effort"><div class="pom-glabel">Effort</div><div class="pom-gtrack"><div class="pom-gfill"></div></div></div>
-    <div class="pom-gauge strategy"><div class="pom-glabel">Strategy</div><div class="pom-gtrack"><div class="pom-gfill"></div></div></div>
-  </div>
-  <div class="pom-standards">
-    <span>&#10003; ISTQB</span>
-    <span>&#10003; OWASP</span>
-    <span>&#10003; IEEE 829</span>
-    <span>&#10003; ISO 25010</span>
-  </div>
-  <div class="pom-cards">
-    <div class="pom-card"><div class="pom-cidx">01</div><div class="pom-ctitle">Answer a few questions</div><div class="pom-cbody">About your project.</div></div>
-    <div class="pom-card"><div class="pom-cidx">02</div><div class="pom-ctitle">AI analyzes</div><div class="pom-cbody">Using QA methodologies &amp; standards.</div></div>
-    <div class="pom-card"><div class="pom-cidx">03</div><div class="pom-ctitle">Download your strategy</div><div class="pom-cbody">Tailored Test Strategy (Markdown &amp; PDF).</div></div>
-  </div>
-</div>
+
+_MAP_LEVELS = ("low", "medium", "high")
+
+
+def _map_level(value: str):
+    """Map a Likelihood/Impact cell to low/medium/high, or None. "Critical"
+    and "Very high" count as high, "Very low" as low."""
+    text = (value or "").lower()
+    if "critical" in text or "high" in text:
+        return "high"
+    if "medium" in text or "moderate" in text:
+        return "medium"
+    if "low" in text:
+        return "low"
+    return None
+
+
+def build_risk_map_html(tokens: dict, rows: list) -> str:
+    """Pure function: token dict + parsed Risk Matrix rows -> a 3x3
+    likelihood x impact map with each risk ID placed in its cell (chip
+    colored by its stated Risk Level). Rows whose likelihood or impact
+    can't be read are listed under the map, never dropped silently. Empty
+    input, or no plottable and no unplotted rows, returns ""."""
+    if not rows:
+        return ""
+    cells: dict = {(lk, im): [] for lk in _MAP_LEVELS for im in _MAP_LEVELS}
+    unplotted = []
+    for row in rows:
+        lk, im = _map_level(row.get("likelihood", "")), _map_level(row.get("impact", ""))
+        chip = (
+            f'<span class="rm-chip {severity_tier(row.get("risk_level", ""))}" '
+            f'title="{_html.escape(row.get("description", ""), quote=True)}">{_html.escape(row.get("risk_id", ""))}</span>'
+        )
+        if lk and im:
+            cells[(lk, im)].append(chip)
+        else:
+            unplotted.append(chip)
+
+    heat = {0: "", 1: "", 2: "warm", 3: "warm", 4: "hot"}
+    grid = []
+    for lk in reversed(_MAP_LEVELS):
+        grid.append(f'<div class="rm-axis rm-row">{lk.title()}</div>')
+        for im in _MAP_LEVELS:
+            zone = heat[_MAP_LEVELS.index(lk) + _MAP_LEVELS.index(im)]
+            grid.append(f'<div class="rm-cell {zone}">{"".join(cells[(lk, im)])}</div>')
+    grid.append('<div class="rm-axis"></div>')
+    grid.extend(f'<div class="rm-axis rm-col">{im.title()}</div>' for im in _MAP_LEVELS)
+    rest = (
+        f'<div class="rm-unplotted">Not plotted (likelihood or impact unreadable): {"".join(unplotted)}</div>'
+        if unplotted else ""
+    )
+    return f"""
+<style>
+.risk-map {{ margin: 0.4rem 0 1.2rem; max-width: 560px; }}
+.rm-title {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.4rem; }}
+.rm-grid {{ display: grid; grid-template-columns: 4.5rem repeat(3, 1fr); gap: 4px; }}
+.rm-cell {{ min-height: 3.4rem; background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-radius: 4px; padding: 0.3rem; display: flex; flex-wrap: wrap; gap: 0.25rem; align-content: flex-start; }}
+.rm-cell.warm {{ background: {tokens['hold_bg']}; }}
+.rm-cell.hot {{ background: {tokens['fail_bg']}; }}
+.rm-axis {{ font-family: 'Plex Mono', monospace; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.04em; color: {tokens['ink_dim']}; display: flex; align-items: center; }}
+.rm-col {{ justify-content: center; padding-top: 0.2rem; }}
+.rm-chip {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: {tokens['surface_2']}; color: {tokens['ink']}; cursor: default; }}
+.rm-chip.pass {{ background: {tokens['pass_bg']}; color: {tokens['pass_']}; }}
+.rm-chip.hold {{ background: {tokens['surface']}; color: {tokens['hold']}; border: 1px solid {tokens['hold']}; }}
+.rm-chip.fail {{ background: {tokens['fail']}; color: {tokens['page']}; }}
+.rm-foot {{ display: flex; justify-content: space-between; font-family: 'Plex Mono', monospace; font-size: 0.62rem; color: {tokens['ink_dim']}; margin-top: 0.3rem; padding-left: 4.5rem; }}
+.rm-unplotted {{ font-size: 0.8rem; color: {tokens['ink_dim']}; margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }}
+</style>
+<div class="risk-map"><div class="rm-title">Risk map: likelihood (rows) x impact (columns)</div>
+<div class="rm-grid">{"".join(grid)}</div>
+<div class="rm-foot"><span>&larr; lower impact</span><span>higher impact &rarr;</span></div>{rest}</div>
 """
 
 
@@ -279,63 +349,17 @@ GENERATION_TIME_ESTIMATE = "~5-10 min"
 GENERATION_TIME_ESTIMATE_LONG = GENERATION_TIME_ESTIMATE.replace(" min", " minutes")
 
 
-def build_landing_deliverables_html(tokens: dict) -> str:
-    """Pure function: token dict -> the "What you get in ~5-10 minutes"
-    deliverable cards + stat tiles HTML block. Reuses
-    build_landing_hero_html()'s .pom-card/.pom-cidx/.pom-ctitle/.pom-cbody
-    classes and pom-card-in keyframe (defined above, always rendered
-    first on the same screen) rather than redefining them, and continues
-    its animation-delay cadence (which ends at 2.0s)."""
-    deliverables = [
-        ("⚠️", "Risk Register", "Prioritized risks with likelihood, impact &amp; mitigation, before a single line of code is written."),
-        ("📊", "Effort Estimation", "PERT-based timeline with team capacity analysis and a confidence score (0 to 100)."),
-        ("📋", "Test Strategy", "ISTQB-aligned approach tailored to your stack, methodology, and compliance requirements."),
-        ("📝", "Test Plan", "IEEE 829-aligned plan with test items, entry/exit criteria, schedule, and AI tool oversight."),
-    ]
-    stats = [
-        ("Time to results", GENERATION_TIME_ESTIMATE, "vs. hours of manual work"),
-        ("Standards", "ISTQB · OWASP · ISO", "7,100+ knowledge vectors"),
-        ("Deliverables", "4 documents", "Risk · Effort · Strategy · Plan"),
-        ("Cost", "Free", "No sign-up required"),
-    ]
-    deliverable_cards = "".join(
-        f'<div class="pom-card"><div class="pom-cidx">{icon}</div>'
-        f'<div class="pom-ctitle">{title}</div><div class="pom-cbody">{body}</div></div>'
-        for icon, title, body in deliverables
-    )
-    deliverable_delay_rules = "\n".join(
-        f".pom-deliverables .pom-card:nth-child({i}) {{ animation-delay: {2.15 + (i - 1) * 0.1:.2f}s; }}"
-        for i in range(1, len(deliverables) + 1)
-    )
-    stat_tiles = "".join(
-        f'<div class="pom-stat"><div class="pom-slabel">{label}</div>'
-        f'<div class="pom-svalue">{value}</div><div class="pom-ssub">{sub}</div></div>'
-        for label, value, sub in stats
-    )
-    stat_delay_rules = "\n".join(
-        f".pom-stats .pom-stat:nth-child({i}) {{ animation-delay: {2.85 + (i - 1) * 0.1:.2f}s; }}"
-        for i in range(1, len(stats) + 1)
-    )
+def build_narrow_screen_notice_html(tokens: dict, notice: str) -> str:
+    """Pure function: token dict + the short AI interaction notice -> a note
+    shown in the main column only below 1024px, where the sidebar holding
+    the full notice may start closed. At 768-1024px both can show; a repeat
+    there is harmless, a missing notice is not."""
     return f"""
 <style>
-.pom-deliverables {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; margin-bottom: 1.6rem; }}
-@media (max-width: 640px) {{ .pom-deliverables {{ grid-template-columns: 1fr; }} }}
-{deliverable_delay_rules}
-.pom-stats {{ display: flex; gap: 1.4rem; flex-wrap: wrap; }}
-.pom-stat {{ opacity: 0; animation: pom-card-in 0.5s ease-out both; }}
-{stat_delay_rules}
-.pom-stat .pom-slabel {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.25rem; }}
-.pom-stat .pom-svalue {{ font-family: 'Plex Mono', monospace; font-size: 1.1rem; font-weight: 500; color: {tokens['ink']}; }}
-.pom-stat .pom-ssub {{ font-family: 'Plex Sans', sans-serif; font-size: 0.72rem; color: {tokens['ink_dim']}; }}
-@media (prefers-reduced-motion: reduce) {{
-  .pom-deliverables .pom-card, .pom-stat {{
-    animation-delay: 0s !important;
-  }}
-}}
+.ai-notice-narrow {{ border-left: 2px solid {tokens['accent']}; padding: 0.5rem 0.8rem; margin-bottom: 0.8rem; font-family: 'Plex Sans', sans-serif; font-size: 0.82rem; line-height: 1.5; color: {tokens['ink_dim']}; background: {tokens['surface']}; }}
+@media (min-width: 1024px) {{ .ai-notice-narrow {{ display: none; }} }}
 </style>
-<div class="pom-readout">&gt; what you get in {GENERATION_TIME_ESTIMATE_LONG}</div>
-<div class="pom-deliverables">{deliverable_cards}</div>
-<div class="pom-stats">{stat_tiles}</div>
+<div class="ai-notice-narrow" role="note">{_html.escape(notice)}</div>
 """
 
 
@@ -398,6 +422,7 @@ def build_adoption_strip_html(tokens: dict, snapshot: dict) -> str:
     )
     return f"""
 <style>
+.adopt-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.78rem; color: {tokens['ink_dim']}; margin-bottom: 1.1rem; }}
 .adopt-strip {{ display: flex; gap: 1.4rem; flex-wrap: wrap; margin-bottom: 0.4rem; }}
 .adopt-stat {{ border-left: 2px solid {tokens['accent']}; padding-left: 0.7rem; }}
 .adopt-label {{ font-family: 'Plex Mono', monospace; font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.25rem; }}
@@ -406,7 +431,7 @@ def build_adoption_strip_html(tokens: dict, snapshot: dict) -> str:
 .adopt-note {{ font-family: 'Plex Sans', sans-serif; font-size: 0.72rem; color: {tokens['ink_dim']}; margin-top: 0.5rem; }}
 .adopt-note a {{ color: {tokens['accent']}; }}
 </style>
-<div class="pom-readout">&gt; live adoption &middot; updated hourly</div>
+<div class="adopt-eyebrow">&gt; live adoption &middot; updated hourly</div>
 <div class="adopt-strip">{tile_html}</div>
 <div class="adopt-note">MCP installs are <a href="https://pypi.org/project/qai-consultant-mcp/">PyPI</a> downloads, which include installs found via the
 <a href="https://registry.modelcontextprotocol.io">official MCP registry</a> and
@@ -529,13 +554,51 @@ def build_output_eyebrow_html(tokens: dict, label: str) -> str:
 """
 
 
-def build_stage_sequence_html(tokens: dict, stages: list) -> str:
+# The mission clock ticks client-side: a server-side value would only move at
+# stage boundaries, minutes apart. The element carries the elapsed seconds at
+# render time, not a server epoch, so browser/server clock skew cannot show up.
+# One interval per window (guarded), re-reading every .mc-clock each tick, so a
+# re-rendered placeholder picks up its fresh element with no new timer; each
+# render also ticks once at once, so a new element is anchored without a 1s lag.
+_MISSION_CLOCK_JS = """
+<script>
+(function () {
+  if (!window.__qaiMissionTick) {
+    window.__qaiMissionTick = function () {
+      var now = Date.now() / 1000;
+      document.querySelectorAll(".mc-clock[data-elapsed]").forEach(function (el) {
+        if (el.__qaiT0 === undefined) el.__qaiT0 = now - Number(el.dataset.elapsed || 0);
+        var s = Math.max(0, Math.floor(now - el.__qaiT0)), m = Math.floor(s / 60), r = s % 60;
+        el.textContent = "T+ " + String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0");
+      });
+    };
+    window.__qaiMissionClock = setInterval(window.__qaiMissionTick, 1000);
+  }
+  window.__qaiMissionTick();  // anchor a freshly rendered clock now, not on the next tick
+})();
+</script>
+"""
+
+
+def format_mission_clock(elapsed_s: float) -> str:
+    """Elapsed seconds -> "T+ MM:SS" (minutes keep counting past 59)."""
+    total = max(0, int(elapsed_s))
+    return f"T+ {total // 60:02d}:{total % 60:02d}"
+
+
+def build_stage_sequence_html(tokens: dict, stages: list, elapsed_s: float | None = None) -> str:
     """Pure function: token dict + an ordered list of (label, status)
-    tuples (status is "pending", "active", "done", or "failed") -> a
-    horizontal stage-status readout. Used only by render_strategy(). Not
-    gated by any session-state "seen" flag: it is a live status readout
-    driven by whichever stages are already in session_state, not a mount
-    animation, so it must render correctly every time it is called.
+    tuples (status is "pending", "active", "done", or "failed") -> the
+    mission timeline: numbered stages on one connected track. Used only by
+    render_strategy(). Not gated by any session-state "seen" flag: it is a
+    live status readout driven by whichever stages are already in
+    session_state, not a mount animation, so it must render correctly every
+    time it is called.
+
+    `elapsed_s` (seconds since the run started) adds a ticking "T+ MM:SS"
+    mission clock plus its script, so the caller must render this with
+    st.html(..., unsafe_allow_javascript=True). None (the results screen)
+    renders no clock and no script.
 
     "failed" exists because render_strategy()'s per-stage try/except sets
     a stage's session-state key to "" (not None) when its LLM call fails,
@@ -544,25 +607,43 @@ def build_stage_sequence_html(tokens: dict, stages: list) -> str:
     not "done", or this live status readout would falsely show green
     success next to its own red st.error message."""
     items = "".join(
-        f'<div class="stage-item {status}"><span class="stage-dot"></span>{_html.escape(label)}</div>'
-        for label, status in stages
+        f'<div class="stage-item {status}"><span class="stage-idx">{i:02d}</span>'
+        f'<span class="stage-dot"></span><span class="stage-label">{_html.escape(label)}</span></div>'
+        for i, (label, status) in enumerate(stages, start=1)
     )
+    clock = ""
+    if elapsed_s is not None:
+        clock = (
+            '<div class="mc-head"><span class="mc-label">&gt; mission clock</span>'
+            f'<span class="mc-clock" data-elapsed="{max(0, int(elapsed_s))}">{format_mission_clock(elapsed_s)}</span></div>'
+            f"{_MISSION_CLOCK_JS}"
+        )
     return f"""
 <style>
-.stage-sequence {{ display: flex; gap: 0.6rem; margin-bottom: 1.2rem; flex-wrap: wrap; }}
-.stage-item {{ display: flex; align-items: center; gap: 0.4rem; font-family: 'Plex Mono', monospace; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.3rem 0.7rem; border: 1px solid {tokens['line']}; border-radius: 4px; color: {tokens['ink_dim']}; }}
-.stage-item .stage-dot {{ width: 7px; height: 7px; border-radius: 50%; background: {tokens['line']}; display: inline-block; }}
-.stage-item.pending {{ opacity: 0.75; border-style: dashed; }}
-.stage-item.pending::after {{ content: 'queued'; text-transform: none; letter-spacing: 0; opacity: 0.8; }}
-.stage-item.active {{ color: {tokens['ink']}; border-color: {tokens['accent']}; }}
+.mc-head {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; font-family: 'Plex Mono', monospace; }}
+.mc-label {{ font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; }}
+.mc-clock {{ font-size: 1.05rem; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; color: {tokens['accent']}; }}
+.stage-sequence {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0; margin-bottom: 1.2rem; border: 1px solid {tokens['line']}; border-radius: 6px; overflow: hidden; background: {tokens['surface']}; }}
+.stage-item {{ position: relative; display: flex; align-items: center; gap: 0.45rem; font-family: 'Plex Mono', monospace; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.7rem 0.8rem 0.85rem; color: {tokens['ink_dim']}; border-right: 1px solid {tokens['line']}; }}
+.stage-item:last-child {{ border-right: none; }}
+.stage-item::before {{ content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: {tokens['line']}; }}
+.stage-item .stage-idx {{ font-size: 0.62rem; opacity: 0.7; }}
+.stage-item .stage-dot {{ width: 7px; height: 7px; border-radius: 50%; background: {tokens['line']}; display: inline-block; flex: none; }}
+.stage-item.pending {{ opacity: 0.75; }}
+.stage-item.pending::after {{ content: 'queued'; margin-left: auto; text-transform: none; letter-spacing: 0; opacity: 0.8; }}
+.stage-item.active {{ color: {tokens['ink']}; }}
+.stage-item.active::before {{ background: {tokens['accent']}; animation: stage-pulse 1.2s ease-in-out infinite; }}
 .stage-item.active .stage-dot {{ background: {tokens['accent']}; animation: stage-pulse 1.2s ease-in-out infinite; }}
-.stage-item.done {{ color: {tokens['ink']}; border-color: {tokens['pass_']}; }}
+.stage-item.done {{ color: {tokens['ink']}; }}
+.stage-item.done::before {{ background: {tokens['pass_']}; }}
 .stage-item.done .stage-dot {{ background: {tokens['pass_']}; }}
-.stage-item.failed {{ color: {tokens['ink']}; border-color: {tokens['fail']}; }}
+.stage-item.failed {{ color: {tokens['ink']}; }}
+.stage-item.failed::before {{ background: {tokens['fail']}; }}
 .stage-item.failed .stage-dot {{ background: {tokens['fail']}; }}
 @keyframes stage-pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.35; }} }}
+@media (prefers-reduced-motion: reduce) {{ .stage-item.active::before, .stage-item.active .stage-dot {{ animation: none; }} }}
 </style>
-<div class="stage-sequence">{items}</div>
+{clock}<div class="stage-sequence">{items}</div>
 """
 
 
@@ -637,12 +718,11 @@ def build_doc_review_input_tray_css(tokens: dict) -> str:
 """
 
 
-# ── Landing CTAs, kick-off note & sidebar mode nav ─────────────────────────
-# Brings the last Streamlit-default widgets on the landing page (st.info,
-# the two st.expanders, the buttons) into the theme's look, and styles the sidebar's three-mode switcher. The buttons and
-# expanders stay real Streamlit widgets (they need on-click/rerun and tabs);
-# only their CSS changes, scoped per instance via st.container(key=...) ->
-# .st-key-<key> so nothing else in the app is affected.
+# ── Landing "more detail" expanders & sidebar mode nav ───────────────────
+# The landing page itself is ui/landing.py's component. What stays native
+# here: the two st.expanders under it and the sidebar's three-mode switcher,
+# styled per instance via st.container(key=...) -> .st-key-<key> so nothing
+# else in the app is affected.
 
 # (mode id, two-digit index, label) -- the order is the display order on
 # both the landing page and the sidebar. app.py owns what each mode does.
@@ -651,44 +731,6 @@ APP_MODES = (
     ("doc_review", "02", "Review a QA document"),
     ("maturity", "03", "Assess QA maturity"),
 )
-
-
-def build_landing_note_html(tokens: dict) -> str:
-    """Pure function: token dict -> the "best used at project kick-off"
-    note that replaces the landing page's st.info() callout."""
-    return f"""
-<style>
-.landing-note {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-left: 2px solid {tokens['accent']}; border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 0.4rem 0 1.6rem; }}
-.landing-note .ln-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.5rem; }}
-.landing-note p {{ font-family: 'Plex Sans', sans-serif; font-size: 0.9rem; line-height: 1.6; color: {tokens['ink']}; margin: 0; }}
-.landing-note p + p {{ margin-top: 0.5rem; color: {tokens['ink_dim']}; }}
-.landing-note strong {{ font-weight: 600; }}
-</style>
-<div class="landing-note">
-  <div class="ln-eyebrow">&gt; best used at project kick-off</div>
-  <p>Early on there's no code, no architecture doc and no detailed spec to hand an AI assistant. That's the gap this fills: <strong>four baseline documents</strong> (Risk Register, Effort Estimation, Test Strategy, Test Plan) grounded in ISTQB, OWASP and ISO, before the first sprint.</p>
-  <p>Then drop them into Claude Code or your AI IDE as project context. The next round of output gets specific to your project instead of generic.</p>
-</div>
-"""
-
-
-def build_landing_cta_css(tokens: dict) -> str:
-    """Pure function: token dict -> CSS for the landing page's three mode
-    buttons inside st.container(key="landing-cta"). The primary button is
-    an accent fill with a `page`-colored label, the same pair theme.py's
-    build_css() gives every primary button, so the label/fill contrast
-    holds in both themes, hover included."""
-    return f"""
-<style>
-.st-key-landing-cta button {{ min-height: 3rem; border-radius: 8px; font-family: 'Plex Sans', sans-serif; }}
-.st-key-landing-cta button[data-testid="stBaseButton-primary"] {{ background: {tokens['accent']}; border: 1px solid {tokens['accent']}; color: {tokens['page']}; }}
-.st-key-landing-cta button[data-testid="stBaseButton-primary"] p {{ font-weight: 600; color: {tokens['page']}; }}
-.st-key-landing-cta button[data-testid="stBaseButton-primary"]:hover {{ filter: brightness(1.08); border-color: {tokens['accent']}; color: {tokens['page']}; }}
-.st-key-landing-cta button[data-testid="stBaseButton-secondary"] {{ background: transparent; border: 1px solid {tokens['line']}; color: {tokens['ink']}; }}
-.st-key-landing-cta button[data-testid="stBaseButton-secondary"]:hover {{ border-color: {tokens['accent']}; color: {tokens['accent']}; transition: border-color 0.15s ease-out, color 0.15s ease-out; }}
-.st-key-landing-cta button[data-testid="stBaseButton-secondary"]:hover p {{ color: {tokens['accent']}; }}
-</style>
-"""
 
 
 def build_landing_details_css(tokens: dict) -> str:

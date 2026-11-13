@@ -6,6 +6,7 @@ Browser-based interface for generating Test Strategy documents.
 import os
 import re
 import sys
+import time
 
 
 from pathlib import Path
@@ -14,7 +15,7 @@ from typing import Optional
 import streamlit as st
 from streamlit.runtime.scriptrunner import RerunException, StopException
 from qai_consultant.rag.agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
-from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, pdf_icon_html, pdf_meta_html, with_ai_footer
+from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, AI_INTERACTION_NOTICE_SHORT, pdf_icon_html, pdf_meta_html, with_ai_footer
 from qai_consultant.core.dialogue import DialogueManager, InputValidator, QUESTIONS
 from qai_consultant.generation.strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from qai_consultant.generation.risk_analyzer import RiskAnalyzer, append_execution_data_appendix
@@ -94,7 +95,10 @@ st.set_page_config(
     page_title="QAI Consultant",
     page_icon=str(BRAND_DIR / "qai_favicon_32.png"),
     layout="wide",
-    initial_sidebar_state="expanded",
+    # "auto": open on desktop, closed on a phone, where an open sidebar covers
+    # the whole landing page on first load. The landing footer repeats the
+    # short AI interaction notice for visitors who never open the sidebar.
+    initial_sidebar_state="auto",
 )
 
 # Sidebar logo (Streamlit >= 1.35): full lockup expanded, symbol-only collapsed.
@@ -273,15 +277,6 @@ def _generation_in_progress() -> bool:
     return bool(state.get("review_narrative_pending") or state.get("maturity_narrative_pending"))
 
 
-# Landing-page wording for the mode buttons (the sidebar uses the shorter
-# components.APP_MODES labels).
-_LANDING_CTA_LABELS = {
-    "strategy": "Start: generate a test strategy →",
-    "doc_review": "Review an existing QA document",
-    "maturity": "Assess QA maturity",
-}
-
-
 def _go_to(mode: str) -> None:
     """Switch to a mode's screen. The strategy flow resumes at the step the
     user left it on (dialogue/review/strategy), or starts at the dialogue."""
@@ -458,7 +453,7 @@ def render_sidebar():
                         "test_plan", "test_plan_path", "test_plan_sources",
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
-                        "generation_started", "results_complete",
+                        "generation_started", "generation_started_at", "results_complete",
                         "results_analysis", "strategy_resume_step",
                         "run_count", "current_step"]:
                 if key in st.session_state:
@@ -570,44 +565,29 @@ def _adoption_snapshot() -> dict:
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
-    from qai_consultant.ui.components import build_landing_hero_html
+    from qai_consultant.ui.landing import build_landing_frame_css, render_mission_landing
     from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
-    _hero_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
-    st.markdown(build_landing_hero_html(_hero_tokens), unsafe_allow_html=True)
+    _dark = st.context.theme.type == "dark"
+    _hero_tokens = DARK_TOKENS if _dark else LIGHT_TOKENS
+    st.markdown(build_landing_frame_css(_hero_tokens), unsafe_allow_html=True)
+    _target = render_mission_landing(_hero_tokens, dark=_dark, version=__version__)
+    if _target:
+        _go_to(_target)
+        st.rerun()
 
-    st.markdown("---")
+    with st.container(key="landing-more"):
+        _render_landing_more(_hero_tokens)
 
-    from qai_consultant.ui.components import build_landing_deliverables_html
-    st.markdown(build_landing_deliverables_html(_hero_tokens), unsafe_allow_html=True)
 
-    st.markdown("---")
+def _render_landing_more(tokens: dict) -> None:
+    """The native Streamlit part of the landing page, under the component:
+    the two "more detail" expanders (the hero's "See example output" button
+    scrolls to st.container(key="landing-details")) and the adoption strip."""
+    from qai_consultant.ui.components import build_landing_details_css, build_output_eyebrow_html
 
-    from qai_consultant.ui.components import (
-        APP_MODES,
-        build_landing_cta_css,
-        build_landing_details_css,
-        build_landing_note_html,
-        build_output_eyebrow_html,
-    )
-    st.markdown(build_landing_cta_css(_hero_tokens), unsafe_allow_html=True)
-    st.markdown(build_output_eyebrow_html(_hero_tokens, "ready when you are"), unsafe_allow_html=True)
-    with st.container(key="landing-cta"):
-        for _col, (_mode_id, _idx, _label) in zip(st.columns([2, 1, 1]), APP_MODES):
-            with _col:
-                if st.button(
-                    _LANDING_CTA_LABELS.get(_mode_id, _label),
-                    key=f"cta-{_mode_id}",
-                    use_container_width=True,
-                    type="primary" if _mode_id == "strategy" else "secondary",
-                ):
-                    _go_to(_mode_id)
-                    st.rerun()
-
-    st.markdown(build_landing_note_html(_hero_tokens), unsafe_allow_html=True)
-
-    st.markdown(build_landing_details_css(_hero_tokens), unsafe_allow_html=True)
-    st.markdown(build_output_eyebrow_html(_hero_tokens, "more detail"), unsafe_allow_html=True)
+    st.markdown(build_landing_details_css(tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(tokens, "more detail"), unsafe_allow_html=True)
     with st.container(key="landing-details"):
         with st.expander("How is this different from prompting Claude or Gemini?"):
             st.markdown("""
@@ -640,11 +620,11 @@ The MCP server (v3.0+) is built from the same knowledge base and the same determ
                 st.markdown(EXAMPLE_TEST_PLAN)
 
     # Last on the page: a cold cache fetches over the network (<=6s), and
-    # nothing above — above all the Start button — should wait on it.
+    # nothing above (the landing component and its Start button included)
+    # should wait on it.
     from qai_consultant.ui.components import build_adoption_strip_html
-    _adoption_html = build_adoption_strip_html(_hero_tokens, _adoption_snapshot())
+    _adoption_html = build_adoption_strip_html(tokens, _adoption_snapshot())
     if _adoption_html:
-        st.markdown("---")
         st.markdown(_adoption_html, unsafe_allow_html=True)
 
 
@@ -973,6 +953,12 @@ def render_strategy():
         )
         st.stop()
 
+    # Set before the first timeline paint so the mission clock shows from the
+    # start, and kept across resume reruns so it counts the whole logical run,
+    # not the time since the last reconnect.
+    if needs_generation:
+        st.session_state.setdefault("generation_started_at", time.time())
+
     from qai_consultant.ui.components import (
         GENERATION_TIME_ESTIMATE,
         build_content_polish_css,
@@ -1029,7 +1015,14 @@ def render_strategy():
                 stages.append((label, "active"))
             else:
                 stages.append((label, "pending"))
-        stage_placeholder.markdown(build_stage_sequence_html(_strategy_tokens, stages), unsafe_allow_html=True)
+        # The mission clock only runs while the pipeline is still going; the
+        # results screen re-renders the timeline without it.
+        _started_at = st.session_state.get("generation_started_at")
+        _elapsed = time.time() - _started_at if needs_generation and _started_at else None
+        stage_placeholder.html(
+            build_stage_sequence_html(_strategy_tokens, stages, elapsed_s=_elapsed),
+            unsafe_allow_javascript=_elapsed is not None,
+        )
 
     _render_stages()
 
@@ -1252,17 +1245,22 @@ def render_strategy():
 
     # ── Executive Readout (deterministic "so what?" above the tabs) ───────
     from qai_consultant.generation.executive_readout import build_readout
-    from qai_consultant.ui.components import executive_readout_html
+    from qai_consultant.ui.components import build_readout_tiles_html, executive_readout_html
     from qai_consultant.core.risk_ledger import parse_risk_matrix as _parse_risk_matrix
 
-    _readout_html = executive_readout_html(
-        build_readout(
-            _parse_risk_matrix(st.session_state.get("risk_register") or ""),
-            st.session_state.get("effort_data"),
-        )
+    _readout = build_readout(
+        _parse_risk_matrix(st.session_state.get("risk_register") or ""),
+        st.session_state.get("effort_data"),
     )
+    # Big tiles first (the "so what?" at a glance); the explanations behind
+    # each number stay one click away in the detailed readout.
+    _tiles_html = build_readout_tiles_html(_strategy_tokens, _readout)
+    if _tiles_html:
+        st.markdown(_tiles_html, unsafe_allow_html=True)
+    _readout_html = executive_readout_html(_readout)
     if _readout_html:
-        st.markdown(_readout_html, unsafe_allow_html=True)
+        with st.expander("How these numbers are computed"):
+            st.markdown(_readout_html, unsafe_allow_html=True)
 
     # ── Three Tabs ────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
@@ -1274,10 +1272,11 @@ def render_strategy():
 
     with tab1:
         from qai_consultant.core.risk_ledger import parse_risk_matrix
-        from qai_consultant.ui.components import risk_ledger_table_html
+        from qai_consultant.ui.components import build_risk_map_html, risk_ledger_table_html
 
         risk_rows = parse_risk_matrix(st.session_state.risk_register)
         if risk_rows:
+            st.markdown(build_risk_map_html(_strategy_tokens, risk_rows), unsafe_allow_html=True)
             st.markdown(
                 f'<div class="output-tiles{_output_animate_class}">{risk_ledger_table_html(risk_rows)}</div>',
                 unsafe_allow_html=True,
@@ -1464,7 +1463,7 @@ def render_strategy():
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
-                    "generation_started", "results_complete",
+                    "generation_started", "generation_started_at", "results_complete",
                     "results_analysis"]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -1484,7 +1483,7 @@ def render_strategy():
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
-                    "generation_started", "results_complete",
+                    "generation_started", "generation_started_at", "results_complete",
                     "results_analysis", "strategy_resume_step"]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -2044,16 +2043,19 @@ def main():
         st.session_state.visit_count = get_and_increment_visit_count()
         st.session_state.visit_counted = True
 
-    _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
-    with _logo_col2:
-        with st.container(key="header-logo"):
-            _header_logo = (
-                "qai_logo_horizontal_dark_1680.png"
-                if st.context.theme.type == "dark"
-                else "qai_logo_horizontal_1680.png"
-            )
-            from qai_consultant.ui.components import header_logo_html
-            st.markdown(header_logo_html((BRAND_DIR / _header_logo).read_bytes()), unsafe_allow_html=True)
+    # The landing component draws its own logo, so the header logo skips it.
+    on_landing = st.session_state.get("current_step", "intro") == "intro"
+    if not on_landing:
+        _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
+        with _logo_col2:
+            with st.container(key="header-logo"):
+                _header_logo = (
+                    "qai_logo_horizontal_dark_1680.png"
+                    if st.context.theme.type == "dark"
+                    else "qai_logo_horizontal_1680.png"
+                )
+                from qai_consultant.ui.components import header_logo_html
+                st.markdown(header_logo_html((BRAND_DIR / _header_logo).read_bytes()), unsafe_allow_html=True)
 
     # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()
@@ -2077,17 +2079,15 @@ def main():
     if st.session_state.get("agent") is None:
         st.session_state.agent = agent
 
-    if not st.session_state.get("release_notes_seen"):
-        st.session_state.release_notes_seen = True
-        st.info(f"✨ Updated to v{__version__} — see the sidebar's **Release Notes** for what's new.")
+    # On narrow screens the sidebar, which holds the full AI interaction
+    # notice, starts closed (initial_sidebar_state="auto"): repeat the short
+    # notice in the main column there. The landing component carries its own.
+    if not on_landing:
+        from qai_consultant.ui.components import build_narrow_screen_notice_html
+        from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
-    if not st.session_state.get("mcp_announcement_seen"):
-        st.session_state.mcp_announcement_seen = True
-        st.info(
-            "🔌 QAI Consultant is also available as a local MCP server for Claude Code, "
-            "Claude Desktop, and other MCP clients, see the sidebar's **Use QAI in your AI tools "
-            "(MCP)** panel."
-        )
+        _notice_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+        st.markdown(build_narrow_screen_notice_html(_notice_tokens, AI_INTERACTION_NOTICE_SHORT), unsafe_allow_html=True)
 
     for _key in _PERSISTED_WIDGET_KEYS:
         if _key in st.session_state:
