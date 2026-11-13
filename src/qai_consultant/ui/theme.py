@@ -1,9 +1,15 @@
 """
-QAI Consultant -- visual identity system ("Calibration Bench").
+QAI Consultant -- visual identity system (Ocean palette).
 
-Token-based CSS: light mode reads as certificate paper, dark mode reads as
-an instrument panel at night. Three signal colors (pass/hold/fail) carry
-real meaning everywhere they're used -- never decorative.
+Token-based CSS built on the brand's Ocean palette (assets/brand/README_BRAND.md):
+navy #0F172A and off-white #F1F5F9 swap roles between the dark and light
+themes, with the logo's teal as the accent. Three signal colors
+(pass/hold/fail) carry real meaning everywhere they're used -- never
+decorative.
+
+The page background, text and widget colors come from
+.streamlit/config.toml's [theme.dark] / [theme.light] tables, which
+tests/unit/ui/test_streamlit_config.py keeps in step with the tokens below.
 
 inject_theme_css() picks the token set from st.context.theme.type, the
 exact mechanism app.py's st.logo() call already uses to pick the light/dark
@@ -14,20 +20,26 @@ import streamlit as st
 
 from qai_consultant.ui._theme_fonts import COND_700, MONO_400, MONO_500, SANS_400, SANS_600
 
+# "page" is the Streamlit page background (config.toml backgroundColor);
+# "surface" is a card sitting on it, "surface_2" a track or inset inside a card.
+# On light backgrounds text-colored accent uses a darker teal than the logo's
+# #14B8A6, which only reaches 2.5:1 against #F1F5F9.
 LIGHT_TOKENS = {
-    "surface": "#F5F3EA", "surface_2": "#E4E0D2",
-    "ink": "#23281F", "ink_dim": "#5B5F52", "line": "#C9C3AF",
-    "accent": "#3E6E85",
-    "pass_": "#386D44", "hold": "#805819", "fail": "#9C3F2C",
-    "pass_bg": "#DCE7DA", "hold_bg": "#ECDFC7", "fail_bg": "#EAD7CF",
+    "page": "#F1F5F9",
+    "surface": "#FFFFFF", "surface_2": "#E2E8F0",
+    "ink": "#0F172A", "ink_dim": "#475569", "line": "#CBD5E1",
+    "accent": "#0F766E",
+    "pass_": "#047857", "hold": "#92400E", "fail": "#B91C1C",
+    "pass_bg": "#D1FAE5", "hold_bg": "#FEF3C7", "fail_bg": "#FEE2E2",
 }
 
 DARK_TOKENS = {
-    "surface": "#212821", "surface_2": "#262E27",
-    "ink": "#E6E8DF", "ink_dim": "#9BA69C", "line": "#3A453D",
-    "accent": "#86ADC2",
-    "pass_": "#7FBC8A", "hold": "#D8AE68", "fail": "#CB7862",
-    "pass_bg": "#23342A", "hold_bg": "#332C1F", "fail_bg": "#35251F",
+    "page": "#0F172A",
+    "surface": "#17223B", "surface_2": "#243049",
+    "ink": "#F1F5F9", "ink_dim": "#9FB0C7", "line": "#334155",
+    "accent": "#2DD4BF",
+    "pass_": "#6EE7B7", "hold": "#FCD34D", "fail": "#FDA4AF",
+    "pass_bg": "#1B3836", "hold_bg": "#3A3320", "fail_bg": "#4A2630",
 }
 
 
@@ -183,6 +195,26 @@ table.risk-ledger .sev {{
 table.risk-ledger .sev.pass {{ background: {tokens['pass_bg']}; color: {tokens['pass_']}; }}
 table.risk-ledger .sev.hold {{ background: {tokens['hold_bg']}; color: {tokens['hold']}; }}
 table.risk-ledger .sev.fail {{ background: {tokens['fail_bg']}; color: {tokens['fail']}; }}
+
+/* Streamlit's own header bar: its menu and toolbar actions are hidden. The
+   header itself must stay in the DOM -- the button that reopens a collapsed
+   sidebar lives inside it (stExpandSidebarButton), so display:none on
+   stHeader or stToolbar strands everything in the sidebar. It also keeps its
+   opaque page-colored fill: made transparent, scrolled content showed through
+   behind the logo and the reopen button (seen at phone width). */
+[data-testid="stToolbarActions"],
+[data-testid="stAppDeployButton"],
+[data-testid="stMainMenu"] {{ display: none; }}
+
+/* Primary buttons: Streamlit labels them white, which measured 1.86:1 on the
+   dark theme's teal. The page color is navy there and off-white on the light
+   theme's dark teal, so the label clears 4.5:1 on both. Disabled buttons keep
+   Streamlit's own greyed pair. */
+button[data-testid="stBaseButton-primary"]:not(:disabled),
+button[data-testid="stBaseButton-primary"]:not(:disabled):hover,
+button[data-testid="stBaseButton-primary"]:not(:disabled):active,
+button[data-testid="stBaseButton-primary"]:not(:disabled):focus-visible,
+button[data-testid="stBaseButton-primary"]:not(:disabled) p {{ color: {tokens['page']}; }}
 
 :focus-visible {{ outline: 2px solid {tokens['accent']}; outline-offset: 2px; }}
 @media (prefers-reduced-motion: reduce) {{

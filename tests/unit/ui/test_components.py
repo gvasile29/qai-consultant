@@ -364,13 +364,11 @@ def test_content_polish_css_scopes_buttons_and_expanders_to_main_not_sidebar():
 
 
 def test_content_polish_css_scopes_hover_color_away_from_primary_buttons():
-    # Regression guard: Streamlit's default primaryColor is red (#FF4B4B)
-    # with a white label; repainting a primary button's label to this app's
-    # blue accent on hover leaves near-illegible contrast against the still-
-    # red fill. border-color has no such conflict and stays unscoped; the
-    # `color` override must exclude buttons whose real rendered <button>
-    # carries data-testid="stBaseButton-primary" (confirmed via a live
-    # Streamlit + Playwright DOM probe -- see this module's docstring).
+    # Regression guard: a primary button is filled with primaryColor, which
+    # config.toml sets to the accent, so an accent hover label would vanish
+    # into its own fill. border-color has no such conflict and stays
+    # unscoped; the `color` override must exclude buttons whose real rendered
+    # <button> carries data-testid="stBaseButton-primary".
     html = build_content_polish_css(LIGHT_TOKENS)
     assert 'button:not([data-testid$="-primary"]):hover {' in html
     color_rule_start = html.index('button:not([data-testid$="-primary"]):hover {')
@@ -424,16 +422,16 @@ def test_landing_note_names_all_four_documents_without_em_dash():
         assert tokens["accent"] in html
 
 
-def test_landing_cta_css_repaints_primary_with_accent_and_surface_label():
+def test_landing_cta_css_repaints_primary_with_accent_and_page_label():
     from qai_consultant.ui.components import build_landing_cta_css
     for tokens in (LIGHT_TOKENS, DARK_TOKENS):
         css = build_landing_cta_css(tokens)
         assert ".st-key-landing-cta" in css
         primary = [line for line in css.splitlines() if 'stBaseButton-primary"] {' in line][0]
         assert f"background: {tokens['accent']}" in primary
-        assert f"color: {tokens['surface']}" in primary
+        assert f"color: {tokens['page']}" in primary
         hover = [line for line in css.splitlines() if 'stBaseButton-primary"]:hover' in line][0]
-        assert f"color: {tokens['surface']}" in hover
+        assert f"color: {tokens['page']}" in hover
         assert "#FF4B4B" not in css
 
 

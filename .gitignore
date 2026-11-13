@@ -49,6 +49,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+.streamlit/secrets.toml
 
 # Claude Code internal files (settings.local.json, scheduled_tasks.lock are
 # machine-local; skills/, agents/, hooks/ and the shared settings.json are

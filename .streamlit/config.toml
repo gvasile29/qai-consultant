@@ -1,0 +1,22 @@
+# Streamlit theme for QAI Consultant (Ocean palette, see assets/brand/README_BRAND.md).
+# The browser's light/dark preference picks the table. Keep these values in
+# step with LIGHT_TOKENS / DARK_TOKENS in src/qai_consultant/ui/theme.py;
+# tests/unit/ui/test_streamlit_config.py fails when they drift.
+# showWidgetBorder: inputs are filled with secondaryBackgroundColor, the same
+# color as the cards they sit on, so without a border they have no edge.
+
+[theme.dark]
+backgroundColor = "#0F172A"
+secondaryBackgroundColor = "#17223B"
+textColor = "#F1F5F9"
+primaryColor = "#2DD4BF"
+borderColor = "#334155"
+showWidgetBorder = true
+
+[theme.light]
+backgroundColor = "#F1F5F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+primaryColor = "#0F766E"
+borderColor = "#CBD5E1"
+showWidgetBorder = true
