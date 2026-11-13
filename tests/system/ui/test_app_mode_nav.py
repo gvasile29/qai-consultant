@@ -58,8 +58,9 @@ def test_current_mode_maps_every_step(step, mode):
     assert app._current_mode(step) == mode
 
 
-def test_every_app_mode_has_a_landing_label():
-    assert {m[0] for m in APP_MODES} == set(app._LANDING_CTA_LABELS)
+def test_every_app_mode_is_a_landing_target():
+    from qai_consultant.ui.landing import landing_target
+    assert all(landing_target(m[0]) == m[0] for m in APP_MODES)
 
 
 # ── _go_to() ─────────────────────────────────────────────────────────────────────
@@ -175,8 +176,8 @@ def test_sidebar_renders_all_modes_with_lock_and_active_state():
 
 def test_intro_renders_all_modes_through_go_to():
     fn = extract_function(APP_PY.read_text(encoding="utf-8"), "render_intro")
-    assert 'with st.container(key="landing-cta")' in fn
-    assert "_go_to(_mode_id)" in fn
+    assert "render_mission_landing(" in fn
+    assert "_go_to(_target)" in fn
     assert "st.info(" not in fn
 
 

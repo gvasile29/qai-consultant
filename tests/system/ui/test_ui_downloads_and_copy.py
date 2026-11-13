@@ -82,8 +82,11 @@ def test_generate_another_keeps_answers_and_start_over_clears_them():
 def test_time_estimate_is_centralized_and_honest():
     from qai_consultant.ui import components
 
+    from qai_consultant.ui.landing import build_mission_landing_html
+    from qai_consultant.ui.theme import LIGHT_TOKENS
+
     assert components.GENERATION_TIME_ESTIMATE == "~5-10 min"
-    html = components.build_landing_deliverables_html(TOKENS)
+    html = build_mission_landing_html(LIGHT_TOKENS, dark=False, version="0")
     assert "~5-10 min" in html and "~5-10 minutes" in html
     for stale in ("3-5", "3-6", "~2 min"):
         assert stale not in html and stale not in APP
@@ -100,11 +103,3 @@ def test_mcp_panel_copy_is_accurate_and_discloses_telemetry():
     for needle in ("telemetry", "on by default", "QAI_TELEMETRY=0", "DO_NOT_TRACK=1",
                    "tool name", "random per-run ID"):
         assert needle in body, needle
-
-
-def test_deliverable_cards_have_uniform_style():
-    from qai_consultant.ui import components
-
-    css = components.build_landing_deliverables_html(TOKENS)
-    card_delays = [float(d) for d in re.findall(r"\.pom-card:nth-child\(\d\) \{ animation-delay: ([\d.]+)s", css)]
-    assert len(card_delays) == 4 and max(card_delays) < 2.6
