@@ -577,11 +577,10 @@ def build_content_polish_css(tokens: dict) -> str:
     The hover `color` override is split into its own rule that excludes
     `type="primary"` buttons (Streamlit 1.59.1 renders the `<button>`
     itself with `data-testid="stBaseButton-primary"`/`"-secondary"`).
-    Streamlit's default `primaryColor` (#FF4B4B, red) already gives a
-    primary button's label white-on-red contrast; repainting that label to
-    this app's blue accent on hover leaves it barely legible against the
-    still-red fill (~1.56:1 in the light theme, far under WCAG AA's
-    4.5:1). `border-color` has no such problem and stays unscoped."""
+    A primary button is filled with config.toml's `primaryColor`, which is
+    the accent token, so an accent-colored hover label would vanish into
+    its own fill. theme.py's build_css() owns the primary label color.
+    `border-color` has no such problem and stays unscoped."""
     return f"""
 <style>
 [data-testid="stMain"] [data-testid="stButton"] button:hover,
@@ -640,8 +639,7 @@ def build_doc_review_input_tray_css(tokens: dict) -> str:
 
 # ── Landing CTAs, kick-off note & sidebar mode nav ─────────────────────────
 # Brings the last Streamlit-default widgets on the landing page (st.info,
-# the two st.expanders, the default-red buttons) into the Calibration Bench
-# look, and styles the sidebar's three-mode switcher. The buttons and
+# the two st.expanders, the buttons) into the theme's look, and styles the sidebar's three-mode switcher. The buttons and
 # expanders stay real Streamlit widgets (they need on-click/rerun and tabs);
 # only their CSS changes, scoped per instance via st.container(key=...) ->
 # .st-key-<key> so nothing else in the app is affected.
@@ -677,16 +675,15 @@ def build_landing_note_html(tokens: dict) -> str:
 def build_landing_cta_css(tokens: dict) -> str:
     """Pure function: token dict -> CSS for the landing page's three mode
     buttons inside st.container(key="landing-cta"). The primary button is
-    repainted from Streamlit's default red (which reads as this palette's
-    "fail" signal) to the accent, with a `surface`-colored label so the
-    label/fill contrast holds in both themes, hover included -- unlike the
-    red-fill case build_content_polish_css() has to work around."""
+    an accent fill with a `page`-colored label, the same pair theme.py's
+    build_css() gives every primary button, so the label/fill contrast
+    holds in both themes, hover included."""
     return f"""
 <style>
 .st-key-landing-cta button {{ min-height: 3rem; border-radius: 8px; font-family: 'Plex Sans', sans-serif; }}
-.st-key-landing-cta button[data-testid="stBaseButton-primary"] {{ background: {tokens['accent']}; border: 1px solid {tokens['accent']}; color: {tokens['surface']}; }}
-.st-key-landing-cta button[data-testid="stBaseButton-primary"] p {{ font-weight: 600; color: {tokens['surface']}; }}
-.st-key-landing-cta button[data-testid="stBaseButton-primary"]:hover {{ filter: brightness(1.08); border-color: {tokens['accent']}; color: {tokens['surface']}; }}
+.st-key-landing-cta button[data-testid="stBaseButton-primary"] {{ background: {tokens['accent']}; border: 1px solid {tokens['accent']}; color: {tokens['page']}; }}
+.st-key-landing-cta button[data-testid="stBaseButton-primary"] p {{ font-weight: 600; color: {tokens['page']}; }}
+.st-key-landing-cta button[data-testid="stBaseButton-primary"]:hover {{ filter: brightness(1.08); border-color: {tokens['accent']}; color: {tokens['page']}; }}
 .st-key-landing-cta button[data-testid="stBaseButton-secondary"] {{ background: transparent; border: 1px solid {tokens['line']}; color: {tokens['ink']}; }}
 .st-key-landing-cta button[data-testid="stBaseButton-secondary"]:hover {{ border-color: {tokens['accent']}; color: {tokens['accent']}; transition: border-color 0.15s ease-out, color 0.15s ease-out; }}
 .st-key-landing-cta button[data-testid="stBaseButton-secondary"]:hover p {{ color: {tokens['accent']}; }}
