@@ -189,6 +189,160 @@ def executive_readout_html(readout) -> str:
     )
 
 
+def _split_value_unit(text: str) -> tuple:
+    """"114.5 person-days" -> ("114.5", "person-days"); text without a
+    leading number stays whole in the value slot."""
+    head, _, rest = (text or "").partition(" ")
+    if head.replace(".", "", 1).isdigit():
+        return head, rest
+    return text or "", ""
+
+
+def build_readout_tiles_html(tokens: dict, readout) -> str:
+    """Pure function: token dict + an executive_readout.ExecutiveReadout ->
+    the results screen's mission readout: up to four large tiles (overall
+    risk, expected effort, team capacity, confidence) and an "Address first"
+    strip with the top risks. None, or a readout with nothing to show,
+    returns "". The detailed explanations stay in executive_readout_html().
+    Every value is escaped -- risk descriptions are LLM output."""
+    if readout is None:
+        return ""
+
+    tiles = []
+    if readout.overall_risk:
+        tier = severity_tier(readout.overall_risk)
+        tiles.append(("Overall risk", readout.overall_risk, "", readout.risk_breakdown, tier))
+    if readout.expected_effort:
+        value, unit = _split_value_unit(readout.expected_effort)
+        tiles.append(("Expected QA effort", value, unit, f"Band {readout.effort_range}", "accent"))
+    if readout.capacity:
+        tiles.append((
+            "Team capacity", "Deficit" if readout.capacity_deficit else "OK", "",
+            readout.capacity, "fail" if readout.capacity_deficit else "pass",
+        ))
+    if readout.confidence:
+        level, _, score = readout.confidence.partition(" (")
+        score = score.rstrip(")")
+        tier = {"high": "pass", "medium": "hold", "low": "fail"}.get(level.strip().lower(), "accent")
+        tiles.append(("Estimate confidence", level, "", score, tier))
+
+    if not tiles and not readout.address_first:
+        return ""
+
+    tiles_html = "".join(
+        f'<div class="mr-tile {tier}"><div class="mr-label">{_html.escape(label)}</div>'
+        f'<div class="mr-value">{_html.escape(value)}'
+        + (f'<span class="mr-unit">{_html.escape(unit)}</span>' if unit else "")
+        + "</div>"
+        + (f'<div class="mr-sub">{_html.escape(sub)}</div>' if sub else "")
+        + "</div>"
+        for label, value, unit, sub, tier in tiles
+    )
+    first_html = ""
+    if readout.address_first:
+        items = "".join(
+            f'<li><span class="mr-rid">{_html.escape(rid)}</span>{_html.escape(desc)}</li>'
+            for rid, desc in readout.address_first
+        )
+        first_html = f'<div class="mr-first"><div class="mr-label">Address first</div><ol>{items}</ol></div>'
+
+    return f"""
+<style>
+.mission-readout {{ margin-bottom: 1.4rem; }}
+.mr-tiles {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem; }}
+.mr-tile {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-top: 3px solid {tokens['accent']}; border-radius: 6px; padding: 0.9rem 1rem 1rem; }}
+.mr-tile.pass {{ border-top-color: {tokens['pass_']}; }}
+.mr-tile.hold {{ border-top-color: {tokens['hold']}; }}
+.mr-tile.fail {{ border-top-color: {tokens['fail']}; }}
+.mr-label {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.35rem; }}
+.mr-value {{ font-size: 1.9rem; font-weight: 600; line-height: 1.1; color: {tokens['ink']}; font-variant-numeric: tabular-nums; }}
+.mr-tile.pass .mr-value {{ color: {tokens['pass_']}; }}
+.mr-tile.hold .mr-value {{ color: {tokens['hold']}; }}
+.mr-tile.fail .mr-value {{ color: {tokens['fail']}; }}
+.mr-unit {{ font-size: 0.85rem; font-weight: 400; margin-left: 0.35rem; color: {tokens['ink_dim']}; }}
+.mr-sub {{ font-size: 0.8rem; color: {tokens['ink_dim']}; margin-top: 0.35rem; }}
+.mr-first {{ background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-left: 3px solid {tokens['fail']}; border-radius: 6px; padding: 0.8rem 1rem; }}
+.mr-first ol {{ margin: 0; padding-left: 1.1rem; }}
+.mr-first li {{ margin: 0.2rem 0; color: {tokens['ink']}; }}
+.mr-rid {{ font-family: 'Plex Mono', monospace; font-size: 0.8rem; color: {tokens['accent']}; margin-right: 0.5rem; }}
+</style>
+<div class="mission-readout"><div class="mr-tiles">{tiles_html}</div>{first_html}</div>
+"""
+
+
+_MAP_LEVELS = ("low", "medium", "high")
+
+
+def _map_level(value: str):
+    """Map a Likelihood/Impact cell to low/medium/high, or None. "Critical"
+    and "Very high" count as high, "Very low" as low."""
+    text = (value or "").lower()
+    if "critical" in text or "high" in text:
+        return "high"
+    if "medium" in text or "moderate" in text:
+        return "medium"
+    if "low" in text:
+        return "low"
+    return None
+
+
+def build_risk_map_html(tokens: dict, rows: list) -> str:
+    """Pure function: token dict + parsed Risk Matrix rows -> a 3x3
+    likelihood x impact map with each risk ID placed in its cell (chip
+    colored by its stated Risk Level). Rows whose likelihood or impact
+    can't be read are listed under the map, never dropped silently. Empty
+    input, or no plottable and no unplotted rows, returns ""."""
+    if not rows:
+        return ""
+    cells: dict = {(lk, im): [] for lk in _MAP_LEVELS for im in _MAP_LEVELS}
+    unplotted = []
+    for row in rows:
+        lk, im = _map_level(row.get("likelihood", "")), _map_level(row.get("impact", ""))
+        chip = (
+            f'<span class="rm-chip {severity_tier(row.get("risk_level", ""))}" '
+            f'title="{_html.escape(row.get("description", ""), quote=True)}">{_html.escape(row.get("risk_id", ""))}</span>'
+        )
+        if lk and im:
+            cells[(lk, im)].append(chip)
+        else:
+            unplotted.append(chip)
+
+    heat = {0: "", 1: "", 2: "warm", 3: "warm", 4: "hot"}
+    grid = []
+    for lk in reversed(_MAP_LEVELS):
+        grid.append(f'<div class="rm-axis rm-row">{lk.title()}</div>')
+        for im in _MAP_LEVELS:
+            zone = heat[_MAP_LEVELS.index(lk) + _MAP_LEVELS.index(im)]
+            grid.append(f'<div class="rm-cell {zone}">{"".join(cells[(lk, im)])}</div>')
+    grid.append('<div class="rm-axis"></div>')
+    grid.extend(f'<div class="rm-axis rm-col">{im.title()}</div>' for im in _MAP_LEVELS)
+    rest = (
+        f'<div class="rm-unplotted">Not plotted (likelihood or impact unreadable): {"".join(unplotted)}</div>'
+        if unplotted else ""
+    )
+    return f"""
+<style>
+.risk-map {{ margin: 0.4rem 0 1.2rem; max-width: 560px; }}
+.rm-title {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.4rem; }}
+.rm-grid {{ display: grid; grid-template-columns: 4.5rem repeat(3, 1fr); gap: 4px; }}
+.rm-cell {{ min-height: 3.4rem; background: {tokens['surface']}; border: 1px solid {tokens['line']}; border-radius: 4px; padding: 0.3rem; display: flex; flex-wrap: wrap; gap: 0.25rem; align-content: flex-start; }}
+.rm-cell.warm {{ background: {tokens['hold_bg']}; }}
+.rm-cell.hot {{ background: {tokens['fail_bg']}; }}
+.rm-axis {{ font-family: 'Plex Mono', monospace; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.04em; color: {tokens['ink_dim']}; display: flex; align-items: center; }}
+.rm-col {{ justify-content: center; padding-top: 0.2rem; }}
+.rm-chip {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: {tokens['surface_2']}; color: {tokens['ink']}; cursor: default; }}
+.rm-chip.pass {{ background: {tokens['pass_bg']}; color: {tokens['pass_']}; }}
+.rm-chip.hold {{ background: {tokens['surface']}; color: {tokens['hold']}; border: 1px solid {tokens['hold']}; }}
+.rm-chip.fail {{ background: {tokens['fail']}; color: {tokens['page']}; }}
+.rm-foot {{ display: flex; justify-content: space-between; font-family: 'Plex Mono', monospace; font-size: 0.62rem; color: {tokens['ink_dim']}; margin-top: 0.3rem; padding-left: 4.5rem; }}
+.rm-unplotted {{ font-size: 0.8rem; color: {tokens['ink_dim']}; margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }}
+</style>
+<div class="risk-map"><div class="rm-title">Risk map: likelihood (rows) x impact (columns)</div>
+<div class="rm-grid">{"".join(grid)}</div>
+<div class="rm-foot"><span>&larr; lower impact</span><span>higher impact &rarr;</span></div>{rest}</div>
+"""
+
+
 # Single source of truth for the full 4-document generation time shown in the
 # UI (observed live: 8-10 min on the free providers). Never hardcode it elsewhere.
 GENERATION_TIME_ESTIMATE = "~5-10 min"
@@ -400,13 +554,51 @@ def build_output_eyebrow_html(tokens: dict, label: str) -> str:
 """
 
 
-def build_stage_sequence_html(tokens: dict, stages: list) -> str:
+# The mission clock ticks client-side: a server-side value would only move at
+# stage boundaries, minutes apart. The element carries the elapsed seconds at
+# render time, not a server epoch, so browser/server clock skew cannot show up.
+# One interval per window (guarded), re-reading every .mc-clock each tick, so a
+# re-rendered placeholder picks up its fresh element with no new timer; each
+# render also ticks once at once, so a new element is anchored without a 1s lag.
+_MISSION_CLOCK_JS = """
+<script>
+(function () {
+  if (!window.__qaiMissionTick) {
+    window.__qaiMissionTick = function () {
+      var now = Date.now() / 1000;
+      document.querySelectorAll(".mc-clock[data-elapsed]").forEach(function (el) {
+        if (el.__qaiT0 === undefined) el.__qaiT0 = now - Number(el.dataset.elapsed || 0);
+        var s = Math.max(0, Math.floor(now - el.__qaiT0)), m = Math.floor(s / 60), r = s % 60;
+        el.textContent = "T+ " + String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0");
+      });
+    };
+    window.__qaiMissionClock = setInterval(window.__qaiMissionTick, 1000);
+  }
+  window.__qaiMissionTick();  // anchor a freshly rendered clock now, not on the next tick
+})();
+</script>
+"""
+
+
+def format_mission_clock(elapsed_s: float) -> str:
+    """Elapsed seconds -> "T+ MM:SS" (minutes keep counting past 59)."""
+    total = max(0, int(elapsed_s))
+    return f"T+ {total // 60:02d}:{total % 60:02d}"
+
+
+def build_stage_sequence_html(tokens: dict, stages: list, elapsed_s: float | None = None) -> str:
     """Pure function: token dict + an ordered list of (label, status)
-    tuples (status is "pending", "active", "done", or "failed") -> a
-    horizontal stage-status readout. Used only by render_strategy(). Not
-    gated by any session-state "seen" flag: it is a live status readout
-    driven by whichever stages are already in session_state, not a mount
-    animation, so it must render correctly every time it is called.
+    tuples (status is "pending", "active", "done", or "failed") -> the
+    mission timeline: numbered stages on one connected track. Used only by
+    render_strategy(). Not gated by any session-state "seen" flag: it is a
+    live status readout driven by whichever stages are already in
+    session_state, not a mount animation, so it must render correctly every
+    time it is called.
+
+    `elapsed_s` (seconds since the run started) adds a ticking "T+ MM:SS"
+    mission clock plus its script, so the caller must render this with
+    st.html(..., unsafe_allow_javascript=True). None (the results screen)
+    renders no clock and no script.
 
     "failed" exists because render_strategy()'s per-stage try/except sets
     a stage's session-state key to "" (not None) when its LLM call fails,
@@ -415,25 +607,43 @@ def build_stage_sequence_html(tokens: dict, stages: list) -> str:
     not "done", or this live status readout would falsely show green
     success next to its own red st.error message."""
     items = "".join(
-        f'<div class="stage-item {status}"><span class="stage-dot"></span>{_html.escape(label)}</div>'
-        for label, status in stages
+        f'<div class="stage-item {status}"><span class="stage-idx">{i:02d}</span>'
+        f'<span class="stage-dot"></span><span class="stage-label">{_html.escape(label)}</span></div>'
+        for i, (label, status) in enumerate(stages, start=1)
     )
+    clock = ""
+    if elapsed_s is not None:
+        clock = (
+            '<div class="mc-head"><span class="mc-label">&gt; mission clock</span>'
+            f'<span class="mc-clock" data-elapsed="{max(0, int(elapsed_s))}">{format_mission_clock(elapsed_s)}</span></div>'
+            f"{_MISSION_CLOCK_JS}"
+        )
     return f"""
 <style>
-.stage-sequence {{ display: flex; gap: 0.6rem; margin-bottom: 1.2rem; flex-wrap: wrap; }}
-.stage-item {{ display: flex; align-items: center; gap: 0.4rem; font-family: 'Plex Mono', monospace; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.3rem 0.7rem; border: 1px solid {tokens['line']}; border-radius: 4px; color: {tokens['ink_dim']}; }}
-.stage-item .stage-dot {{ width: 7px; height: 7px; border-radius: 50%; background: {tokens['line']}; display: inline-block; }}
-.stage-item.pending {{ opacity: 0.75; border-style: dashed; }}
-.stage-item.pending::after {{ content: 'queued'; text-transform: none; letter-spacing: 0; opacity: 0.8; }}
-.stage-item.active {{ color: {tokens['ink']}; border-color: {tokens['accent']}; }}
+.mc-head {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; font-family: 'Plex Mono', monospace; }}
+.mc-label {{ font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; }}
+.mc-clock {{ font-size: 1.05rem; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; color: {tokens['accent']}; }}
+.stage-sequence {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0; margin-bottom: 1.2rem; border: 1px solid {tokens['line']}; border-radius: 6px; overflow: hidden; background: {tokens['surface']}; }}
+.stage-item {{ position: relative; display: flex; align-items: center; gap: 0.45rem; font-family: 'Plex Mono', monospace; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.7rem 0.8rem 0.85rem; color: {tokens['ink_dim']}; border-right: 1px solid {tokens['line']}; }}
+.stage-item:last-child {{ border-right: none; }}
+.stage-item::before {{ content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: {tokens['line']}; }}
+.stage-item .stage-idx {{ font-size: 0.62rem; opacity: 0.7; }}
+.stage-item .stage-dot {{ width: 7px; height: 7px; border-radius: 50%; background: {tokens['line']}; display: inline-block; flex: none; }}
+.stage-item.pending {{ opacity: 0.75; }}
+.stage-item.pending::after {{ content: 'queued'; margin-left: auto; text-transform: none; letter-spacing: 0; opacity: 0.8; }}
+.stage-item.active {{ color: {tokens['ink']}; }}
+.stage-item.active::before {{ background: {tokens['accent']}; animation: stage-pulse 1.2s ease-in-out infinite; }}
 .stage-item.active .stage-dot {{ background: {tokens['accent']}; animation: stage-pulse 1.2s ease-in-out infinite; }}
-.stage-item.done {{ color: {tokens['ink']}; border-color: {tokens['pass_']}; }}
+.stage-item.done {{ color: {tokens['ink']}; }}
+.stage-item.done::before {{ background: {tokens['pass_']}; }}
 .stage-item.done .stage-dot {{ background: {tokens['pass_']}; }}
-.stage-item.failed {{ color: {tokens['ink']}; border-color: {tokens['fail']}; }}
+.stage-item.failed {{ color: {tokens['ink']}; }}
+.stage-item.failed::before {{ background: {tokens['fail']}; }}
 .stage-item.failed .stage-dot {{ background: {tokens['fail']}; }}
 @keyframes stage-pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.35; }} }}
+@media (prefers-reduced-motion: reduce) {{ .stage-item.active::before, .stage-item.active .stage-dot {{ animation: none; }} }}
 </style>
-<div class="stage-sequence">{items}</div>
+{clock}<div class="stage-sequence">{items}</div>
 """
 
 

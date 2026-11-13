@@ -6,6 +6,7 @@ Browser-based interface for generating Test Strategy documents.
 import os
 import re
 import sys
+import time
 
 
 from pathlib import Path
@@ -452,7 +453,7 @@ def render_sidebar():
                         "test_plan", "test_plan_path", "test_plan_sources",
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
-                        "generation_started", "results_complete",
+                        "generation_started", "generation_started_at", "results_complete",
                         "results_analysis", "strategy_resume_step",
                         "run_count", "current_step"]:
                 if key in st.session_state:
@@ -952,6 +953,12 @@ def render_strategy():
         )
         st.stop()
 
+    # Set before the first timeline paint so the mission clock shows from the
+    # start, and kept across resume reruns so it counts the whole logical run,
+    # not the time since the last reconnect.
+    if needs_generation:
+        st.session_state.setdefault("generation_started_at", time.time())
+
     from qai_consultant.ui.components import (
         GENERATION_TIME_ESTIMATE,
         build_content_polish_css,
@@ -1008,7 +1015,14 @@ def render_strategy():
                 stages.append((label, "active"))
             else:
                 stages.append((label, "pending"))
-        stage_placeholder.markdown(build_stage_sequence_html(_strategy_tokens, stages), unsafe_allow_html=True)
+        # The mission clock only runs while the pipeline is still going; the
+        # results screen re-renders the timeline without it.
+        _started_at = st.session_state.get("generation_started_at")
+        _elapsed = time.time() - _started_at if needs_generation and _started_at else None
+        stage_placeholder.html(
+            build_stage_sequence_html(_strategy_tokens, stages, elapsed_s=_elapsed),
+            unsafe_allow_javascript=_elapsed is not None,
+        )
 
     _render_stages()
 
@@ -1231,17 +1245,22 @@ def render_strategy():
 
     # ── Executive Readout (deterministic "so what?" above the tabs) ───────
     from qai_consultant.generation.executive_readout import build_readout
-    from qai_consultant.ui.components import executive_readout_html
+    from qai_consultant.ui.components import build_readout_tiles_html, executive_readout_html
     from qai_consultant.core.risk_ledger import parse_risk_matrix as _parse_risk_matrix
 
-    _readout_html = executive_readout_html(
-        build_readout(
-            _parse_risk_matrix(st.session_state.get("risk_register") or ""),
-            st.session_state.get("effort_data"),
-        )
+    _readout = build_readout(
+        _parse_risk_matrix(st.session_state.get("risk_register") or ""),
+        st.session_state.get("effort_data"),
     )
+    # Big tiles first (the "so what?" at a glance); the explanations behind
+    # each number stay one click away in the detailed readout.
+    _tiles_html = build_readout_tiles_html(_strategy_tokens, _readout)
+    if _tiles_html:
+        st.markdown(_tiles_html, unsafe_allow_html=True)
+    _readout_html = executive_readout_html(_readout)
     if _readout_html:
-        st.markdown(_readout_html, unsafe_allow_html=True)
+        with st.expander("How these numbers are computed"):
+            st.markdown(_readout_html, unsafe_allow_html=True)
 
     # ── Three Tabs ────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
@@ -1253,10 +1272,11 @@ def render_strategy():
 
     with tab1:
         from qai_consultant.core.risk_ledger import parse_risk_matrix
-        from qai_consultant.ui.components import risk_ledger_table_html
+        from qai_consultant.ui.components import build_risk_map_html, risk_ledger_table_html
 
         risk_rows = parse_risk_matrix(st.session_state.risk_register)
         if risk_rows:
+            st.markdown(build_risk_map_html(_strategy_tokens, risk_rows), unsafe_allow_html=True)
             st.markdown(
                 f'<div class="output-tiles{_output_animate_class}">{risk_ledger_table_html(risk_rows)}</div>',
                 unsafe_allow_html=True,
@@ -1443,7 +1463,7 @@ def render_strategy():
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
-                    "generation_started", "results_complete",
+                    "generation_started", "generation_started_at", "results_complete",
                     "results_analysis"]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -1463,7 +1483,7 @@ def render_strategy():
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
-                    "generation_started", "results_complete",
+                    "generation_started", "generation_started_at", "results_complete",
                     "results_analysis", "strategy_resume_step"]:
             if key in st.session_state:
                 del st.session_state[key]

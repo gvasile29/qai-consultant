@@ -1,18 +1,23 @@
 """
-Manual dev script -- screenshots the local output screens (render_strategy(),
-render_doc_review()) and the landing addendum to visually verify the Phase 3
-redesign (docs/superpowers/specs/2026-08-17-output-screens-power-on-redesign-
-design.md). Not part of pytest/CI: run manually.
+Manual dev script -- drives one REAL end-to-end strategy generation in a
+browser to check the Mission Control generating and results screens
+(render_strategy()). Not part of pytest/CI: run manually.
 
-Runs one REAL end-to-end strategy generation (real Mistral/Pinecone calls,
-consuming one of the session's 3 free runs) to reach render_strategy()'s
-tabs -- unlike Phases 1-2's verification scripts, which needed no live API
-calls. Budget a few minutes for this step.
+It uses real LLM/Pinecone calls: one of the session's free runs, a few
+Mistral requests, and it bumps the daily usage counters. Budget 5-10 min.
 
 Usage:
     streamlit run src/app.py                          # in one terminal, leave running
     python scripts/verify_output_screens_visual.py    # in another
+
+Checks: the mission clock ticks while generating, a stage is active, and the
+results screen shows the readout tiles, the risk map and no running clock,
+plus the accent active tab and the download-button hover border. It runs
+one theme at desktop width; check dark and 390px by hand (or with a
+throwaway page rendering the same builders) when the readout CSS changes.
+Prints one line per check, screenshots to a temp folder, exits 1 on a failure.
 """
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -21,136 +26,79 @@ from playwright.sync_api import sync_playwright
 
 from verify_visual_common import URL, full_screenshot
 
-VIEWPORT = {"width": 1280, "height": 1400}
+VIEWPORT = {"width": 1280, "height": 1000}
+TIMEOUT = 120_000
+failures: list[str] = []
+
+
+def check(name: str, ok: bool, detail: str = "") -> None:
+    print(f"{'PASS' if ok else 'FAIL'}  {name}" + (f"  ({detail})" if detail else ""))
+    if not ok:
+        failures.append(name)
+
+
+def _secs(text: str) -> int:
+    m, s = re.findall(r"(\d+):(\d+)", text)[0]
+    return int(m) * 60 + int(s)
 
 
 def main() -> int:
     out_dir = Path(tempfile.mkdtemp(prefix="qai_output_screens_visual_"))
-
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport=VIEWPORT)
+        page.set_default_timeout(TIMEOUT)
 
-        # ── 1. Landing addendum ──────────────────────────────────────────
-        page.goto(URL, timeout=30000, wait_until="networkidle")
-        # "networkidle" doesn't wait for Streamlit's own server-side script run
-        # (a fresh session_state init, including a real synchronous Pinecone
-        # call for the visit counter) to finish and push content over the
-        # websocket -- wait for the actual landing content first.
-        page.wait_for_selector(".pom-stats", timeout=30000)
-        # Last stat tile's animation-delay is 3.15s (4 stats x 0.1s steps from
-        # a 2.85s base) + its 0.5s duration = finishes at 3.65s -- pad well
-        # past that so the screenshot isn't taken mid-animation.
-        page.wait_for_timeout(4200)
-        full_screenshot(page, str(out_dir / "landing_deliverables.png"), VIEWPORT)
-
-        # ── 2. render_strategy(): full real generation ──────────────────
-        page.get_by_role("button", name="Start — Generate a Test Strategy").click(timeout=10000)
-        page.wait_for_selector(".dialogue-progress-track", timeout=15000)
+        page.goto(URL, wait_until="networkidle")
+        page.wait_for_selector(".ql-hero h1")  # Playwright pierces the landing's open shadow root
+        page.locator('.ql-cta[data-go="strategy"]').click()
+        page.wait_for_selector(".dialogue-progress-track")
         page.locator('[data-testid="stSelectbox"]').first.click()
-        page.get_by_text("🌐 Web Application", exact=False).click(timeout=10000)
-        page.get_by_role("button", name="Apply template").click(timeout=10000)
+        page.get_by_text("🌐 Web Application", exact=False).click()
+        page.get_by_role("button", name="Apply template").click()
         page.wait_for_timeout(500)
-        page.get_by_role("button", name="✅ Review & Generate Strategy").click(timeout=10000)
-        page.wait_for_selector(".review-grid", timeout=15000)
-        page.get_by_role("button", name="🤖 Generate Test Strategy").click(timeout=10000)
+        page.get_by_role("button", name="✅ Review & Generate Strategy").click()
+        page.wait_for_selector(".review-grid")
+        page.get_by_role("button", name="🤖 Generate Test Strategy").click()
 
-        page.wait_for_selector(".stage-sequence", timeout=20000)
-        # Try to catch a mid-generation "active" stage — best-effort, since
-        # streamed LLM generation timing isn't deterministic. If this
-        # particular poll misses it, the final all-done screenshot below
-        # still verifies the indicator renders correctly.
-        try:
-            page.wait_for_selector(".stage-item.active", timeout=15000)
-            full_screenshot(page, str(out_dir / "strategy_stage_active.png"), VIEWPORT)
-            print("Caught a mid-generation 'active' stage screenshot.")
-        except Exception:
-            print("Did not catch a mid-generation 'active' stage in time (non-fatal) — "
-                  "the final all-done screenshot still covers the indicator.")
+        # ── Generating screen ──────────────────────────────────────────────
+        page.wait_for_selector(".stage-item.active")
+        page.wait_for_selector(".mc-clock")
+        first = page.inner_text(".mc-clock")
+        page.wait_for_timeout(3200)
+        second = page.inner_text(".mc-clock")
+        check("mission clock ticks while generating", 2 <= _secs(second) - _secs(first) <= 5, f"{first} -> {second}")
+        full_screenshot(page, str(out_dir / "generating.png"), VIEWPORT)
 
-        page.wait_for_selector('[data-testid="stTabs"]', timeout=240000)  # full 4-stage pipeline
-        page.wait_for_timeout(600)  # let the .output-tiles entrance finish
-        stage_classes = page.eval_on_selector_all(".stage-item", "els => els.map(e => e.className)")
-        print(f"Final stage classes (expect all 'stage-item done'): {stage_classes}")
-        active_tab_color = page.eval_on_selector(
-            '[data-testid="stTab"][aria-selected="true"] p', "el => getComputedStyle(el).color"
-        )
-        print(f"Active tab label color (expect the accent color, not default black/red): {active_tab_color}")
-        full_screenshot(page, str(out_dir / "strategy_tab1_risk.png"), VIEWPORT)
+        # ── Results screen ─────────────────────────────────────────────────
+        page.wait_for_selector('[data-testid="stTabs"]', timeout=900_000)
+        page.wait_for_timeout(800)
+        check("all four stages done", page.locator(".stage-item.done").count() == 4,
+              str(page.eval_on_selector_all(".stage-item", "els => els.map(e => e.className)")))
+        check("no running clock on results", page.locator(".mc-clock").count() == 0)
+        check("readout tiles", page.locator(".mr-tile").count() >= 3, str(page.locator(".mr-tile").count()))
+        check("address first strip", page.locator(".mr-first li").count() >= 1)
+        cells = page.locator(".rm-cell").all_inner_texts()
+        plotted = sum(1 for c in cells for _ in re.findall(r"R\d+", c))
+        check("risk map plots the parsed risks", len(cells) == 9 and plotted >= 1, f"{plotted} risks plotted")
+        check("detailed readout behind expander",
+              page.get_by_text("How these numbers are computed").count() == 1)
+        full_screenshot(page, str(out_dir / "results_risk_tab.png"), VIEWPORT)
 
-        page.get_by_role("tab", name="📊 Effort Estimation").click(timeout=10000)
-        page.wait_for_timeout(300)
-        full_screenshot(page, str(out_dir / "strategy_tab2_effort.png"), VIEWPORT)
-
-        # Hover check: a download button's border should change to the accent color.
-        # Streamlit keeps all 4 tabs' download buttons mounted in the DOM (only the
-        # active tab panel is visible), so scope to :visible or .first grabs a hidden
-        # button from the Risk Register tab and hover() times out waiting for it to
-        # become visible.
+        accent = page.evaluate("() => getComputedStyle(document.querySelector('.mr-rid')).color")
+        tab_color = page.eval_on_selector('[data-testid="stTab"][aria-selected="true"] p',
+                                          "el => getComputedStyle(el).color")
+        check("active tab uses the accent", tab_color == accent, f"{tab_color} vs {accent}")
+        # All 4 tabs' download buttons stay mounted; only :visible ones can be hovered.
         dl_button = page.locator('[data-testid="stDownloadButton"] button:visible').first
         dl_button.hover()
-        page.wait_for_timeout(200)
-        hover_border_color = dl_button.evaluate("el => getComputedStyle(el).borderColor")
-        print(f"Download button border color on hover (expect the accent color): {hover_border_color}")
-
-        browser.close()
-
-        # ── 3. render_doc_review(): deterministic step only (no LLM call) ─
-        browser = p.chromium.launch()
-        page = browser.new_page(viewport=VIEWPORT)
-        page.goto(URL, timeout=30000, wait_until="networkidle")
-        page.wait_for_selector(".pom-stats", timeout=30000)
-        page.wait_for_timeout(1000)
-        page.get_by_role("button", name="Review an existing QA document instead").click(timeout=10000)
-        page.wait_for_selector(".st-key-doc-review-input", timeout=15000)
-        full_screenshot(page, str(out_dir / "doc_review_input_tray.png"), VIEWPORT)
-
-        page.locator("textarea").last.fill(
-            "# Test Plan\n\nScope: checkout flow.\nEntry criteria: build passes CI.\n"
-            "Exit criteria: 0 open critical defects.\n\n## Test Cases\n"
-            "1. Verify successful checkout with valid payment.\n"
-            "2. Verify checkout rejects an expired card.\n" * 5
-        )
-        # .fill() alone doesn't blur the widget, so Streamlit's text_area never
-        # commits the value to session state and the "Review Document" button
-        # (disabled until document_text.strip() is truthy) never re-enables.
-        # Tab away to blur, then give the resulting rerun time to land.
-        page.keyboard.press("Tab")
-        page.wait_for_timeout(1000)
-        page.get_by_role("button", name="🔍 Review Document").click(timeout=10000)
-        page.wait_for_selector(".output-tiles", timeout=15000)
-        page.wait_for_timeout(500)  # let the entrance finish
-        full_screenshot(page, str(out_dir / "doc_review_results.png"), VIEWPORT)
-        browser.close()
-
-        # ── 4. Reduced-motion pass (landing + doc-review only — cheap to
-        #        re-run; a second full real generation for this pass would
-        #        double the API cost for a check the pulse/entrance CSS
-        #        rules already cover deterministically) ────────────────
-        browser = p.chromium.launch()
-        page = browser.new_page(viewport=VIEWPORT, reduced_motion="reduce")
-        page.goto(URL, timeout=30000, wait_until="networkidle")
-        # A fresh browser context is a brand-new Streamlit session (its own
-        # session_state init, including a real synchronous Pinecone call for
-        # the visit counter) -- "networkidle" doesn't wait for that server-side
-        # script run to finish and push content over the websocket, so wait for
-        # the actual landing content instead of a fixed short timeout.
-        page.wait_for_selector(".pom-stats", timeout=30000)
-        page.wait_for_timeout(300)
-        full_screenshot(page, str(out_dir / "landing_deliverables_reduced_motion.png"), VIEWPORT)
-        page.get_by_role("button", name="Review an existing QA document instead").click(timeout=10000)
-        page.wait_for_selector(".st-key-doc-review-input", timeout=15000)
-        page.locator("textarea").last.fill("# Test Plan\n\nScope: checkout flow.\n" * 20)
-        page.keyboard.press("Tab")
-        page.wait_for_timeout(1000)
-        page.get_by_role("button", name="🔍 Review Document").click(timeout=10000)
-        page.wait_for_selector(".output-tiles", timeout=15000)
-        page.wait_for_timeout(150)
-        full_screenshot(page, str(out_dir / "doc_review_results_reduced_motion.png"), VIEWPORT)
+        page.wait_for_timeout(250)  # the border-color transition is 0.15s
+        border = dl_button.evaluate("el => getComputedStyle(el).borderTopColor")
+        check("download button hover border is the accent", border == accent, f"{border} vs {accent}")
         browser.close()
 
     print(f"Screenshots saved to: {out_dir}")
-    return 0
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
