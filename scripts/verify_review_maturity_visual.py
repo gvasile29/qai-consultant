@@ -10,8 +10,11 @@ For dark and light, at desktop and phone width: the score cards sit in one CSS
 grid with the right column count (5 TMMi / 3 review on desktop, always 2 on a
 phone, not one card per row), the maturity level tile reads as the top level
 (pass tone, 3 of 3 segments lit, not a failing 3/100), the phone header logo
-is smaller than on desktop, the in-page mode switcher fits the screen, lights the
-active mode and switches screens on a click, and nothing overflows sideways. Prints one line per
+is smaller than on desktop, the in-page mode switcher (Home first) fits the screen, lights the
+active mode, switches screens on a click and Home returns to the landing page, the EU AI Act Article 50(1) notice and
+icon sit in the page at every width and with the sidebar hidden (on the landing page the icon is
+in the hero, in the first view on desktop), the sidebar is a drawer with a Home button and no mode switcher, and
+nothing overflows sideways. Prints one line per
 check, screenshots to a temp folder, exits 1 on a failure. No LLM call.
 """
 import sys
@@ -57,21 +60,65 @@ def run_mode(page: Page, mode: str, text: str, button: str) -> None:
     page.wait_for_selector(".score-grid")
 
 
+def check_notice_and_sidebar(page: Page, tag: str, vw: int, vh: int) -> None:
+    page.goto(URL, wait_until="networkidle")
+    page.wait_for_selector('.ql-cta[data-go="strategy"]')
+    page.wait_for_selector(".ai-notice", state="attached")
+    check(f"{tag}: landing page carries the full AI notice block", page.locator(".ai-notice").count() == 1)
+    page.wait_for_timeout(3000)  # the hero's entrance animation
+    hero_icon = page.locator(".ql-notice-row img")  # inside the landing component's shadow root
+    hero_ok = hero_icon.count() == 1 and hero_icon.is_visible() and hero_icon.evaluate("i => i.complete && i.naturalWidth > 0")
+    check(f"{tag}: landing hero shows the EU AI-generated icon", bool(hero_ok))
+    if vw >= 1024:
+        hbox = hero_icon.bounding_box()
+        check(f"{tag}: ...and it is in the first view, no scrolling",
+              hbox is not None and hbox["y"] >= 0 and hbox["y"] + hbox["height"] <= vh,
+              str(hbox and round(hbox["y"] + hbox["height"])))
+    page.locator('.ql-mission[data-go="maturity"]').click()
+    page.wait_for_selector('[data-testid="stTextArea"]')
+    notice = page.locator(".ai-notice")
+    box = notice.bounding_box()
+    check(f"{tag}: AI notice is on the mode screen, inside the screen",
+          notice.count() == 1 and box is not None and box["x"] >= 0 and box["x"] + box["width"] <= vw,
+          str(box and round(box["x"] + box["width"])))
+    check(f"{tag}: AI notice carries the full wording",
+          "may log it and use it to train their models" in notice.inner_text())
+    icon_ok = page.evaluate(
+        "() => { const i = document.querySelector('.ai-notice img'); return !!i && i.complete && i.naturalWidth > 0; }"
+    )
+    check(f"{tag}: EU AI-generated icon is rendered", bool(icon_ok))
+    check(f"{tag}: no mode switcher left in the sidebar", page.locator('[class*="st-key-nav-"]').count() == 0)
+    # A closed or collapsed sidebar must not take the notice with it: it lives in the
+    # main column, and stays visible when the sidebar is hidden outright.
+    in_main_only = page.evaluate(
+        "() => !!document.querySelector('[data-testid=stMain] .ai-notice')"
+        " && !document.querySelector('[data-testid=stSidebar] .ai-notice')"
+    )
+    check(f"{tag}: AI notice is in the main column, not the sidebar", bool(in_main_only))
+    page.add_style_tag(content='[data-testid="stSidebar"] { display: none !important; }')
+    check(f"{tag}: AI notice and icon stay visible with the sidebar hidden",
+          notice.is_visible() and page.locator(".ai-notice img").is_visible())
+
+
 def check_page_nav(page: Page, tag: str, vw: int) -> None:
     page.goto(URL, wait_until="networkidle")
     page.locator('.ql-mission[data-go="maturity"]').click()
     page.wait_for_selector('[data-testid="stTextArea"]')
     chips = page.locator(".st-key-page-nav button")
-    check(f"{tag}: page nav shows three modes", chips.count() == 3, str(chips.count()))
+    check(f"{tag}: page nav shows Home and the three modes", chips.count() == 4, str(chips.count()))
     boxes = [chips.nth(i).bounding_box() for i in range(chips.count())]
     check(f"{tag}: page nav chips stay inside the screen",
           all(b and b["x"] >= 0 and b["x"] + b["width"] <= vw for b in boxes), str([b and round(b["x"] + b["width"]) for b in boxes]))
     check(f"{tag}: active mode is disabled, the others are not",
-          [chips.nth(i).is_disabled() for i in range(3)] == [False, False, True])
+          [chips.nth(i).is_disabled() for i in range(4)] == [False, False, False, True])
     page.locator(".st-key-pagenav-doc_review button").click()
     expect(page.get_by_role("heading", name="Review an Existing QA Document")).to_be_visible()
     check(f"{tag}: page nav click opens document review",
           page.locator(".st-key-pagenav-doc_review button").is_disabled())
+    page.locator(".st-key-pagenav-home button").click()
+    page.wait_for_selector('.ql-cta[data-go="strategy"]')
+    check(f"{tag}: Home chip returns to the landing page",
+          page.locator(".st-key-page-nav").count() == 0)
 
 
 def check_dialogue_text_kept(page: Page, tag: str) -> None:
@@ -99,6 +146,24 @@ def settled_value(page: Page, selector: str, expected: str, timeout_ms: int = 50
     return loc.input_value()
 
 
+def check_sidebar_home(page: Page, tag: str) -> None:
+    """Desktop only (the sidebar starts closed on a phone): the drawer has a Home button on
+    every screen but the landing page, above Start Over, and it returns to the landing page."""
+    page.goto(URL, wait_until="networkidle")
+    page.wait_for_selector('.ql-cta[data-go="strategy"]')
+    check(f"{tag}: no sidebar Home button on the landing page", page.locator(".st-key-sidebar-home").count() == 0)
+    page.locator('.ql-mission[data-go="maturity"]').click()
+    page.wait_for_selector('[data-testid="stTextArea"]')
+    home = page.locator(".st-key-sidebar-home button")
+    check(f"{tag}: sidebar shows a Home button", home.count() == 1 and home.is_visible())
+    home_y = home.bounding_box()["y"] if home.count() else -1
+    start_y = page.get_by_role("button", name="Start Over").bounding_box()["y"]
+    check(f"{tag}: Home sits above Start Over in the sidebar", 0 <= home_y < start_y, f"{round(home_y)} < {round(start_y)}")
+    home.click()
+    page.wait_for_selector('.ql-cta[data-go="strategy"]')
+    check(f"{tag}: sidebar Home returns to the landing page", page.locator(".st-key-sidebar-home").count() == 0)
+
+
 def main() -> int:
     out_dir = Path(tempfile.mkdtemp(prefix="qai_review_maturity_visual_"))
     maturity_text = (REPO / "evals/fixtures/maturity/level3_strong.txt").read_text(encoding="utf-8")
@@ -111,6 +176,9 @@ def main() -> int:
                 page = browser.new_page(viewport=viewport, color_scheme=scheme)
                 page.set_default_timeout(TIMEOUT)
 
+                check_notice_and_sidebar(page, tag, viewport["width"], viewport["height"])
+                if viewport["width"] >= 1024:
+                    check_sidebar_home(page, tag)
                 check_page_nav(page, tag, viewport["width"])
                 check_dialogue_text_kept(page, tag)
                 run_mode(page, "maturity", maturity_text, "Assess Maturity")

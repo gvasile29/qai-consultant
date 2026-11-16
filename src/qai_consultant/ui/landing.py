@@ -81,15 +81,20 @@ _ARROW_LEFT = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24
 _ARROW_RIGHT = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M9 5l7 7-7 7"/></svg>'
 
 
-def build_mission_landing_html(tokens: dict, *, dark: bool, version: str) -> str:
+def build_mission_landing_html(tokens: dict, *, dark: bool, version: str, ai_icon_html: str = "") -> str:
     """Pure function: theme tokens + theme flag + app version -> the whole
     landing page as one HTML string (styles included) for the component.
 
     Every button that changes screen carries data-go with an APP_MODES id;
     every in-page jump carries data-scroll with a CSS selector, looked up in
     the component first and then in the page (".st-key-landing-details" is
-    the native "more detail" section below the component)."""
+    the native "more detail" section below the component).
+
+    `ai_icon_html` is the EU "fully AI-generated" icon's <img> (trusted, from
+    inline_image_html()); it sits next to the short AI notice in the hero so the
+    icon is in the first view, not only in the full notice further down."""
     t = tokens
+    icon_block = f'<span class="ql-notice-icon">{ai_icon_html}</span>' if ai_icon_html else ""
     # Brand rule (assets/brand/README_BRAND.md): the defect pixel is #2DD4BF on
     # dark backgrounds and #14B8A6 on light ones; never another color.
     pixel = "#2DD4BF" if dark else "#14B8A6"
@@ -172,7 +177,10 @@ def build_mission_landing_html(tokens: dict, *, dark: bool, version: str) -> str
 .ql-cta:hover {{ filter: brightness(1.08); }}
 .ql-link-cta {{ display: inline-flex; align-items: center; min-height: 3.5rem; padding: 0 0.25rem; border: 0; background: none; cursor: pointer; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: {t['ink']}; }}
 .ql-link-cta:hover {{ color: {t['accent']}; }}
-.ql-notice {{ max-width: 560px; font-size: 0.85rem; line-height: 1.55; color: {t['ink_dim']}; }}
+.ql-notice-row {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem 1rem; max-width: 700px; }}
+.ql-notice-icon {{ flex: 0 0 auto; line-height: 0; }}
+.ql-notice-row img {{ height: auto; }}
+.ql-notice {{ flex: 1 1 280px; max-width: 560px; font-size: 0.85rem; line-height: 1.55; color: {t['ink_dim']}; }}
 .ql-horizon {{ position: relative; margin-top: 3.5rem; animation: ql-fade 1s ease-out 0.9s both; }}
 .ql-horizon svg {{ display: block; width: 100%; height: 96px; }}
 .ql-band {{ background: {t['surface']}; box-shadow: 0 -30px 90px {glow}; }}
@@ -275,7 +283,7 @@ def build_mission_landing_html(tokens: dict, *, dark: bool, version: str) -> str
         <button type="button" class="ql-cta" data-go="strategy">Start pre-flight</button>
         <button type="button" class="ql-link-cta" data-scroll=".st-key-landing-details">See example output</button>
       </div>
-      <p class="ql-notice">{_html.escape(AI_INTERACTION_NOTICE_SHORT)}</p>
+      <div class="ql-notice-row">{icon_block}<p class="ql-notice">{_html.escape(AI_INTERACTION_NOTICE_SHORT)}</p></div>
     </div>
     <div class="ql-horizon">
       <svg viewBox="0 0 1440 110" preserveAspectRatio="none" aria-hidden="true">
@@ -431,10 +439,10 @@ def _component():
     return st.components.v2.component(COMPONENT_NAME, js=_JS)
 
 
-def render_mission_landing(tokens: dict, *, dark: bool, version: str) -> str | None:
+def render_mission_landing(tokens: dict, *, dark: bool, version: str, ai_icon_html: str = "") -> str | None:
     """Mount the landing component; return the mode a visitor picked, or None."""
     result = _component()(
-        data=build_mission_landing_html(tokens, dark=dark, version=version),
+        data=build_mission_landing_html(tokens, dark=dark, version=version, ai_icon_html=ai_icon_html),
         key=COMPONENT_KEY,
         on_go_change=lambda: None,
     )

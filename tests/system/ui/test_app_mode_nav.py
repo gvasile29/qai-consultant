@@ -165,13 +165,31 @@ def test_reset_helpers_clear_pending_flags(state):
 
 # ── Wiring ───────────────────────────────────────────────────────────────────────
 
-def test_sidebar_renders_all_modes_with_lock_and_active_state():
-    fn = extract_function(APP_PY.read_text(encoding="utf-8"), "render_sidebar")
-    assert "for _mode_id, _idx, _label in APP_MODES" in fn
-    assert 'key=f"nav-{_mode_id}"' in fn
-    assert "disabled=_nav_locked or _mode_id == _active_mode" in fn
-    assert "_go_to(_mode_id)" in fn
+def test_page_nav_renders_all_modes_with_lock_and_active_state():
+    fn = extract_function(APP_PY.read_text(encoding="utf-8"), "render_page_nav")
+    assert "for mode_id, _idx, label in APP_MODES" in fn
+    assert 'key=f"pagenav-{mode_id}"' in fn
+    assert "disabled=locked or mode_id == active" in fn
+    assert "on_click=_go_to" in fn
+    assert 'key="pagenav-home"' in fn and 'args=("intro",)' in fn, "the Home chip is missing"
+    assert fn.index('key="pagenav-home"') < fn.index("for mode_id, _idx, label in APP_MODES"), "Home leads the row"
     assert "How it works" not in fn
+
+
+def test_sidebar_has_no_mode_switcher_and_main_renders_the_page_nav():
+    source = APP_PY.read_text(encoding="utf-8")
+    sidebar = extract_function(source, "render_sidebar")
+    assert "APP_MODES" not in sidebar and "_go_to(" not in sidebar and 'key=f"nav-' not in sidebar
+    assert re.search(r"if not on_landing:\s+render_page_nav\(\)", extract_function(source, "main"))
+
+
+def test_sidebar_has_a_guarded_home_button():
+    fn = extract_function(APP_PY.read_text(encoding="utf-8"), "render_sidebar")
+    assert 'key="sidebar-home"' in fn and 'args=("intro",)' in fn and "on_click=_go_to" in fn
+    assert "disabled=_generation_in_progress()" in fn, "Home must lock while a generation runs"
+    guard = fn.index('!= "intro":')
+    assert guard < fn.index('key="sidebar-home"') < fn.index("Release Notes"), \
+        "Home leads the sidebar, and only on screens that are not the landing page"
 
 
 def test_intro_renders_all_modes_through_go_to():
@@ -187,8 +205,8 @@ def test_both_full_reset_lists_clear_strategy_resume_step():
     assert '"strategy_resume_step"' in extract_function(source, "render_strategy")
 
 
-def test_strategy_reruns_after_completion_so_the_sidebar_unlocks():
-    """The sidebar renders before render_strategy() finishes; without a rerun
+def test_strategy_reruns_after_completion_so_the_page_nav_unlocks():
+    """The page nav renders before render_strategy() finishes; without a rerun
     after results_complete is set, it stays locked until the next click."""
     body = extract_function(APP_PY.read_text(encoding="utf-8"), "render_strategy")
     done = body.index("st.session_state.results_complete = True")
