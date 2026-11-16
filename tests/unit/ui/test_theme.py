@@ -32,7 +32,7 @@ def test_build_css_embeds_all_five_font_faces():
     for family, weight in [
         ("Plex Mono", "400"), ("Plex Mono", "500"),
         ("Plex Sans", "400"), ("Plex Sans", "600"),
-        ("Plex Cond", "700"),
+        ("Archivo", "700"),
     ]:
         assert f"font-family: '{family}'" in css
         assert f"font-weight: {weight}" in css
@@ -108,3 +108,10 @@ def test_build_css_hides_the_local_deploy_button():
     hidden = hidden[hidden.index('[data-testid="stToolbarActions"]'):]
     assert '[data-testid="stAppDeployButton"]' in hidden[:hidden.index("}")]
 
+
+
+def test_build_css_sets_archivo_for_streamlit_headings():
+    css = build_css(LIGHT_TOKENS)
+    assert ".stApp h1, .stApp h2, .stApp h3" in css
+    assert "font-family: 'Archivo', 'Plex Sans', sans-serif;" in css
+    assert "Plex Cond" not in css

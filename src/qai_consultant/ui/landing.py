@@ -135,7 +135,7 @@ def build_mission_landing_html(tokens: dict, *, dark: bool, version: str, ai_ico
 :host {{ display: block; }}
 .ql {{ container-type: inline-size; background: {t['page']}; color: {t['ink']}; font-family: 'Plex Sans', -apple-system, "Segoe UI", sans-serif; }}
 .ql *, .ql *::before, .ql *::after {{ box-sizing: border-box; }}
-.ql h1, .ql h2, .ql h3 {{ font-family: 'Plex Cond', 'Plex Sans', sans-serif; font-weight: 700; text-transform: uppercase; margin: 0; color: {t['ink']}; }}
+.ql h1, .ql h2, .ql h3 {{ font-family: 'Archivo', 'Plex Sans', sans-serif; font-weight: 700; text-transform: uppercase; margin: 0; color: {t['ink']}; }}
 .ql p {{ margin: 0; }}
 .ql a {{ color: {t['accent']}; }}
 /* :where() keeps this reset at zero specificity: as ".ql button" it beat
@@ -160,7 +160,7 @@ def build_mission_landing_html(tokens: dict, *, dark: bool, version: str, ai_ico
 .ql-arc path.ql-trail {{ stroke-dasharray: 900; animation: ql-draw 2.6s ease-out 0.4s both; }}
 .ql-arc .ql-rocket {{ animation: ql-fade 0.6s ease-out 2.6s both; }}
 .ql-top {{ position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 1.1rem; padding-bottom: 1.1rem; }}
-.ql-brand {{ display: flex; align-items: center; gap: 0.7rem; font-family: 'Plex Cond', sans-serif; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.16em; text-transform: uppercase; }}
+.ql-brand {{ display: flex; align-items: center; gap: 0.7rem; font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.16em; text-transform: uppercase; }}
 .ql-nav {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1.5rem; }}
 .ql-nav-link, .ql-nav a {{ background: none; border: 0; padding: 0.75rem 0; cursor: pointer; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: {t['ink']}; text-decoration: none; }}
 .ql-nav-link:hover, .ql-nav a:hover {{ color: {t['accent']}; }}
@@ -204,7 +204,7 @@ def build_mission_landing_html(tokens: dict, *, dark: bool, version: str, ai_ico
 .ql-track::-webkit-scrollbar {{ display: none; }}
 .ql-card {{ flex: 0 0 min(420px, 84cqi); scroll-snap-align: start; min-height: 400px; display: flex; flex-direction: column; justify-content: space-between; gap: 1.75rem; padding: 2rem; background: {t['surface']}; border: 1px solid {t['line']}; transition: border-color 0.25s ease-out, transform 0.25s ease-out; }}
 .ql-card:hover {{ border-color: {t['accent']}; transform: translateY(-4px); }}
-.ql-card-num {{ font-family: 'Plex Cond', sans-serif; font-weight: 700; font-size: 5.5rem; line-height: 1; color: {t['line']}; }}
+.ql-card-num {{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 5.5rem; line-height: 1; color: {t['line']}; }}
 .ql-card-body {{ display: flex; flex-direction: column; gap: 0.85rem; }}
 .ql-card h3 {{ font-size: 1.55rem; }}
 .ql-card p {{ font-size: 1rem; line-height: 1.6; color: {t['ink_dim']}; }}
@@ -214,7 +214,7 @@ def build_mission_landing_html(tokens: dict, *, dark: bool, version: str, ai_ico
 .ql-mission {{ display: grid; grid-template-columns: 3rem minmax(0, 1.2fr) minmax(0, 1fr) 2rem; align-items: center; gap: 0.75rem 2rem; width: 100%; padding: 2rem 0.5rem 2rem 0; text-align: left; background: none; border: 0; border-top: 1px solid {t['line']}; cursor: pointer; transition: padding-left 0.25s ease-out; }}
 .ql-mission:hover {{ padding-left: 1.25rem; }}
 .ql-mission-idx {{ font-family: 'Plex Mono', monospace; font-size: 0.95rem; color: {t['accent']}; }}
-.ql-mission-title {{ font-family: 'Plex Cond', sans-serif; font-weight: 700; font-size: clamp(1.35rem, 3cqi, 2.1rem); text-transform: uppercase; line-height: 1.05; transition: color 0.25s ease-out; }}
+.ql-mission-title {{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: clamp(1.35rem, 3cqi, 2.1rem); text-transform: uppercase; line-height: 1.05; transition: color 0.25s ease-out; }}
 .ql-mission:hover .ql-mission-title {{ color: {t['accent']}; }}
 .ql-mission-body {{ font-size: 1rem; line-height: 1.55; color: {t['ink_dim']}; }}
 .ql-mission-go {{ color: {t['accent']}; justify-self: end; }}
