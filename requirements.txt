@@ -10,15 +10,17 @@ transformers==5.10.4
 pypdf==6.21.2
 python-dotenv==1.2.2
 markdown==3.8.1
-xhtml2pdf>=0.2.11
+xhtml2pdf==0.2.17
 nltk==3.10.3
 rich==13.7.1
 streamlit==1.59.1
 # Streamlit only requires starlette>=0.40; starlette>=1.8 breaks its gzip middleware for
 # already-compressed downloads (HTTP 500 on the .zip). See tests/integration/ui/test_zip_media_gzip.py.
 starlette==1.7.0
-mistralai>=1.2.0
-openai>=2.44.0
-pinecone>=3.0.0
-platformdirs>=4.0.0
-defusedxml>=0.7.1
+# mistralai 3.x fails at import on Python 3.11 (SyntaxError: Forward reference must be an expression),
+# which took the live app down on a fresh Streamlit Cloud install. Exact pins here, like pyproject.toml.
+mistralai==2.7.2
+openai==2.49.0
+pinecone==9.1.0
+platformdirs==4.11.12
+defusedxml==0.7.1
