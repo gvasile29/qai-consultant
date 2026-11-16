@@ -18,7 +18,7 @@ to the light set, matching that existing code's else branch.
 """
 import streamlit as st
 
-from qai_consultant.ui._theme_fonts import COND_700, MONO_400, MONO_500, SANS_400, SANS_600
+from qai_consultant.ui._theme_fonts import ARCHIVO_700, MONO_400, MONO_500, SANS_400, SANS_600
 
 # "page" is the Streamlit page background (config.toml backgroundColor);
 # "surface" is a card sitting on it, "surface_2" a track or inset inside a card.
@@ -53,10 +53,16 @@ def build_css(tokens: dict) -> str:
 @font-face {{ font-family: 'Plex Mono'; font-weight: 500; font-style: normal; font-display: swap; src: url('{MONO_500}') format('woff2'); }}
 @font-face {{ font-family: 'Plex Sans'; font-weight: 400; font-style: normal; font-display: swap; src: url('{SANS_400}') format('woff2'); }}
 @font-face {{ font-family: 'Plex Sans'; font-weight: 600; font-style: normal; font-display: swap; src: url('{SANS_600}') format('woff2'); }}
-@font-face {{ font-family: 'Plex Cond'; font-weight: 700; font-style: normal; font-display: swap; src: url('{COND_700}') format('woff2'); }}
+@font-face {{ font-family: 'Archivo'; font-weight: 700; font-style: normal; font-display: swap; src: url('{ARCHIVO_700}') format('woff2'); }}
 
 html, body, [class*="css"] {{
     font-family: 'Plex Sans', -apple-system, "Segoe UI", sans-serif;
+}}
+
+/* Headings use Archivo Bold on every screen (the landing component sets its own). */
+.stApp h1, .stApp h2, .stApp h3 {{
+    font-family: 'Archivo', 'Plex Sans', sans-serif;
+    font-weight: 700;
 }}
 
 .sub-header {{
