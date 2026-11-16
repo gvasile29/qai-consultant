@@ -13,7 +13,6 @@ SRC_DIR = REPO_ROOT / "src"
 
 from qai_consultant.ui.components import (  # noqa: E402
     build_content_polish_css,
-    build_dialogue_header_html,
     build_doc_review_input_tray_css,
     build_output_eyebrow_html,
     build_review_summary_html,
@@ -115,30 +114,6 @@ class _FakeContext:
     known_risks: str = "Payment integration"
     existing_automation: str = "Selenium suite"
     compliance_requirements: str = "GDPR"
-
-
-def test_dialogue_header_uses_the_given_tokens_not_a_hardcoded_theme():
-    light = build_dialogue_header_html(LIGHT_TOKENS, 3, 11)
-    dark = build_dialogue_header_html(DARK_TOKENS, 3, 11)
-    assert LIGHT_TOKENS["accent"] in light
-    assert DARK_TOKENS["accent"] not in light
-    assert DARK_TOKENS["accent"] in dark
-    assert LIGHT_TOKENS["accent"] not in dark
-
-
-def test_dialogue_header_computes_progress_percentage():
-    html = build_dialogue_header_html(LIGHT_TOKENS, 3, 12)
-    assert "width: 25%;" in html
-
-
-def test_dialogue_header_handles_zero_total_without_dividing_by_zero():
-    html = build_dialogue_header_html(LIGHT_TOKENS, 0, 0)
-    assert "width: 0%;" in html
-
-
-def test_dialogue_header_adds_ledger_card_hover_without_touching_base_rule():
-    html = build_dialogue_header_html(LIGHT_TOKENS, 1, 11)
-    assert ".ledger-card:hover" in html
 
 
 def test_review_summary_escapes_html_in_user_supplied_fields():

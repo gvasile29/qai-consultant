@@ -456,20 +456,52 @@ def build_adoption_strip_html(tokens: dict, snapshot: dict) -> str:
 # additive pseudo-class selector, not an override) -- this is the only
 # place in this file that styles a theme.py-owned class.
 
-def build_dialogue_header_html(tokens: dict, answered: int, total: int) -> str:
-    """Pure function: token dict + progress counts -> dialogue header HTML
-    (eyebrow label + animated-width progress bar) plus the .ledger-card
-    hover rule."""
-    pct = round((answered / total) * 100) if total else 0
+# The discovery wizard's three phases, in QUESTIONS order. Every question key
+# appears exactly once (guarded by tests/unit/ui/test_discovery_wizard.py).
+DISCOVERY_PHASES = (
+    ("Mission", ("project_name", "project_description", "project_type", "tech_stack")),
+    ("Crew & schedule", ("team_qa_size", "team_dev_size", "timeline", "methodology")),
+    ("Risk & compliance", ("known_risks", "existing_automation", "compliance_requirements")),
+)
+
+
+def build_discovery_header_html(tokens: dict, phase_idx: int, answered_keys) -> str:
+    """Pure function: token dict + the current phase (0-based) + the set of
+    answered question keys -> the wizard header: an eyebrow, the three phase
+    labels (done / active / ahead) and one progress segment per question,
+    grouped by phase, lit when answered. Also carries the .ledger-card
+    hover rule the question cards use."""
+    answered_keys = set(answered_keys)
+    total = sum(len(keys) for _name, keys in DISCOVERY_PHASES)
+    answered = sum(1 for _name, keys in DISCOVERY_PHASES for k in keys if k in answered_keys)
+    phase_idx = max(0, min(phase_idx, len(DISCOVERY_PHASES) - 1))
+    steps, groups = [], []
+    for i, (name, keys) in enumerate(DISCOVERY_PHASES):
+        state = "done" if i < phase_idx else "active" if i == phase_idx else "ahead"
+        steps.append(
+            f'<div class="dq-step {state}"><span class="dq-num">{i + 1:02d}</span>{_html.escape(name)}</div>'
+        )
+        segs = "".join(f'<i class="{"on" if k in answered_keys else ""}"></i>' for k in keys)
+        groups.append(f'<div class="dq-group {state}">{segs}</div>')
     return f"""
 <style>
 .ledger-card:hover {{ border-color: {tokens['accent']}; box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out; }}
-.dialogue-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.4rem; }}
-.dialogue-progress-track {{ height: 6px; background: {tokens['surface_2']}; border-radius: 3px; overflow: hidden; margin: 0.6rem 0 1.2rem; }}
-.dialogue-progress-fill {{ height: 100%; background: {tokens['accent']}; transition: width 0.4s ease-out; }}
+.dialogue-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.6rem; }}
+.dq-steps {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.5rem; }}
+.dq-step {{ font-family: 'Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: {tokens['ink_dim']}; display: flex; align-items: center; gap: 0.45rem; }}
+.dq-step .dq-num {{ display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid {tokens['line']}; font-size: 0.66rem; flex: none; }}
+.dq-step.active {{ color: {tokens['ink']}; }}
+.dq-step.active .dq-num {{ border-color: {tokens['accent']}; color: {tokens['accent']}; }}
+.dq-step.done .dq-num {{ background: {tokens['accent']}; border-color: {tokens['accent']}; color: {tokens['page']}; }}
+.dialogue-progress-track {{ display: grid; grid-template-columns: 4fr 4fr 3fr; gap: 0.5rem; margin: 0.2rem 0 1.4rem; }}
+.dq-group {{ display: flex; gap: 3px; }}
+.dq-group i {{ flex: 1; height: 6px; border-radius: 2px; background: {tokens['surface_2']}; transition: background 0.3s ease-out; }}
+.dq-group i.on {{ background: {tokens['accent']}; }}
+@media (max-width: 640px) {{ .dq-step {{ font-size: 0; gap: 0; }} .dq-step .dq-num {{ font-size: 0.66rem; }} .dq-step.active {{ font-size: 0.7rem; gap: 0.45rem; }} }}
 </style>
-<div class="dialogue-eyebrow">&gt; project discovery sequence: {answered}/{total} instruments calibrated</div>
-<div class="dialogue-progress-track"><div class="dialogue-progress-fill" style="width: {pct}%;"></div></div>
+<div class="dialogue-eyebrow">&gt; pre-flight: phase {phase_idx + 1} of {len(DISCOVERY_PHASES)}, {answered}/{total} instruments calibrated</div>
+<div class="dq-steps">{"".join(steps)}</div>
+<div class="dialogue-progress-track">{"".join(groups)}</div>
 """
 
 

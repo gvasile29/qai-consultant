@@ -65,6 +65,8 @@ def main(url: str) -> None:
         shot(page, "streamlit_dialogue.png", page.locator(".dialogue-progress-track"))
 
         # 4-7. Full generation, then one screenshot per output tab
+        page.get_by_role("button", name="Next: Crew & schedule →").click(timeout=10000)
+        page.get_by_role("button", name="Next: Risk & compliance →").click(timeout=10000)
         page.get_by_role("button", name="✅ Review & Generate Strategy").click(timeout=10000)
         page.wait_for_selector(".review-grid", timeout=20000)
         page.get_by_role("button", name="🤖 Generate Test Strategy").click(timeout=10000)

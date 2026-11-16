@@ -57,6 +57,8 @@ def main() -> int:
         page.get_by_text("🌐 Web Application", exact=False).click()
         page.get_by_role("button", name="Apply template").click()
         page.wait_for_timeout(500)
+        page.get_by_role("button", name="Next: Crew & schedule →").click()
+        page.get_by_role("button", name="Next: Risk & compliance →").click()
         page.get_by_role("button", name="✅ Review & Generate Strategy").click()
         page.wait_for_selector(".review-grid")
         page.get_by_role("button", name="🤖 Generate Test Strategy").click()

@@ -93,7 +93,7 @@ def main() -> int:
 
                 page.locator('.ql-cta[data-go="strategy"]').click()
                 page.wait_for_selector(".ledger-card", timeout=TIMEOUT)
-                check(f"{tag}: start pre-flight opens discovery", page.locator(".ledger-card").count() == 11)
+                check(f"{tag}: start pre-flight opens discovery", page.locator(".ledger-card").count() == 4)  # phase 1 of the wizard
 
                 open_landing(page)  # a fresh load lands back on the intro screen
                 page.locator('.ql-mission[data-go="doc_review"]').click()

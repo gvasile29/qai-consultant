@@ -463,6 +463,8 @@ def render_sidebar():
             for q in QUESTIONS:
                 st.session_state.pop(f"input_{q['key']}", None)
             st.session_state.pop("input_additional_context", None)
+            st.session_state.pop("discovery_additional_context", None)
+            st.session_state.pop("discovery_phase", None)
             st.session_state.pop("review_additional_context", None)
             st.session_state.pop("results_uploader", None)
             st.rerun()
@@ -646,98 +648,174 @@ def _apply_template(template_key: str) -> None:
         st.session_state[f"input_{field}"] = value
 
 
+def _validate_answers(keys) -> tuple[dict, list]:
+    """Validate the given question keys. Reads the input_<key> widget value
+    when it exists (a callback runs before the script copies it into
+    answers), else answers. Returns (cleaned answers, error lines)."""
+    validator = InputValidator()
+    questions = {q["key"]: q for q in QUESTIONS}
+    cleaned, errors = {}, []
+    for key in keys:
+        raw = st.session_state.get(f"input_{key}", st.session_state.answers.get(key, ""))
+        result = validator.validate(key, raw)
+        if result.valid:
+            cleaned[key] = result.cleaned
+        else:
+            errors.append(f"**{questions[key]['question']}**: {result.error}")
+    return cleaned, errors
+
+
+# Wizard navigation runs in on_click callbacks, before the script: the new
+# phase renders in the same run, with no st.rerun() second pass.
+def _commit_phase_inputs(phase: int) -> None:
+    """Copy the phase's widget values into answers. A value typed and then
+    the button clicked with no blur arrives in the click's own run, where
+    this phase's widgets no longer render: without this copy it never
+    reaches answers and Streamlit drops its key at the end of the run."""
+    from qai_consultant.ui.components import DISCOVERY_PHASES
+
+    for key in DISCOVERY_PHASES[phase][1]:
+        if f"input_{key}" in st.session_state:
+            st.session_state.answers[key] = st.session_state[f"input_{key}"]
+    if phase == len(DISCOVERY_PHASES) - 1 and "input_additional_context" in st.session_state:
+        st.session_state.discovery_additional_context = st.session_state["input_additional_context"]
+
+
+def _discovery_next(phase: int) -> None:
+    from qai_consultant.ui.components import DISCOVERY_PHASES
+
+    _commit_phase_inputs(phase)
+    _cleaned, errors = _validate_answers(DISCOVERY_PHASES[phase][1])
+    if errors:
+        st.session_state.discovery_errors = errors
+    else:
+        st.session_state.discovery_phase = phase + 1
+
+
+def _discovery_back(phase: int) -> None:
+    _commit_phase_inputs(phase)
+    st.session_state.discovery_phase = max(0, phase - 1)
+
+
+def _apply_selected_template() -> None:
+    selected = st.session_state.get("template_selector")
+    if selected:
+        _apply_template(selected)
+
+
 def render_dialogue():
-    st.markdown("## 📋 Project Discovery")
-    st.markdown("Answer the questions below to help QAI understand your project.")
-    st.markdown("---")
-
-    total = len(QUESTIONS)
-
-    from qai_consultant.ui.components import build_dialogue_header_html
+    from qai_consultant.ui.components import DISCOVERY_PHASES, build_discovery_header_html
     from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
+    st.markdown("## 📋 Project Discovery")
+    st.markdown("Three short phases, so QAI understands your project.")
+    st.markdown("---")
+
     _dialogue_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
-    # The progress header sits above the form, but answers only reach
-    # st.session_state.answers while the form widgets run below it. Counting
-    # before the form lagged one rerun behind (first Enter looked ignored,
-    # progress stayed 0/11), so reserve the slot now and fill it after.
+    phase = max(0, min(st.session_state.get("discovery_phase", 0), len(DISCOVERY_PHASES) - 1))
+    phase_name, phase_keys = DISCOVERY_PHASES[phase]
+    last_phase = phase == len(DISCOVERY_PHASES) - 1
+    # The header sits above the inputs, but answers only reach
+    # st.session_state.answers while the input widgets run below it. Counting
+    # before them lagged one rerun behind (first Enter looked ignored), so
+    # reserve the slot now and fill it after.
     _progress_slot = st.empty()
-    st.markdown("###")
 
-    selected_template = st.selectbox(
-        "⚡ Quick start with a template",
-        options=[opt[1] for opt in TEMPLATE_OPTIONS],
-        format_func=lambda k: next((label for label, key in TEMPLATE_OPTIONS if key == k), "— Unknown —"),
-        index=0,
-        key="template_selector",
-    )
-    if selected_template and st.button("Apply template", key="apply_template"):
-        _apply_template(selected_template)
-        st.rerun()
+    if phase == 0:
+        selected_template = st.selectbox(
+            "⚡ Quick start with a template",
+            options=[opt[1] for opt in TEMPLATE_OPTIONS],
+            format_func=lambda k: next((label for label, key in TEMPLATE_OPTIONS if key == k), "— Unknown —"),
+            index=0,
+            key="template_selector",
+        )
+        if selected_template:
+            st.button("Apply template", key="apply_template", on_click=_apply_selected_template)
+        st.markdown("###")
 
+    question_by_key = {q["key"]: q for q in QUESTIONS}
+    question_no = {q["key"]: i for i, q in enumerate(QUESTIONS, start=1)}
     # Plain container, not st.form: a form's first Enter raced the widget-value
     # sync (stale value submitted, progress stuck at 0/11 until a 2nd Enter).
     # Without a form every answer commits on Enter/blur and reruns.
     with st.container():
-        for idx, question in enumerate(QUESTIONS, start=1):
-            key = question["key"]
+        for key in phase_keys:
+            question = question_by_key[key]
             st.markdown(
                 f'<div class="ledger-card">'
-                f'<div class="idx">{idx:02d} / {len(QUESTIONS):02d}</div>'
+                f'<div class="idx">{question_no[key]:02d} / {len(QUESTIONS):02d}</div>'
                 f'<div class="qtitle">{question["question"]}</div>'
                 f"</div>",
                 unsafe_allow_html=True,
             )
             st.caption(f"💡 {question['hint']}")
+            # Only the current phase's inputs render. Streamlit drops the key
+            # of a widget it did not render (so fall back to answers, the layer
+            # that survives), and it sends a Session-State value to the browser
+            # only in the run that set it: a key the template callback set in
+            # an earlier run would show empty and post "" back on the next
+            # click. So always (re)set the key in the run that creates the
+            # widget. key= only, no value=, or Streamlit warns about both.
+            widget_key = f"input_{key}"
+            st.session_state[widget_key] = st.session_state.get(widget_key, st.session_state.answers.get(key, ""))
             st.session_state.answers[key] = st.text_input(
                 label=question["question"],
-                value=st.session_state.answers.get(key, ""),
-                key=f"input_{key}",
+                key=widget_key,
                 label_visibility="collapsed",
             )
             st.markdown("###")
 
-        # Optional free-text context — deliberately NOT in st.session_state.answers:
-        # the progress bar divides by len(QUESTIONS) and this field must not count.
-        st.markdown("**Anything else QAI should know? (optional)**")
-        st.caption("💡 e.g., legacy constraints, third-party dependencies, team specifics, used to tailor all generated documents")
-        st.text_area(
-            label="Anything else QAI should know? (optional)",
-            key="input_additional_context",
-            max_chars=2000,
-            height=120,
-            label_visibility="collapsed",
-        )
-        st.markdown("###")
+        if last_phase:
+            # Optional free-text context -- deliberately NOT in st.session_state.answers:
+            # the progress counts QUESTIONS only and this field must not count.
+            st.session_state["input_additional_context"] = st.session_state.get(
+                "input_additional_context", st.session_state.get("discovery_additional_context", "")
+            )
+            st.markdown("**Anything else QAI should know? (optional)**")
+            st.caption("💡 e.g., legacy constraints, third-party dependencies, team specifics, used to tailor all generated documents")
+            st.session_state["discovery_additional_context"] = st.text_area(
+                label="Anything else QAI should know? (optional)",
+                key="input_additional_context",
+                max_chars=2000,
+                height=120,
+                label_visibility="collapsed",
+            )
+            st.markdown("###")
 
-        submitted = st.button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
+        back_col, next_col = st.columns([1, 2])
+        with back_col:
+            st.button("← Back", key="discovery_back", use_container_width=True, disabled=phase == 0,
+                      on_click=_discovery_back, args=(phase,))
+        with next_col:
+            if last_phase:
+                submitted = st.button("✅ Review & Generate Strategy", key="discovery_submit",
+                                      use_container_width=True, type="primary")
+            else:
+                submitted = False
+                st.button(f"Next: {DISCOVERY_PHASES[phase + 1][0]} →", key="discovery_next",
+                          use_container_width=True, type="primary", on_click=_discovery_next, args=(phase,))
 
-    _answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
-    _progress_slot.markdown(build_dialogue_header_html(_dialogue_tokens, _answered, total), unsafe_allow_html=True)
+    _answered = {k for k, v in st.session_state.answers.items() if v and v.strip()}
+    _progress_slot.markdown(build_discovery_header_html(_dialogue_tokens, phase, _answered), unsafe_allow_html=True)
+
+    _phase_errors = st.session_state.pop("discovery_errors", None)
+    if _phase_errors:
+        st.warning(f"⚠️ Please fix the following before moving on from {phase_name}:")
+        for err in _phase_errors:
+            st.markdown(f"- {err}")
 
     if submitted:
-        # Validate all answers using InputValidator
-        validator = InputValidator()
-        errors = []
-        cleaned_answers = {}
-
-        for question in QUESTIONS:
-            key = question["key"]
-            raw = st.session_state.answers.get(key, "")
-            result = validator.validate(key, raw)
-            if not result.valid:
-                errors.append(f"**{question['question']}**: {result.error}")
-            else:
-                cleaned_answers[key] = result.cleaned
-
-        extra_result = validator.validate_additional_context(
+        # Every phase again, not just this one: a template or an edit can
+        # leave an earlier phase invalid after its Next was pressed.
+        cleaned_answers, errors = _validate_answers([q["key"] for q in QUESTIONS])
+        extra_result = InputValidator().validate_additional_context(
             st.session_state.get("input_additional_context", "")
         )
         if not extra_result.valid:
             errors.append(f"**Additional context**: {extra_result.error}")
 
         if errors:
-            st.warning("⚠️ Please fix the following before continuing:")
+            st.warning("⚠️ Please fix the following before continuing (use ← Back for earlier phases):")
             for err in errors:
                 st.markdown(f"- {err}")
         else:
@@ -853,6 +931,7 @@ def render_review():
             st.session_state["input_additional_context"] = st.session_state.get(
                 "review_additional_context", ""
             )
+            st.session_state["discovery_additional_context"] = st.session_state["input_additional_context"]
             st.session_state.current_step = "dialogue"
             st.rerun()
     with col2:
@@ -866,6 +945,7 @@ def render_review():
             else:
                 st.session_state.dialogue.set_additional_context(result.cleaned)
                 st.session_state["input_additional_context"] = result.cleaned
+                st.session_state["discovery_additional_context"] = result.cleaned
                 if st.session_state.get("run_count", 0) < MAX_RUNS_PER_SESSION:
                     # Charge the run here, before the rerun, so the strategy
                     # screen's sidebar already renders locked (see
@@ -1473,6 +1553,10 @@ def render_strategy():
         for q in QUESTIONS:
             st.session_state[f"input_{q['key']}"] = st.session_state.answers.get(q["key"], "")
         st.session_state["input_additional_context"] = _prev_extra or ""
+        # The wizard's surviving copy of the field (its widget renders only
+        # on the last phase), and back to the first phase to revisit all.
+        st.session_state["discovery_additional_context"] = _prev_extra or ""
+        st.session_state["discovery_phase"] = 0
         st.session_state.current_step = "dialogue"
         st.rerun()
 
@@ -1492,6 +1576,8 @@ def render_strategy():
         for q in QUESTIONS:
             st.session_state.pop(f"input_{q['key']}", None)
         st.session_state.pop("input_additional_context", None)
+        st.session_state.pop("discovery_additional_context", None)
+        st.session_state.pop("discovery_phase", None)
         st.session_state.pop("review_additional_context", None)
         st.session_state.pop("results_uploader", None)
         st.session_state.current_step = "intro"
