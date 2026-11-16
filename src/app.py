@@ -277,10 +277,36 @@ def _generation_in_progress() -> bool:
     return bool(state.get("review_narrative_pending") or state.get("maturity_narrative_pending"))
 
 
+def render_page_nav() -> None:
+    """The mode switcher inside the page, under the header, on every screen but
+    the landing page. The sidebar holds the same three modes but starts closed
+    on a phone and can be collapsed anywhere. Same rules as the sidebar's: the active mode is disabled, and
+    everything is locked while a generation runs. Navigates in an on_click
+    callback, so the new screen renders in the same run (no st.rerun())."""
+    from qai_consultant.ui.components import APP_MODES, build_page_nav_css
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
+
+    tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    active = _current_mode(st.session_state.get("current_step", "intro"))
+    locked = _generation_in_progress()
+    st.markdown(build_page_nav_css(tokens, active), unsafe_allow_html=True)
+    with st.container(key="page-nav", horizontal=True):
+        for mode_id, _idx, label in APP_MODES:
+            st.button(
+                label, key=f"pagenav-{mode_id}", width="content",
+                disabled=locked or mode_id == active,
+                on_click=_go_to, args=(mode_id,),
+            )
+
+
 def _go_to(mode: str) -> None:
     """Switch to a mode's screen. The strategy flow resumes at the step the
     user left it on (dialogue/review/strategy), or starts at the dialogue."""
     current = st.session_state.get("current_step", "intro")
+    if current == "dialogue":
+        # Text typed and a mode chip clicked with no blur arrives in this click's
+        # run; the dialogue's widgets are not rendered after the switch.
+        _commit_phase_inputs(st.session_state.get("discovery_phase", 0))
     if _current_mode(current) == "strategy":
         st.session_state.strategy_resume_step = current
     if mode == "strategy":
@@ -1874,16 +1900,12 @@ def render_doc_review():
 
 
 def _render_score_grid(scores: dict, per_row: int = 5) -> None:
-    """Signal Ledger cards in rows of `per_row`. One st.columns() per dimension
-    squeezed 10 TMMi cards into a single row at desktop width, wrapping "100"
-    across lines and overflowing the bars out of their cards."""
-    from qai_consultant.ui.components import signal_ledger_html
-    items = list(scores.items())
-    for start in range(0, len(items), per_row):
-        cols = st.columns(per_row)
-        for col, (dim, score) in zip(cols, items[start:start + per_row]):
-            with col:
-                st.markdown(signal_ledger_html(dim.replace("_", " ").title(), score), unsafe_allow_html=True)
+    """Signal Ledger cards in one responsive CSS grid (`per_row` wide, two on a
+    phone). One st.columns() per dimension squeezed 10 TMMi cards into a single
+    row at desktop width, wrapping "100" across lines, and stacked one card per
+    row on a phone."""
+    from qai_consultant.ui.components import build_score_grid_html
+    st.markdown(build_score_grid_html(scores.items(), per_row), unsafe_allow_html=True)
 
 
 def render_maturity_assessment():
@@ -1972,7 +1994,7 @@ def render_maturity_assessment():
             st.rerun()
         return
 
-    from qai_consultant.ui.components import signal_ledger_html
+    from qai_consultant.ui.components import maturity_level_tier, signal_ledger_html
 
     _maturity_animate_class = " animate" if not st.session_state.get("maturity_intro_animated") else ""
     st.session_state.maturity_intro_animated = True
@@ -1984,7 +2006,11 @@ def render_maturity_assessment():
     st.markdown(
         '<div class="output-tiles{}">{}</div>'.format(
             _maturity_animate_class,
-            signal_ledger_html("Indicative TMMi Level", result.indicative_tmmi_level, sub="1-3 · never 4-5"),
+            signal_ledger_html(
+                "Indicative TMMi Level", result.indicative_tmmi_level, sub="1-3 · never 4-5",
+                tier=maturity_level_tier(result.indicative_tmmi_level),
+                segments=3, filled=result.indicative_tmmi_level,
+            ),
         ),
         unsafe_allow_html=True,
     )
@@ -2180,6 +2206,8 @@ def main():
             st.session_state[_key] = st.session_state[_key]
 
     render_sidebar()
+    if not on_landing:
+        render_page_nav()
 
     step = st.session_state.get("current_step", "intro")
 

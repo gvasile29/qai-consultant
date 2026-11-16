@@ -66,18 +66,36 @@ def score_tier(score: int) -> str:
     return "fail"
 
 
-def signal_ledger_html(label: str, score: int, sub: str = "", tier: str | None = None) -> str:
+def maturity_level_tier(level: int) -> str:
+    """Signal Ledger tier for an indicative TMMi level (1-3; the tool never
+    reports 4-5). The level is not a 0-100 score, so score_tier() would read
+    the maximum level 3 as a failing 3/100."""
+    if level >= 3:
+        return "pass"
+    if level == 2:
+        return "hold"
+    return "fail"
+
+
+def signal_ledger_html(
+    label: str, score: int, sub: str = "", tier: str | None = None,
+    segments: int = 10, filled: int | None = None,
+) -> str:
     """A compact score readout: an uppercase mono label, a large tabular
-    score, an optional sub-line, and a 10-segment meter. `tier` overrides
-    the auto-computed pass/hold/fail class when the caller's score isn't a
-    "higher is better toward 100" quality score (e.g. it's fine to leave
-    unset for Review/Results scores, and explicit for anything where the
-    caller has better domain judgment than the generic 80/50 split)."""
+    score, an optional sub-line, and a segmented meter (10 segments by
+    default). `tier` overrides the auto-computed pass/hold/fail class when
+    the caller's score isn't a "higher is better toward 100" quality score
+    (e.g. it's fine to leave unset for Review/Results scores, and explicit
+    for anything where the caller has better domain judgment than the
+    generic 80/50 split). A value on another scale passes `segments` (the
+    scale's top) and `filled` (how many are lit), e.g. TMMi level 2 of 3."""
     resolved_tier = tier or score_tier(score)
-    filled = max(0, min(10, round(score / 10)))
+    if filled is None:
+        filled = round(score / 10)
+    filled = max(0, min(segments, filled))
     meter = "".join(
         f'<i class="on {resolved_tier}"></i>' if i < filled else "<i></i>"
-        for i in range(10)
+        for i in range(segments)
     )
     sub_html = f'<div class="sl-sub">{_html.escape(sub)}</div>' if sub else ""
     return (
@@ -87,6 +105,24 @@ def signal_ledger_html(label: str, score: int, sub: str = "", tier: str | None =
         f"{sub_html}"
         f'<div class="sl-meter">{meter}</div>'
         "</div>"
+    )
+
+
+def build_score_grid_html(items, per_row: int = 5) -> str:
+    """Pure function: (label, score) pairs -> Signal Ledger cards in one CSS
+    grid, `per_row` columns wide and always two on a phone. st.columns() gave
+    a one-card-per-row stack there (ten TMMi areas, about 1000px of scrolling).
+    Labels are escaped by signal_ledger_html()."""
+    cards = "".join(
+        signal_ledger_html(label.replace("_", " ").title(), score) for label, score in items
+    )
+    return (
+        "<style>"
+        ".score-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 0.75rem; }"
+        ".score-grid .signal-ledger { margin-bottom: 0; }"
+        "@media (max-width: 640px) { .score-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }"
+        "</style>"
+        f'<div class="score-grid" style="--cols: {per_row}">{cards}</div>'
     )
 
 
@@ -800,6 +836,40 @@ def build_sidebar_nav_css(tokens: dict, active_mode: str | None) -> str:
 .st-key-nav-{active_mode} button:disabled p::before {{ color: {tokens['accent']}; }}
 .st-key-nav-{active_mode} button:disabled::after {{ content: "\\25CF"; position: absolute; right: 0.8rem; font-size: 0.6rem; color: {tokens['accent']}; }}
 """
+    return _sidebar_nav_css_template(tokens, index_rules, active_rule)
+
+
+def build_page_nav_css(tokens: dict, active_mode: str | None) -> str:
+    """Pure function: token dict + the active mode id -> CSS for the in-page
+    mode switcher (st.container(key="page-nav", horizontal=True) holding one
+    button per APP_MODES entry, keyed pagenav-<mode>). It is the sidebar
+    switcher's twin for a phone, where the sidebar starts closed: one wrapping
+    row of mono chips, the active mode lit in the accent. Keys deliberately
+    avoid the sidebar's "nav-" prefix so neither rule set catches the other."""
+    index_rules = "\n".join(
+        f'.st-key-pagenav-{mode_id} button p::before {{ content: "{idx}"; color: {tokens["ink_dim"]}; margin-right: 0.45rem; }}'
+        for mode_id, idx, _label in APP_MODES
+    )
+    active_rule = ""
+    if active_mode in {m[0] for m in APP_MODES}:
+        active_rule = f"""
+.st-key-pagenav-{active_mode} button:disabled {{ opacity: 1; cursor: default; background: {tokens['surface']}; border-color: {tokens['accent']}; }}
+.st-key-pagenav-{active_mode} button:disabled p {{ color: {tokens['accent']}; font-weight: 600; }}
+.st-key-pagenav-{active_mode} button:disabled p::before {{ color: {tokens['accent']}; }}
+"""
+    return f"""
+<style>
+.st-key-page-nav {{ flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem; }}
+.st-key-page-nav button {{ min-height: 2.1rem; padding: 0.15rem 0.7rem; }}
+.st-key-page-nav button p {{ font-family: 'Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.03em; text-transform: uppercase; white-space: nowrap; }}
+.st-key-page-nav button p::before {{ font-size: 0.68rem; }}
+{index_rules}
+{active_rule}
+</style>
+"""
+
+
+def _sidebar_nav_css_template(tokens: dict, index_rules: str, active_rule: str) -> str:
     return f"""
 <style>
 [class*="st-key-nav-"] button {{ justify-content: flex-start; text-align: left; position: relative; }}

@@ -21,7 +21,7 @@ HIDE_TOOLBAR = '[data-testid="stToolbar"], [data-testid="stDecoration"] { displa
 
 def open_home(page: Page, url: str) -> None:
     page.goto(url, timeout=60000, wait_until="networkidle")
-    page.wait_for_selector(".pom-stats", timeout=60000)
+    page.wait_for_selector('.ql-cta[data-go="strategy"]', timeout=60000)  # inside the landing component's shadow root
     page.add_style_tag(content=HIDE_TOOLBAR)
     page.wait_for_timeout(4500)  # let the landing entrance animation finish
 
@@ -56,7 +56,7 @@ def main(url: str) -> None:
         page.wait_for_timeout(500)
 
         # 3. Project Discovery dialogue with the Web Application template applied
-        page.get_by_role("button", name="Start — Generate a Test Strategy").click(timeout=10000)
+        page.locator('.ql-cta[data-go="strategy"]').click(timeout=10000)
         page.wait_for_selector(".dialogue-progress-track", timeout=15000)
         page.locator('[data-testid="stSelectbox"]').first.click()
         page.get_by_text("🌐 Web Application", exact=False).click(timeout=10000)
@@ -72,7 +72,7 @@ def main(url: str) -> None:
         page.get_by_role("button", name="🤖 Generate Test Strategy").click(timeout=10000)
         page.wait_for_selector('[data-testid="stTabs"]', timeout=900000)
         page.wait_for_timeout(2000)
-        shot(page, "streamlit_risk_register.png", page.locator(".ledger-card").filter(has_text="Executive readout").first)
+        shot(page, "streamlit_risk_register.png", page.locator(".mission-readout").first)
         tabs = page.locator('[data-testid="stTab"]')
         for i, name in enumerate(["streamlit_risk_ledger.png", "streamlit_effort.png",
                                   "streamlit_strategy.png", "streamlit_test_plan.png"]):
@@ -82,7 +82,7 @@ def main(url: str) -> None:
 
         # 8. QA Document Quality Review (deterministic, no LLM call)
         open_home(page, url)
-        page.get_by_role("button", name="📝 Review an existing QA document instead").click(timeout=10000)
+        page.locator('.ql-mission[data-go="doc_review"]').click(timeout=10000)
         page.wait_for_selector(".st-key-doc-review-input", timeout=15000)
         page.locator("textarea").last.fill((REPO / "evals/fixtures/review/strong_test_plan.md").read_text(encoding="utf-8"))
         page.keyboard.press("Tab")  # blur so Streamlit registers the text_area value
@@ -90,11 +90,11 @@ def main(url: str) -> None:
         page.get_by_role("button", name="🔍 Review Document").click(timeout=10000)
         page.wait_for_selector(".output-tiles", timeout=20000)
         page.wait_for_timeout(1500)
-        shot(page, "streamlit_doc_review.png", page.locator(".output-tiles").first)
+        shot(page, "streamlit_doc_review.png", page.locator(".output-eyebrow").first)  # from the title down: not cropped mid-caption
 
         # 9. QA Maturity Assessment (deterministic, no LLM call)
         open_home(page, url)
-        page.get_by_role("button", name="📈 Assess QA Maturity").click(timeout=10000)
+        page.locator('.ql-mission[data-go="maturity"]').click(timeout=10000)
         page.wait_for_selector(".st-key-maturity-input", timeout=15000)
         page.locator("textarea").last.fill((REPO / "evals/fixtures/maturity/level3_strong.txt").read_text(encoding="utf-8"))
         page.keyboard.press("Tab")
@@ -102,7 +102,7 @@ def main(url: str) -> None:
         page.get_by_role("button", name="🔍 Assess Maturity").click(timeout=10000)
         page.wait_for_selector(".output-tiles", timeout=20000)
         page.wait_for_timeout(1500)
-        shot(page, "streamlit_maturity.png", page.locator(".output-tiles").first)
+        shot(page, "streamlit_maturity.png", page.locator(".output-eyebrow").first)
 
         browser.close()
 
