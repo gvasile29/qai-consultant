@@ -86,6 +86,10 @@ html, body, [class*="css"] {{
     justify-content: center;
 }}
 .st-key-header-logo .header-logo {{ max-width: 100%; height: auto; }}
+/* On a phone the 280px logo took ~230px of a 844px screen above the title. */
+@media (max-width: 640px) {{
+    .st-key-header-logo .header-logo {{ max-width: 150px; }}
+}}
 
 /* Intake ledger card (Task 6) */
 .ledger-card {{

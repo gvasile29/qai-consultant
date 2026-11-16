@@ -6,6 +6,7 @@ Browser-based interface for generating Test Strategy documents.
 import os
 import re
 import sys
+import time
 
 
 from pathlib import Path
@@ -14,7 +15,7 @@ from typing import Optional
 import streamlit as st
 from streamlit.runtime.scriptrunner import RerunException, StopException
 from qai_consultant.rag.agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
-from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, pdf_icon_html, pdf_meta_html, with_ai_footer
+from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, AI_INTERACTION_NOTICE_SHORT, pdf_icon_html, pdf_meta_html, with_ai_footer
 from qai_consultant.core.dialogue import DialogueManager, InputValidator, QUESTIONS
 from qai_consultant.generation.strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from qai_consultant.generation.risk_analyzer import RiskAnalyzer, append_execution_data_appendix
@@ -94,7 +95,10 @@ st.set_page_config(
     page_title="QAI Consultant",
     page_icon=str(BRAND_DIR / "qai_favicon_32.png"),
     layout="wide",
-    initial_sidebar_state="expanded",
+    # "auto": open on desktop, closed on a phone, where an open sidebar covers
+    # the whole landing page on first load. The landing footer repeats the
+    # short AI interaction notice for visitors who never open the sidebar.
+    initial_sidebar_state="auto",
 )
 
 # Sidebar logo (Streamlit >= 1.35): full lockup expanded, symbol-only collapsed.
@@ -273,19 +277,36 @@ def _generation_in_progress() -> bool:
     return bool(state.get("review_narrative_pending") or state.get("maturity_narrative_pending"))
 
 
-# Landing-page wording for the mode buttons (the sidebar uses the shorter
-# components.APP_MODES labels).
-_LANDING_CTA_LABELS = {
-    "strategy": "Start: generate a test strategy →",
-    "doc_review": "Review an existing QA document",
-    "maturity": "Assess QA maturity",
-}
+def render_page_nav() -> None:
+    """The mode switcher inside the page, under the header, on every screen but
+    the landing page. The sidebar holds the same three modes but starts closed
+    on a phone and can be collapsed anywhere. Same rules as the sidebar's: the active mode is disabled, and
+    everything is locked while a generation runs. Navigates in an on_click
+    callback, so the new screen renders in the same run (no st.rerun())."""
+    from qai_consultant.ui.components import APP_MODES, build_page_nav_css
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
+
+    tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    active = _current_mode(st.session_state.get("current_step", "intro"))
+    locked = _generation_in_progress()
+    st.markdown(build_page_nav_css(tokens, active), unsafe_allow_html=True)
+    with st.container(key="page-nav", horizontal=True):
+        for mode_id, _idx, label in APP_MODES:
+            st.button(
+                label, key=f"pagenav-{mode_id}", width="content",
+                disabled=locked or mode_id == active,
+                on_click=_go_to, args=(mode_id,),
+            )
 
 
 def _go_to(mode: str) -> None:
     """Switch to a mode's screen. The strategy flow resumes at the step the
     user left it on (dialogue/review/strategy), or starts at the dialogue."""
     current = st.session_state.get("current_step", "intro")
+    if current == "dialogue":
+        # Text typed and a mode chip clicked with no blur arrives in this click's
+        # run; the dialogue's widgets are not rendered after the switch.
+        _commit_phase_inputs(st.session_state.get("discovery_phase", 0))
     if _current_mode(current) == "strategy":
         st.session_state.strategy_resume_step = current
     if mode == "strategy":
@@ -458,7 +479,7 @@ def render_sidebar():
                         "test_plan", "test_plan_path", "test_plan_sources",
                         "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                         "feedback_submitted", "_feedback_partial",
-                        "generation_started", "results_complete",
+                        "generation_started", "generation_started_at", "results_complete",
                         "results_analysis", "strategy_resume_step",
                         "run_count", "current_step"]:
                 if key in st.session_state:
@@ -468,6 +489,8 @@ def render_sidebar():
             for q in QUESTIONS:
                 st.session_state.pop(f"input_{q['key']}", None)
             st.session_state.pop("input_additional_context", None)
+            st.session_state.pop("discovery_additional_context", None)
+            st.session_state.pop("discovery_phase", None)
             st.session_state.pop("review_additional_context", None)
             st.session_state.pop("results_uploader", None)
             st.rerun()
@@ -570,44 +593,29 @@ def _adoption_snapshot() -> dict:
 
 # ── Steps ──────────────────────────────────────────────────────────────────────
 def render_intro():
-    from qai_consultant.ui.components import build_landing_hero_html
+    from qai_consultant.ui.landing import build_landing_frame_css, render_mission_landing
     from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
-    _hero_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
-    st.markdown(build_landing_hero_html(_hero_tokens), unsafe_allow_html=True)
+    _dark = st.context.theme.type == "dark"
+    _hero_tokens = DARK_TOKENS if _dark else LIGHT_TOKENS
+    st.markdown(build_landing_frame_css(_hero_tokens), unsafe_allow_html=True)
+    _target = render_mission_landing(_hero_tokens, dark=_dark, version=__version__)
+    if _target:
+        _go_to(_target)
+        st.rerun()
 
-    st.markdown("---")
+    with st.container(key="landing-more"):
+        _render_landing_more(_hero_tokens)
 
-    from qai_consultant.ui.components import build_landing_deliverables_html
-    st.markdown(build_landing_deliverables_html(_hero_tokens), unsafe_allow_html=True)
 
-    st.markdown("---")
+def _render_landing_more(tokens: dict) -> None:
+    """The native Streamlit part of the landing page, under the component:
+    the two "more detail" expanders (the hero's "See example output" button
+    scrolls to st.container(key="landing-details")) and the adoption strip."""
+    from qai_consultant.ui.components import build_landing_details_css, build_output_eyebrow_html
 
-    from qai_consultant.ui.components import (
-        APP_MODES,
-        build_landing_cta_css,
-        build_landing_details_css,
-        build_landing_note_html,
-        build_output_eyebrow_html,
-    )
-    st.markdown(build_landing_cta_css(_hero_tokens), unsafe_allow_html=True)
-    st.markdown(build_output_eyebrow_html(_hero_tokens, "ready when you are"), unsafe_allow_html=True)
-    with st.container(key="landing-cta"):
-        for _col, (_mode_id, _idx, _label) in zip(st.columns([2, 1, 1]), APP_MODES):
-            with _col:
-                if st.button(
-                    _LANDING_CTA_LABELS.get(_mode_id, _label),
-                    key=f"cta-{_mode_id}",
-                    use_container_width=True,
-                    type="primary" if _mode_id == "strategy" else "secondary",
-                ):
-                    _go_to(_mode_id)
-                    st.rerun()
-
-    st.markdown(build_landing_note_html(_hero_tokens), unsafe_allow_html=True)
-
-    st.markdown(build_landing_details_css(_hero_tokens), unsafe_allow_html=True)
-    st.markdown(build_output_eyebrow_html(_hero_tokens, "more detail"), unsafe_allow_html=True)
+    st.markdown(build_landing_details_css(tokens), unsafe_allow_html=True)
+    st.markdown(build_output_eyebrow_html(tokens, "more detail"), unsafe_allow_html=True)
     with st.container(key="landing-details"):
         with st.expander("How is this different from prompting Claude or Gemini?"):
             st.markdown("""
@@ -640,11 +648,11 @@ The MCP server (v3.0+) is built from the same knowledge base and the same determ
                 st.markdown(EXAMPLE_TEST_PLAN)
 
     # Last on the page: a cold cache fetches over the network (<=6s), and
-    # nothing above — above all the Start button — should wait on it.
+    # nothing above (the landing component and its Start button included)
+    # should wait on it.
     from qai_consultant.ui.components import build_adoption_strip_html
-    _adoption_html = build_adoption_strip_html(_hero_tokens, _adoption_snapshot())
+    _adoption_html = build_adoption_strip_html(tokens, _adoption_snapshot())
     if _adoption_html:
-        st.markdown("---")
         st.markdown(_adoption_html, unsafe_allow_html=True)
 
 
@@ -666,98 +674,174 @@ def _apply_template(template_key: str) -> None:
         st.session_state[f"input_{field}"] = value
 
 
+def _validate_answers(keys) -> tuple[dict, list]:
+    """Validate the given question keys. Reads the input_<key> widget value
+    when it exists (a callback runs before the script copies it into
+    answers), else answers. Returns (cleaned answers, error lines)."""
+    validator = InputValidator()
+    questions = {q["key"]: q for q in QUESTIONS}
+    cleaned, errors = {}, []
+    for key in keys:
+        raw = st.session_state.get(f"input_{key}", st.session_state.answers.get(key, ""))
+        result = validator.validate(key, raw)
+        if result.valid:
+            cleaned[key] = result.cleaned
+        else:
+            errors.append(f"**{questions[key]['question']}**: {result.error}")
+    return cleaned, errors
+
+
+# Wizard navigation runs in on_click callbacks, before the script: the new
+# phase renders in the same run, with no st.rerun() second pass.
+def _commit_phase_inputs(phase: int) -> None:
+    """Copy the phase's widget values into answers. A value typed and then
+    the button clicked with no blur arrives in the click's own run, where
+    this phase's widgets no longer render: without this copy it never
+    reaches answers and Streamlit drops its key at the end of the run."""
+    from qai_consultant.ui.components import DISCOVERY_PHASES
+
+    for key in DISCOVERY_PHASES[phase][1]:
+        if f"input_{key}" in st.session_state:
+            st.session_state.answers[key] = st.session_state[f"input_{key}"]
+    if phase == len(DISCOVERY_PHASES) - 1 and "input_additional_context" in st.session_state:
+        st.session_state.discovery_additional_context = st.session_state["input_additional_context"]
+
+
+def _discovery_next(phase: int) -> None:
+    from qai_consultant.ui.components import DISCOVERY_PHASES
+
+    _commit_phase_inputs(phase)
+    _cleaned, errors = _validate_answers(DISCOVERY_PHASES[phase][1])
+    if errors:
+        st.session_state.discovery_errors = errors
+    else:
+        st.session_state.discovery_phase = phase + 1
+
+
+def _discovery_back(phase: int) -> None:
+    _commit_phase_inputs(phase)
+    st.session_state.discovery_phase = max(0, phase - 1)
+
+
+def _apply_selected_template() -> None:
+    selected = st.session_state.get("template_selector")
+    if selected:
+        _apply_template(selected)
+
+
 def render_dialogue():
-    st.markdown("## 📋 Project Discovery")
-    st.markdown("Answer the questions below to help QAI understand your project.")
-    st.markdown("---")
-
-    total = len(QUESTIONS)
-
-    from qai_consultant.ui.components import build_dialogue_header_html
+    from qai_consultant.ui.components import DISCOVERY_PHASES, build_discovery_header_html
     from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
+    st.markdown("## 📋 Project Discovery")
+    st.markdown("Three short phases, so QAI understands your project.")
+    st.markdown("---")
+
     _dialogue_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
-    # The progress header sits above the form, but answers only reach
-    # st.session_state.answers while the form widgets run below it. Counting
-    # before the form lagged one rerun behind (first Enter looked ignored,
-    # progress stayed 0/11), so reserve the slot now and fill it after.
+    phase = max(0, min(st.session_state.get("discovery_phase", 0), len(DISCOVERY_PHASES) - 1))
+    phase_name, phase_keys = DISCOVERY_PHASES[phase]
+    last_phase = phase == len(DISCOVERY_PHASES) - 1
+    # The header sits above the inputs, but answers only reach
+    # st.session_state.answers while the input widgets run below it. Counting
+    # before them lagged one rerun behind (first Enter looked ignored), so
+    # reserve the slot now and fill it after.
     _progress_slot = st.empty()
-    st.markdown("###")
 
-    selected_template = st.selectbox(
-        "⚡ Quick start with a template",
-        options=[opt[1] for opt in TEMPLATE_OPTIONS],
-        format_func=lambda k: next((label for label, key in TEMPLATE_OPTIONS if key == k), "— Unknown —"),
-        index=0,
-        key="template_selector",
-    )
-    if selected_template and st.button("Apply template", key="apply_template"):
-        _apply_template(selected_template)
-        st.rerun()
+    if phase == 0:
+        selected_template = st.selectbox(
+            "⚡ Quick start with a template",
+            options=[opt[1] for opt in TEMPLATE_OPTIONS],
+            format_func=lambda k: next((label for label, key in TEMPLATE_OPTIONS if key == k), "— Unknown —"),
+            index=0,
+            key="template_selector",
+        )
+        if selected_template:
+            st.button("Apply template", key="apply_template", on_click=_apply_selected_template)
+        st.markdown("###")
 
+    question_by_key = {q["key"]: q for q in QUESTIONS}
+    question_no = {q["key"]: i for i, q in enumerate(QUESTIONS, start=1)}
     # Plain container, not st.form: a form's first Enter raced the widget-value
     # sync (stale value submitted, progress stuck at 0/11 until a 2nd Enter).
     # Without a form every answer commits on Enter/blur and reruns.
     with st.container():
-        for idx, question in enumerate(QUESTIONS, start=1):
-            key = question["key"]
+        for key in phase_keys:
+            question = question_by_key[key]
             st.markdown(
                 f'<div class="ledger-card">'
-                f'<div class="idx">{idx:02d} / {len(QUESTIONS):02d}</div>'
+                f'<div class="idx">{question_no[key]:02d} / {len(QUESTIONS):02d}</div>'
                 f'<div class="qtitle">{question["question"]}</div>'
                 f"</div>",
                 unsafe_allow_html=True,
             )
             st.caption(f"💡 {question['hint']}")
+            # Only the current phase's inputs render. Streamlit drops the key
+            # of a widget it did not render (so fall back to answers, the layer
+            # that survives), and it sends a Session-State value to the browser
+            # only in the run that set it: a key the template callback set in
+            # an earlier run would show empty and post "" back on the next
+            # click. So always (re)set the key in the run that creates the
+            # widget. key= only, no value=, or Streamlit warns about both.
+            widget_key = f"input_{key}"
+            st.session_state[widget_key] = st.session_state.get(widget_key, st.session_state.answers.get(key, ""))
             st.session_state.answers[key] = st.text_input(
                 label=question["question"],
-                value=st.session_state.answers.get(key, ""),
-                key=f"input_{key}",
+                key=widget_key,
                 label_visibility="collapsed",
             )
             st.markdown("###")
 
-        # Optional free-text context — deliberately NOT in st.session_state.answers:
-        # the progress bar divides by len(QUESTIONS) and this field must not count.
-        st.markdown("**Anything else QAI should know? (optional)**")
-        st.caption("💡 e.g., legacy constraints, third-party dependencies, team specifics, used to tailor all generated documents")
-        st.text_area(
-            label="Anything else QAI should know? (optional)",
-            key="input_additional_context",
-            max_chars=2000,
-            height=120,
-            label_visibility="collapsed",
-        )
-        st.markdown("###")
+        if last_phase:
+            # Optional free-text context -- deliberately NOT in st.session_state.answers:
+            # the progress counts QUESTIONS only and this field must not count.
+            st.session_state["input_additional_context"] = st.session_state.get(
+                "input_additional_context", st.session_state.get("discovery_additional_context", "")
+            )
+            st.markdown("**Anything else QAI should know? (optional)**")
+            st.caption("💡 e.g., legacy constraints, third-party dependencies, team specifics, used to tailor all generated documents")
+            st.session_state["discovery_additional_context"] = st.text_area(
+                label="Anything else QAI should know? (optional)",
+                key="input_additional_context",
+                max_chars=2000,
+                height=120,
+                label_visibility="collapsed",
+            )
+            st.markdown("###")
 
-        submitted = st.button("✅ Review & Generate Strategy", use_container_width=True, type="primary")
+        back_col, next_col = st.columns([1, 2])
+        with back_col:
+            st.button("← Back", key="discovery_back", use_container_width=True, disabled=phase == 0,
+                      on_click=_discovery_back, args=(phase,))
+        with next_col:
+            if last_phase:
+                submitted = st.button("✅ Review & Generate Strategy", key="discovery_submit",
+                                      use_container_width=True, type="primary")
+            else:
+                submitted = False
+                st.button(f"Next: {DISCOVERY_PHASES[phase + 1][0]} →", key="discovery_next",
+                          use_container_width=True, type="primary", on_click=_discovery_next, args=(phase,))
 
-    _answered = sum(1 for v in st.session_state.answers.values() if v and v.strip())
-    _progress_slot.markdown(build_dialogue_header_html(_dialogue_tokens, _answered, total), unsafe_allow_html=True)
+    _answered = {k for k, v in st.session_state.answers.items() if v and v.strip()}
+    _progress_slot.markdown(build_discovery_header_html(_dialogue_tokens, phase, _answered), unsafe_allow_html=True)
+
+    _phase_errors = st.session_state.pop("discovery_errors", None)
+    if _phase_errors:
+        st.warning(f"⚠️ Please fix the following before moving on from {phase_name}:")
+        for err in _phase_errors:
+            st.markdown(f"- {err}")
 
     if submitted:
-        # Validate all answers using InputValidator
-        validator = InputValidator()
-        errors = []
-        cleaned_answers = {}
-
-        for question in QUESTIONS:
-            key = question["key"]
-            raw = st.session_state.answers.get(key, "")
-            result = validator.validate(key, raw)
-            if not result.valid:
-                errors.append(f"**{question['question']}**: {result.error}")
-            else:
-                cleaned_answers[key] = result.cleaned
-
-        extra_result = validator.validate_additional_context(
+        # Every phase again, not just this one: a template or an edit can
+        # leave an earlier phase invalid after its Next was pressed.
+        cleaned_answers, errors = _validate_answers([q["key"] for q in QUESTIONS])
+        extra_result = InputValidator().validate_additional_context(
             st.session_state.get("input_additional_context", "")
         )
         if not extra_result.valid:
             errors.append(f"**Additional context**: {extra_result.error}")
 
         if errors:
-            st.warning("⚠️ Please fix the following before continuing:")
+            st.warning("⚠️ Please fix the following before continuing (use ← Back for earlier phases):")
             for err in errors:
                 st.markdown(f"- {err}")
         else:
@@ -873,6 +957,7 @@ def render_review():
             st.session_state["input_additional_context"] = st.session_state.get(
                 "review_additional_context", ""
             )
+            st.session_state["discovery_additional_context"] = st.session_state["input_additional_context"]
             st.session_state.current_step = "dialogue"
             st.rerun()
     with col2:
@@ -886,6 +971,7 @@ def render_review():
             else:
                 st.session_state.dialogue.set_additional_context(result.cleaned)
                 st.session_state["input_additional_context"] = result.cleaned
+                st.session_state["discovery_additional_context"] = result.cleaned
                 if st.session_state.get("run_count", 0) < MAX_RUNS_PER_SESSION:
                     # Charge the run here, before the rerun, so the strategy
                     # screen's sidebar already renders locked (see
@@ -973,6 +1059,12 @@ def render_strategy():
         )
         st.stop()
 
+    # Set before the first timeline paint so the mission clock shows from the
+    # start, and kept across resume reruns so it counts the whole logical run,
+    # not the time since the last reconnect.
+    if needs_generation:
+        st.session_state.setdefault("generation_started_at", time.time())
+
     from qai_consultant.ui.components import (
         GENERATION_TIME_ESTIMATE,
         build_content_polish_css,
@@ -1029,7 +1121,14 @@ def render_strategy():
                 stages.append((label, "active"))
             else:
                 stages.append((label, "pending"))
-        stage_placeholder.markdown(build_stage_sequence_html(_strategy_tokens, stages), unsafe_allow_html=True)
+        # The mission clock only runs while the pipeline is still going; the
+        # results screen re-renders the timeline without it.
+        _started_at = st.session_state.get("generation_started_at")
+        _elapsed = time.time() - _started_at if needs_generation and _started_at else None
+        stage_placeholder.html(
+            build_stage_sequence_html(_strategy_tokens, stages, elapsed_s=_elapsed),
+            unsafe_allow_javascript=_elapsed is not None,
+        )
 
     _render_stages()
 
@@ -1252,17 +1351,22 @@ def render_strategy():
 
     # ── Executive Readout (deterministic "so what?" above the tabs) ───────
     from qai_consultant.generation.executive_readout import build_readout
-    from qai_consultant.ui.components import executive_readout_html
+    from qai_consultant.ui.components import build_readout_tiles_html, executive_readout_html
     from qai_consultant.core.risk_ledger import parse_risk_matrix as _parse_risk_matrix
 
-    _readout_html = executive_readout_html(
-        build_readout(
-            _parse_risk_matrix(st.session_state.get("risk_register") or ""),
-            st.session_state.get("effort_data"),
-        )
+    _readout = build_readout(
+        _parse_risk_matrix(st.session_state.get("risk_register") or ""),
+        st.session_state.get("effort_data"),
     )
+    # Big tiles first (the "so what?" at a glance); the explanations behind
+    # each number stay one click away in the detailed readout.
+    _tiles_html = build_readout_tiles_html(_strategy_tokens, _readout)
+    if _tiles_html:
+        st.markdown(_tiles_html, unsafe_allow_html=True)
+    _readout_html = executive_readout_html(_readout)
     if _readout_html:
-        st.markdown(_readout_html, unsafe_allow_html=True)
+        with st.expander("How these numbers are computed"):
+            st.markdown(_readout_html, unsafe_allow_html=True)
 
     # ── Three Tabs ────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Risk Register", "📊 Effort Estimation", "📋 Test Strategy", "📝 Test Plan"])
@@ -1274,10 +1378,11 @@ def render_strategy():
 
     with tab1:
         from qai_consultant.core.risk_ledger import parse_risk_matrix
-        from qai_consultant.ui.components import risk_ledger_table_html
+        from qai_consultant.ui.components import build_risk_map_html, risk_ledger_table_html
 
         risk_rows = parse_risk_matrix(st.session_state.risk_register)
         if risk_rows:
+            st.markdown(build_risk_map_html(_strategy_tokens, risk_rows), unsafe_allow_html=True)
             st.markdown(
                 f'<div class="output-tiles{_output_animate_class}">{risk_ledger_table_html(risk_rows)}</div>',
                 unsafe_allow_html=True,
@@ -1464,7 +1569,7 @@ def render_strategy():
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
-                    "generation_started", "results_complete",
+                    "generation_started", "generation_started_at", "results_complete",
                     "results_analysis"]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -1474,6 +1579,10 @@ def render_strategy():
         for q in QUESTIONS:
             st.session_state[f"input_{q['key']}"] = st.session_state.answers.get(q["key"], "")
         st.session_state["input_additional_context"] = _prev_extra or ""
+        # The wizard's surviving copy of the field (its widget renders only
+        # on the last phase), and back to the first phase to revisit all.
+        st.session_state["discovery_additional_context"] = _prev_extra or ""
+        st.session_state["discovery_phase"] = 0
         st.session_state.current_step = "dialogue"
         st.rerun()
 
@@ -1484,7 +1593,7 @@ def render_strategy():
                     "test_plan", "test_plan_path", "test_plan_sources",
                     "risk_pdf_bytes", "effort_pdf_bytes", "strategy_pdf_bytes", "test_plan_pdf_bytes",
                     "feedback_submitted", "_feedback_partial",
-                    "generation_started", "results_complete",
+                    "generation_started", "generation_started_at", "results_complete",
                     "results_analysis", "strategy_resume_step"]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -1493,6 +1602,8 @@ def render_strategy():
         for q in QUESTIONS:
             st.session_state.pop(f"input_{q['key']}", None)
         st.session_state.pop("input_additional_context", None)
+        st.session_state.pop("discovery_additional_context", None)
+        st.session_state.pop("discovery_phase", None)
         st.session_state.pop("review_additional_context", None)
         st.session_state.pop("results_uploader", None)
         st.session_state.current_step = "intro"
@@ -1789,16 +1900,12 @@ def render_doc_review():
 
 
 def _render_score_grid(scores: dict, per_row: int = 5) -> None:
-    """Signal Ledger cards in rows of `per_row`. One st.columns() per dimension
-    squeezed 10 TMMi cards into a single row at desktop width, wrapping "100"
-    across lines and overflowing the bars out of their cards."""
-    from qai_consultant.ui.components import signal_ledger_html
-    items = list(scores.items())
-    for start in range(0, len(items), per_row):
-        cols = st.columns(per_row)
-        for col, (dim, score) in zip(cols, items[start:start + per_row]):
-            with col:
-                st.markdown(signal_ledger_html(dim.replace("_", " ").title(), score), unsafe_allow_html=True)
+    """Signal Ledger cards in one responsive CSS grid (`per_row` wide, two on a
+    phone). One st.columns() per dimension squeezed 10 TMMi cards into a single
+    row at desktop width, wrapping "100" across lines, and stacked one card per
+    row on a phone."""
+    from qai_consultant.ui.components import build_score_grid_html
+    st.markdown(build_score_grid_html(scores.items(), per_row), unsafe_allow_html=True)
 
 
 def render_maturity_assessment():
@@ -1887,7 +1994,7 @@ def render_maturity_assessment():
             st.rerun()
         return
 
-    from qai_consultant.ui.components import signal_ledger_html
+    from qai_consultant.ui.components import maturity_level_tier, signal_ledger_html
 
     _maturity_animate_class = " animate" if not st.session_state.get("maturity_intro_animated") else ""
     st.session_state.maturity_intro_animated = True
@@ -1899,7 +2006,11 @@ def render_maturity_assessment():
     st.markdown(
         '<div class="output-tiles{}">{}</div>'.format(
             _maturity_animate_class,
-            signal_ledger_html("Indicative TMMi Level", result.indicative_tmmi_level, sub="1-3 · never 4-5"),
+            signal_ledger_html(
+                "Indicative TMMi Level", result.indicative_tmmi_level, sub="1-3 · never 4-5",
+                tier=maturity_level_tier(result.indicative_tmmi_level),
+                segments=3, filled=result.indicative_tmmi_level,
+            ),
         ),
         unsafe_allow_html=True,
     )
@@ -2044,16 +2155,19 @@ def main():
         st.session_state.visit_count = get_and_increment_visit_count()
         st.session_state.visit_counted = True
 
-    _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
-    with _logo_col2:
-        with st.container(key="header-logo"):
-            _header_logo = (
-                "qai_logo_horizontal_dark_1680.png"
-                if st.context.theme.type == "dark"
-                else "qai_logo_horizontal_1680.png"
-            )
-            from qai_consultant.ui.components import header_logo_html
-            st.markdown(header_logo_html((BRAND_DIR / _header_logo).read_bytes()), unsafe_allow_html=True)
+    # The landing component draws its own logo, so the header logo skips it.
+    on_landing = st.session_state.get("current_step", "intro") == "intro"
+    if not on_landing:
+        _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
+        with _logo_col2:
+            with st.container(key="header-logo"):
+                _header_logo = (
+                    "qai_logo_horizontal_dark_1680.png"
+                    if st.context.theme.type == "dark"
+                    else "qai_logo_horizontal_1680.png"
+                )
+                from qai_consultant.ui.components import header_logo_html
+                st.markdown(header_logo_html((BRAND_DIR / _header_logo).read_bytes()), unsafe_allow_html=True)
 
     # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()
@@ -2077,23 +2191,23 @@ def main():
     if st.session_state.get("agent") is None:
         st.session_state.agent = agent
 
-    if not st.session_state.get("release_notes_seen"):
-        st.session_state.release_notes_seen = True
-        st.info(f"✨ Updated to v{__version__} — see the sidebar's **Release Notes** for what's new.")
+    # On narrow screens the sidebar, which holds the full AI interaction
+    # notice, starts closed (initial_sidebar_state="auto"): repeat the short
+    # notice in the main column there. The landing component carries its own.
+    if not on_landing:
+        from qai_consultant.ui.components import build_narrow_screen_notice_html
+        from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
-    if not st.session_state.get("mcp_announcement_seen"):
-        st.session_state.mcp_announcement_seen = True
-        st.info(
-            "🔌 QAI Consultant is also available as a local MCP server for Claude Code, "
-            "Claude Desktop, and other MCP clients, see the sidebar's **Use QAI in your AI tools "
-            "(MCP)** panel."
-        )
+        _notice_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+        st.markdown(build_narrow_screen_notice_html(_notice_tokens, AI_INTERACTION_NOTICE_SHORT), unsafe_allow_html=True)
 
     for _key in _PERSISTED_WIDGET_KEYS:
         if _key in st.session_state:
             st.session_state[_key] = st.session_state[_key]
 
     render_sidebar()
+    if not on_landing:
+        render_page_nav()
 
     step = st.session_state.get("current_step", "intro")
 

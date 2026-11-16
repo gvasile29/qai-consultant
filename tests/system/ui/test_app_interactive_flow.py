@@ -28,7 +28,7 @@ def extract_function(source: str, fn_name: str) -> str:
 
 def test_dialogue_uses_the_new_header_builder():
     fn = extract_function(read_app_source(), "render_dialogue")
-    assert "build_dialogue_header_html" in fn
+    assert "build_discovery_header_html" in fn
     assert "st.progress(" not in fn, \
         "render_dialogue() should no longer call the native st.progress()"
 

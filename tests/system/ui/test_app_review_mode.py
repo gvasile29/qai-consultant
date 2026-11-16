@@ -109,13 +109,14 @@ def test_reset_review_mode_state_safe_when_keys_absent():
 # ── Intro entry point ─────────────────────────────────────────────────────────────
 
 def test_intro_has_review_document_entry_point():
-    import app
     fn = extract_function(read_app_source(), "render_intro")
-    assert "_go_to(_mode_id)" in fn, \
-        "render_intro() must route its mode buttons through _go_to()"
+    assert "_go_to(_target)" in fn, \
+        "render_intro() must route the landing component's choice through _go_to()"
     from qai_consultant.ui.components import APP_MODES
+    from qai_consultant.ui.landing import build_mission_landing_html
+    from qai_consultant.ui.theme import LIGHT_TOKENS
     assert "doc_review" in [m[0] for m in APP_MODES]
-    assert app._LANDING_CTA_LABELS["doc_review"] == "Review an existing QA document"
+    assert 'data-go="doc_review"' in build_mission_landing_html(LIGHT_TOKENS, dark=False, version="0")
 
 
 # ── main() dispatch ───────────────────────────────────────────────────────────────

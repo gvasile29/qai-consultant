@@ -51,6 +51,15 @@ AI_INTERACTION_NOTICE = (
     "confidential or personal data."
 )
 
+# Plain-text short form for places with no room for the full notice: the
+# landing page and the main column on narrow screens, where the sidebar that
+# holds AI_INTERACTION_NOTICE starts closed.
+AI_INTERACTION_NOTICE_SHORT = (
+    "You are interacting with an AI system. Its outputs need review by a qualified "
+    "QA professional, and your text is sent to third-party LLM providers: do not "
+    "enter confidential or personal data."
+)
+
 AI_GENERATED_FOOTER = (
     "*🤖 AI-generated content — produced by QAI Consultant using an AI system "
     "(Mistral / OpenRouter LLM). This document has not been reviewed by a human and "
