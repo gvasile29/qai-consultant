@@ -1,5 +1,5 @@
-"""build_page_nav_css(): the in-page mode switcher's styles."""
-from qai_consultant.ui.components import APP_MODES, build_page_nav_css, build_sidebar_nav_css
+"""build_page_nav_css(): the in-page mode switcher's styles (the only mode switcher)."""
+from qai_consultant.ui.components import APP_MODES, build_page_nav_css
 from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
 
@@ -26,8 +26,6 @@ def test_row_wraps_instead_of_overflowing_a_phone():
     assert ".st-key-page-nav { flex-wrap: wrap" in css
 
 
-def test_page_nav_and_sidebar_rules_do_not_catch_each_other():
-    """The sidebar's rules select [class*="st-key-nav-"]; the page chips' keys
-    (st-key-pagenav-*) must not contain that substring, and vice versa."""
-    assert "st-key-pagenav-" not in build_sidebar_nav_css(DARK_TOKENS, "strategy")
-    assert 'class*="st-key-nav-"' not in build_page_nav_css(DARK_TOKENS, "strategy")
+def test_lock_note_is_styled_in_the_hold_tone():
+    css = build_page_nav_css(DARK_TOKENS, None)
+    assert f".page-nav-lock {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; color: {DARK_TOKENS['hold']}" in css

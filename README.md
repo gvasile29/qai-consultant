@@ -211,7 +211,7 @@ streamlit run src/app.py
 
 Or use the **live hosted version**: [quality-ai-consultant.streamlit.app](https://quality-ai-consultant.streamlit.app)
 
-Besides the Test Strategy flow, the landing page and sidebar offer **Review an existing QA document** and **Assess QA Maturity**; test execution results can be attached on the review screen before generating.
+Besides the Test Strategy flow, the landing page and the mode chips at the top of every screen offer **Review an existing QA document** and **Assess QA Maturity**; test execution results can be attached on the review screen before generating.
 
 ### CLI (Terminal)
 

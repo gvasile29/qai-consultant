@@ -23,6 +23,7 @@ of <style> tag load order.
 """
 import base64 as _base64
 import html as _html
+import re as _re
 
 from qai_consultant.core.risk_ledger import severity_tier
 
@@ -385,17 +386,24 @@ GENERATION_TIME_ESTIMATE = "~5-10 min"
 GENERATION_TIME_ESTIMATE_LONG = GENERATION_TIME_ESTIMATE.replace(" min", " minutes")
 
 
-def build_narrow_screen_notice_html(tokens: dict, notice: str) -> str:
-    """Pure function: token dict + the short AI interaction notice -> a note
-    shown in the main column only below 1024px, where the sidebar holding
-    the full notice may start closed. At 768-1024px both can show; a repeat
-    there is harmless, a missing notice is not."""
+def build_ai_notice_html(tokens: dict, notice: str, icon_html: str) -> str:
+    """Pure function: token dict + the full AI interaction notice + the EU
+    "fully AI-generated" icon's <img> -> the Article 50(1) disclosure block
+    shown in the main column on every screen, at every width (it used to live
+    in the sidebar, which can be closed or collapsed). `notice` is HTML-escaped;
+    its **bold** spans, the only markup it carries, become <strong>.
+    `icon_html` is trusted: it comes from inline_image_html(); empty omits the icon
+    (the landing page shows it in its hero instead)."""
+    text = _re.sub(r"\*\*(.+?)\*\*", lambda m: f"<strong>{m.group(1)}</strong>", _html.escape(notice))
+    icon = f'<div class="ai-notice-icon">{icon_html}</div>' if icon_html else ""
     return f"""
 <style>
-.ai-notice-narrow {{ border-left: 2px solid {tokens['accent']}; padding: 0.5rem 0.8rem; margin-bottom: 0.8rem; font-family: 'Plex Sans', sans-serif; font-size: 0.82rem; line-height: 1.5; color: {tokens['ink_dim']}; background: {tokens['surface']}; }}
-@media (min-width: 1024px) {{ .ai-notice-narrow {{ display: none; }} }}
+.ai-notice {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; border-left: 2px solid {tokens['accent']}; padding: 0.6rem 0.9rem; margin-bottom: 0.8rem; font-family: 'Plex Sans', sans-serif; font-size: 0.82rem; line-height: 1.5; color: {tokens['ink_dim']}; background: {tokens['surface']}; }}
+.ai-notice .ai-notice-icon {{ flex: 0 0 auto; line-height: 0; }}
+.ai-notice .ai-notice-text {{ flex: 1 1 260px; min-width: 0; }}
+.ai-notice strong {{ color: {tokens['ink']}; }}
 </style>
-<div class="ai-notice-narrow" role="note">{_html.escape(notice)}</div>
+<div class="ai-notice" role="note">{icon}<div class="ai-notice-text">{text}</div></div>
 """
 
 
@@ -817,35 +825,12 @@ def build_landing_details_css(tokens: dict) -> str:
 """
 
 
-def build_sidebar_nav_css(tokens: dict, active_mode: str | None) -> str:
-    """Pure function: token dict + the current mode id (or None on the
-    landing page) -> CSS for the sidebar's mode buttons, each rendered by
-    app.py with key=f"nav-{mode_id}". Adds the 01/02/03 index before each
-    label and paints the active mode's (disabled) button as "you are here";
-    any other disabled button (the generation lock) keeps Streamlit's
-    default greyed-out look."""
-    index_rules = "\n".join(
-        f'.st-key-nav-{mode_id} button p::before {{ content: "{idx}"; font-family: \'Plex Mono\', monospace; font-size: 0.68rem; color: {tokens["ink_dim"]}; margin-right: 0.55rem; }}'
-        for mode_id, idx, _label in APP_MODES
-    )
-    active_rule = ""
-    if active_mode in {m[0] for m in APP_MODES}:
-        active_rule = f"""
-.st-key-nav-{active_mode} button:disabled {{ opacity: 1; cursor: default; background: {tokens['surface']}; border: 1px solid {tokens['accent']}; border-left: 3px solid {tokens['accent']}; color: {tokens['accent']}; }}
-.st-key-nav-{active_mode} button:disabled p {{ color: {tokens['accent']}; font-weight: 600; }}
-.st-key-nav-{active_mode} button:disabled p::before {{ color: {tokens['accent']}; }}
-.st-key-nav-{active_mode} button:disabled::after {{ content: "\\25CF"; position: absolute; right: 0.8rem; font-size: 0.6rem; color: {tokens['accent']}; }}
-"""
-    return _sidebar_nav_css_template(tokens, index_rules, active_rule)
-
-
 def build_page_nav_css(tokens: dict, active_mode: str | None) -> str:
     """Pure function: token dict + the active mode id -> CSS for the in-page
     mode switcher (st.container(key="page-nav", horizontal=True) holding one
-    button per APP_MODES entry, keyed pagenav-<mode>). It is the sidebar
-    switcher's twin for a phone, where the sidebar starts closed: one wrapping
-    row of mono chips, the active mode lit in the accent. Keys deliberately
-    avoid the sidebar's "nav-" prefix so neither rule set catches the other."""
+    button per APP_MODES entry, keyed pagenav-<mode>): one wrapping row of
+    mono chips, the active mode lit in the accent, plus the note shown while a
+    generation locks the chips."""
     index_rules = "\n".join(
         f'.st-key-pagenav-{mode_id} button p::before {{ content: "{idx}"; color: {tokens["ink_dim"]}; margin-right: 0.45rem; }}'
         for mode_id, idx, _label in APP_MODES
@@ -863,21 +848,8 @@ def build_page_nav_css(tokens: dict, active_mode: str | None) -> str:
 .st-key-page-nav button {{ min-height: 2.1rem; padding: 0.15rem 0.7rem; }}
 .st-key-page-nav button p {{ font-family: 'Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.03em; text-transform: uppercase; white-space: nowrap; }}
 .st-key-page-nav button p::before {{ font-size: 0.68rem; }}
+.page-nav-lock {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; color: {tokens['hold']}; margin: 0 0 0.4rem; }}
 {index_rules}
 {active_rule}
 </style>
-"""
-
-
-def _sidebar_nav_css_template(tokens: dict, index_rules: str, active_rule: str) -> str:
-    return f"""
-<style>
-[class*="st-key-nav-"] button {{ justify-content: flex-start; text-align: left; position: relative; }}
-[class*="st-key-nav-"] button > div {{ justify-content: flex-start; width: 100%; }}
-{index_rules}
-{active_rule}
-.sidebar-nav-eyebrow {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: {tokens['ink_dim']}; margin-bottom: 0.1rem; }}
-.sidebar-nav-lock {{ font-family: 'Plex Mono', monospace; font-size: 0.66rem; color: {tokens['hold']}; margin-top: 0.1rem; }}
-</style>
-<div class="sidebar-nav-eyebrow">&gt; modes</div>
 """

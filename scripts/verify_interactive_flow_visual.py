@@ -38,7 +38,12 @@ def pick_template(page: Page, label: str) -> None:
     # Scroll first: when the main column is scrolled down (e.g. to a warning),
     # scrolling back during the click closes the select's popover.
     page.evaluate("() => document.querySelector('[data-testid=stMain]').scrollTo(0, 0)")
-    page.locator('[data-testid="stSelectbox"]').first.click()
+    # On a phone the AI notice and mode chips push the select below the first
+    # screen: bring it into view ourselves, or click()'s own scroll closes the popover.
+    select = page.locator('[data-testid="stSelectbox"]').first
+    select.scroll_into_view_if_needed()
+    page.wait_for_timeout(300)
+    select.click()
     page.get_by_role("option", name=re.compile(label)).first.click()
 
 
@@ -78,7 +83,7 @@ def main() -> int:
                 check(f"{tag}: header says phase 1 of 3", "phase 1 of 3" in page.inner_text(".dialogue-eyebrow").lower())
 
                 page.get_by_role("button", name="Next: Crew & schedule →").click()
-                # Not just stAlert: the sidebar's AI notice is one too, already on screen.
+                # Not just stAlert: any st.warning-style element may already be on screen.
                 page.get_by_text("Please fix the following before moving on").wait_for()
                 check(f"{tag}: empty Next stays and warns", cards(page) == 4)
 

@@ -175,3 +175,18 @@ def test_button_reset_cannot_override_the_cta_label_color():
     cta = re.search(r"^\.ql-cta \{[^}]*\}", html, re.M).group(0)
     assert f"color: {DARK_TOKENS['page']}" in cta and f"background: {DARK_TOKENS['accent']}" in cta
 
+
+ICON = '<img alt="EU AI Act: fully AI-generated content" width="120" src="data:image/svg+xml;base64,AAAA">'
+
+
+@pytest.mark.parametrize("tokens, dark", THEMES)
+def test_hero_shows_the_ai_icon_next_to_the_short_notice(tokens, dark):
+    """Article 50: the icon must be in the first view, not only in the full notice below."""
+    html = build_mission_landing_html(tokens, dark=dark, version="3.9.3", ai_icon_html=ICON)
+    hero_notice = html[html.index('class="ql-notice-row"'):]
+    assert ICON in hero_notice[: hero_notice.index("</div>")]
+    assert AI_INTERACTION_NOTICE_SHORT in html
+
+
+def test_hero_has_no_icon_block_without_an_icon():
+    assert "ql-notice-icon" not in _html().replace(".ql-notice-icon", "")

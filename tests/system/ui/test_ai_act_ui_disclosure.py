@@ -7,7 +7,8 @@ function's source text, and assert on it structurally.
 
 Covers:
 1. app.py imports AI_INTERACTION_NOTICE / with_ai_footer from ai_disclosure
-2. render_sidebar() surfaces the AI_INTERACTION_NOTICE (Article 50(1) disclosure)
+2. render_ai_notice() surfaces the AI_INTERACTION_NOTICE and the EU icon (Article 50(1)),
+   and main() / render_intro() put it on every screen (it used to live in the sidebar only)
 3. render_strategy() wraps all 4 markdown_to_pdf() calls with with_ai_footer()
 4. render_strategy() wraps all 4 .md download_button data= with with_ai_footer()
 """
@@ -47,12 +48,30 @@ def test_app_imports_ai_disclosure_helpers():
     print("  PASS: app.py imports ai_disclosure helpers")
 
 
-def test_sidebar_shows_ai_interaction_notice():
-    """render_sidebar() renders the AI_INTERACTION_NOTICE (Article 50(1) disclosure)."""
-    fn = extract_function(read_app_source(), "render_sidebar")
-    assert "AI_INTERACTION_NOTICE" in fn, \
-        "render_sidebar() does not surface AI_INTERACTION_NOTICE"
-    print("  PASS: render_sidebar() surfaces AI_INTERACTION_NOTICE")
+def test_page_shows_ai_interaction_notice_and_icon():
+    """render_ai_notice() renders the full AI_INTERACTION_NOTICE with the EU icon."""
+    fn = extract_function(read_app_source(), "render_ai_notice")
+    assert "AI_INTERACTION_NOTICE" in fn, "render_ai_notice() does not surface AI_INTERACTION_NOTICE"
+    assert "build_ai_notice_html" in fn
+    assert "_ai_icon_html()" in fn, "render_ai_notice() does not show the EU AI-generated icon"
+    assert "eu_ai_generated_icon" in extract_function(read_app_source(), "_ai_icon_html")
+    print("  PASS: render_ai_notice() surfaces AI_INTERACTION_NOTICE and the icon")
+
+
+def test_notice_is_rendered_on_every_screen():
+    """main() shows it on every screen but the landing page, whose own render_intro()
+    shows it; neither may depend on the sidebar, which can be closed or collapsed."""
+    source = read_app_source()
+    main_fn = extract_function(source, "main")
+    assert re.search(r"if not on_landing:\s+render_ai_notice\(\)", main_fn), \
+        "main() must render the notice on every screen but the landing page"
+    intro = extract_function(source, "render_intro")
+    assert "render_ai_notice(" in intro
+    assert "ai_icon_html=_ai_icon_html()" in intro, "the landing hero must carry the EU icon"
+    assert "AI_INTERACTION_NOTICE" not in extract_function(source, "render_sidebar"),         "the notice must not live only in the sidebar"
+    error_branch = main_fn[main_fn.index("if error:"):main_fn.index("st.stop()")]
+    assert "render_ai_notice()" in error_branch, "the agent-load error screen must show the notice too"
+    print("  PASS: the notice is rendered in the page on every screen")
 
 
 def test_pdf_exports_wrapped_with_ai_footer():

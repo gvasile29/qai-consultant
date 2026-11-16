@@ -269,27 +269,6 @@ def test_landing_details_css_is_scoped():
     assert rules and all(line.startswith(".st-key-landing-details") for line in rules)
 
 
-def test_sidebar_nav_css_indexes_every_mode():
-    from qai_consultant.ui.components import APP_MODES, build_sidebar_nav_css
-    css = build_sidebar_nav_css(DARK_TOKENS, None)
-    for mode_id, idx, _label in APP_MODES:
-        assert f'.st-key-nav-{mode_id} button p::before {{ content: "{idx}"' in css
-    assert "button:disabled" not in css  # no active mode on the landing page
-
-
-def test_sidebar_nav_css_marks_only_the_active_mode():
-    from qai_consultant.ui.components import build_sidebar_nav_css
-    css = build_sidebar_nav_css(LIGHT_TOKENS, "maturity")
-    assert ".st-key-nav-maturity button:disabled" in css
-    assert ".st-key-nav-strategy button:disabled" not in css
-    assert ".st-key-nav-doc_review button:disabled" not in css
-
-
-def test_sidebar_nav_css_ignores_unknown_mode():
-    from qai_consultant.ui.components import build_sidebar_nav_css
-    assert "button:disabled" not in build_sidebar_nav_css(LIGHT_TOKENS, "bogus")
-
-
 def test_pending_stage_is_labelled_queued_not_just_faded():
     from qai_consultant.ui.components import build_stage_sequence_html
     from qai_consultant.ui.theme import LIGHT_TOKENS

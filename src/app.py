@@ -15,7 +15,7 @@ from typing import Optional
 import streamlit as st
 from streamlit.runtime.scriptrunner import RerunException, StopException
 from qai_consultant.rag.agent import MISTRAL_MODEL, QAIAgent, clean_markdown_html
-from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, AI_INTERACTION_NOTICE_SHORT, pdf_icon_html, pdf_meta_html, with_ai_footer
+from qai_consultant.compliance.ai_disclosure import AI_INTERACTION_NOTICE, pdf_icon_html, pdf_meta_html, with_ai_footer
 from qai_consultant.core.dialogue import DialogueManager, InputValidator, QUESTIONS
 from qai_consultant.generation.strategy_generator import StrategyGenerator, build_strategy_prompt, SYSTEM_PROMPT
 from qai_consultant.generation.risk_analyzer import RiskAnalyzer, append_execution_data_appendix
@@ -96,8 +96,8 @@ st.set_page_config(
     page_icon=str(BRAND_DIR / "qai_favicon_32.png"),
     layout="wide",
     # "auto": open on desktop, closed on a phone, where an open sidebar covers
-    # the whole landing page on first load. The landing footer repeats the
-    # short AI interaction notice for visitors who never open the sidebar.
+    # the whole landing page on first load. The AI interaction notice lives in
+    # the page (render_ai_notice), so a closed sidebar hides nothing required.
     initial_sidebar_state="auto",
 )
 
@@ -226,10 +226,11 @@ def _reset_maturity_mode_state():
     st.session_state.pop("maturity_narrative_pending", None)
 
 
-# ── Mode navigation (landing CTAs + sidebar) ──────────────────────────────────
+# ── Mode navigation (landing CTAs + in-page chips) ──────────────────────────
 # The 3 modes (components.APP_MODES) are reachable from the landing page and
-# from the sidebar on every screen. Switching modes keeps each mode's own
-# state (their session-state keys are disjoint) and resumes the strategy
+# from the in-page chips (render_page_nav) on every other screen. Switching
+# modes keeps each mode's own state (their session-state keys are disjoint)
+# and resumes the strategy
 # flow at the step the user left. Streamlit drops a widget's key on any run
 # where the widget isn't rendered, so main() re-pins _PERSISTED_WIDGET_KEYS
 # every run. Not covered: answers typed into the dialogue but not yet committed (Enter/blur)
@@ -262,7 +263,7 @@ def _generation_in_progress() -> bool:
     """True while an LLM generation is running or about to run on this
     rerun. Mode switching is locked then: a click would interrupt the
     stream after run_count/the daily quota were already charged.
-    render_sidebar() evaluates this BEFORE the step renderer runs, so every
+    render_page_nav() evaluates this BEFORE the step renderer runs, so every
     flag it reads is set by the click that starts the run, before its
     st.rerun(): generation_started by render_review()'s Generate button,
     the *_narrative_pending flags by the narrative buttons. A run the
@@ -277,11 +278,36 @@ def _generation_in_progress() -> bool:
     return bool(state.get("review_narrative_pending") or state.get("maturity_narrative_pending"))
 
 
+def _ai_icon_html() -> str:
+    """The EU "fully AI-generated" icon as an inline <img> (dark or light variant)."""
+    from qai_consultant.ui.components import inline_image_html
+
+    name = "eu_ai_generated_icon_dark.svg" if st.context.theme.type == "dark" else "eu_ai_generated_icon.svg"
+    return inline_image_html(
+        (EU_AI_ICON_DIR / name).read_bytes(), "image/svg+xml", "EU AI Act: fully AI-generated content", 120
+    )
+
+
+def render_ai_notice(with_icon: bool = True) -> None:
+    """EU AI Act Article 50(1) disclosure: the full AI interaction notice with
+    the EU "fully AI-generated" icon, in the main column. The landing page shows
+    the icon in its hero and passes with_icon=False here. Guarded by
+    tests/system/ui/test_ai_act_ui_disclosure.py."""
+    from qai_consultant.ui.components import build_ai_notice_html
+    from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
+
+    tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
+    st.markdown(
+        build_ai_notice_html(tokens, AI_INTERACTION_NOTICE, _ai_icon_html() if with_icon else ""),
+        unsafe_allow_html=True,
+    )
+
+
 def render_page_nav() -> None:
-    """The mode switcher inside the page, under the header, on every screen but
-    the landing page. The sidebar holds the same three modes but starts closed
-    on a phone and can be collapsed anywhere. Same rules as the sidebar's: the active mode is disabled, and
-    everything is locked while a generation runs. Navigates in an on_click
+    """The mode switcher, in the page under the header, on every screen but the
+    landing page (which has its own), led by a Home chip back to the landing
+    page. Leaving a screen keeps its state. The active mode is disabled, and
+    every chip is locked while a generation runs. Navigates in an on_click
     callback, so the new screen renders in the same run (no st.rerun())."""
     from qai_consultant.ui.components import APP_MODES, build_page_nav_css
     from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
@@ -291,17 +317,22 @@ def render_page_nav() -> None:
     locked = _generation_in_progress()
     st.markdown(build_page_nav_css(tokens, active), unsafe_allow_html=True)
     with st.container(key="page-nav", horizontal=True):
+        st.button("← Home", key="pagenav-home", width="content", disabled=locked,
+                  on_click=_go_to, args=("intro",))
         for mode_id, _idx, label in APP_MODES:
             st.button(
                 label, key=f"pagenav-{mode_id}", width="content",
                 disabled=locked or mode_id == active,
                 on_click=_go_to, args=(mode_id,),
             )
+    if locked:
+        st.markdown('<div class="page-nav-lock">&gt; generation in progress</div>', unsafe_allow_html=True)
 
 
 def _go_to(mode: str) -> None:
-    """Switch to a mode's screen. The strategy flow resumes at the step the
-    user left it on (dialogue/review/strategy), or starts at the dialogue."""
+    """Switch to a mode's screen, or to the landing page with "intro". The
+    strategy flow resumes at the step the user left it on (dialogue/review/
+    strategy), or starts at the dialogue."""
     current = st.session_state.get("current_step", "intro")
     if current == "dialogue":
         # Text typed and a mode chip clicked with no blur arrives in this click's
@@ -423,44 +454,14 @@ def render_sidebar():
         _sidebar_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
         st.markdown(build_sidebar_polish_css(_sidebar_tokens), unsafe_allow_html=True)
 
-        st.markdown("## 🧪 QAI Consultant")
-        st.markdown("AI-powered QA Architect")
-        st.caption(f"v{__version__}")
+        if st.session_state.get("current_step", "intro") != "intro":
+            # A safe way back to the landing page that keeps everything, next to
+            # "Start Over" below, which wipes it. Persistent where the in-page chips scroll away.
+            st.button("← Home", key="sidebar-home", use_container_width=True,
+                      disabled=_generation_in_progress(), on_click=_go_to, args=("intro",))
+        st.caption(f"QAI Consultant v{__version__}")
         if st.session_state.get("visit_count") is not None:
             st.caption(f"👀 {st.session_state.visit_count:,} visits")
-        _eu_icon_svg = (
-            "eu_ai_generated_icon_dark.svg"
-            if _theme_type == "dark"
-            else "eu_ai_generated_icon.svg"
-        )
-        from qai_consultant.ui.components import inline_image_html
-        st.markdown(
-            inline_image_html(
-                (EU_AI_ICON_DIR / _eu_icon_svg).read_bytes(),
-                "image/svg+xml",
-                "EU AI Act: fully AI-generated content",
-                140,
-            ),
-            unsafe_allow_html=True,
-        )
-        st.info(AI_INTERACTION_NOTICE)
-
-        from qai_consultant.ui.components import APP_MODES, build_sidebar_nav_css
-        _active_mode = _current_mode(st.session_state.get("current_step", "intro"))
-        _nav_locked = _generation_in_progress()
-        st.markdown(build_sidebar_nav_css(_sidebar_tokens, _active_mode), unsafe_allow_html=True)
-        for _mode_id, _idx, _label in APP_MODES:
-            if st.button(
-                _label, key=f"nav-{_mode_id}", use_container_width=True,
-                disabled=_nav_locked or _mode_id == _active_mode,
-            ):
-                _go_to(_mode_id)
-                st.rerun()
-        if _nav_locked:
-            st.markdown(
-                '<div class="sidebar-nav-lock">&gt; generation in progress</div>',
-                unsafe_allow_html=True,
-            )
 
         with st.expander("📋 Release Notes"):
             st.markdown(load_changelog())
@@ -599,12 +600,13 @@ def render_intro():
     _dark = st.context.theme.type == "dark"
     _hero_tokens = DARK_TOKENS if _dark else LIGHT_TOKENS
     st.markdown(build_landing_frame_css(_hero_tokens), unsafe_allow_html=True)
-    _target = render_mission_landing(_hero_tokens, dark=_dark, version=__version__)
+    _target = render_mission_landing(_hero_tokens, dark=_dark, version=__version__, ai_icon_html=_ai_icon_html())
     if _target:
         _go_to(_target)
         st.rerun()
 
     with st.container(key="landing-more"):
+        render_ai_notice(with_icon=False)
         _render_landing_more(_hero_tokens)
 
 
@@ -2172,6 +2174,7 @@ def main():
     # ── Load agent — show clear error if API keys not ready ──────────────────
     agent, error = load_agent()
     if error:
+        render_ai_notice()  # Article 50(1) needs no agent: show it on the error screen too
         st.error(error)
         st.markdown("---")
         st.markdown("### 🛠️ Troubleshooting")
@@ -2191,15 +2194,11 @@ def main():
     if st.session_state.get("agent") is None:
         st.session_state.agent = agent
 
-    # On narrow screens the sidebar, which holds the full AI interaction
-    # notice, starts closed (initial_sidebar_state="auto"): repeat the short
-    # notice in the main column there. The landing component carries its own.
+    # Article 50(1): the full notice and the EU icon sit in the page, not the
+    # sidebar (which can be closed or collapsed). The landing page repeats them
+    # in render_intro(), below its hero's own short notice.
     if not on_landing:
-        from qai_consultant.ui.components import build_narrow_screen_notice_html
-        from qai_consultant.ui.theme import DARK_TOKENS, LIGHT_TOKENS
-
-        _notice_tokens = DARK_TOKENS if st.context.theme.type == "dark" else LIGHT_TOKENS
-        st.markdown(build_narrow_screen_notice_html(_notice_tokens, AI_INTERACTION_NOTICE_SHORT), unsafe_allow_html=True)
+        render_ai_notice()
 
     for _key in _PERSISTED_WIDGET_KEYS:
         if _key in st.session_state:

@@ -77,7 +77,7 @@ html, body, [class*="css"] {{
 
 /* Centers the top-of-page logo within its column. Scoped to the keyed
    container (not a blanket [data-testid="stImage"] rule) so it doesn't
-   also apply to the sidebar's EU AI-generated-content icon below.
+   also apply to any other st.image elements.
    Carried over verbatim from the pre-Calibration-Bench inline CSS block
    -- see this plan's Global Constraints. */
 .st-key-header-logo [data-testid="stImage"],
